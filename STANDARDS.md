@@ -1744,13 +1744,20 @@ Use this checklist every time you create a new MCP server. Do not skip steps.
 - [ ] Confirm verb is in the approved verb list
 - [ ] Write engine function in `engine.py` first — no MCP imports
 - [ ] Engine function returns dict with `"success"` as first key
+- [ ] Engine function builds `progress` list and appends steps as it works
+- [ ] Engine function calls `resolve_path()` as first operation on file_path
+- [ ] Engine function validates file extension after resolve_path()
 - [ ] Engine function calls `snapshot()` if it writes anything
 - [ ] Engine function includes `"backup"` in return dict on writes
+- [ ] Engine function calls `append_receipt()` after every write (success or fail)
+- [ ] Engine function calls `notify_reload()` as final step after save
+- [ ] Engine function includes `"progress"` array in return dict
 - [ ] Engine function includes `"token_estimate"` in return dict
 - [ ] Engine function catches all exceptions and returns error dict
 - [ ] Error dict includes `"hint"` with actionable recovery instruction
 - [ ] Engine function calls `get_max_*()` helpers for any bounded return
-- [ ] No `print()` statements
+- [ ] No `print()` statements — progress goes in return dict only
+- [ ] Write tool has `dry_run: bool = False` parameter
 - [ ] Add `@mcp.tool()` decorator in `server.py` calling engine function
 - [ ] Tool docstring is ≤ 80 characters
 - [ ] All parameters have type annotations using allowed types only
@@ -1758,6 +1765,8 @@ Use this checklist every time you create a new MCP server. Do not skip steps.
 - [ ] Add success test in `tests/test_{server_name}.py`
 - [ ] Add file-not-found failure test
 - [ ] Add snapshot-created test (if write tool)
+- [ ] Add dry_run test (if write tool)
+- [ ] Add progress array present test
 - [ ] Run `uv run pytest tests/test_{server_name}.py` — all pass
 - [ ] Run `uv run ruff check servers/{name}/`
 - [ ] Run `uv run pyright servers/{name}/`
@@ -1765,7 +1774,76 @@ Use this checklist every time you create a new MCP server. Do not skip steps.
 
 ---
 
-*Version: 1.0*
+## 29. Progress output — every tool call must be visible
+
+### The rule
+
+Every tool response includes a `"progress"` array. Never print to stdout — it
+corrupts the MCP stdio channel. All visible output goes in the progress array.
+
+```python
+{
+    "success": True,
+    "progress": [
+        {"icon": "✔", "msg": "Opened sales_data.xlsx",           "detail": "1,250 rows"},
+        {"icon": "✔", "msg": "Removed duplicate entries",        "detail": "32 removed"},
+        {"icon": "✔", "msg": "Filled missing values in Revenue", "detail": "8 filled"},
+        {"icon": "✔", "msg": "Saved Sales_Report_March.xlsx",    "detail": "1,210 rows"},
+    ],
+    "token_estimate": 95
+}
+```
+
+### shared/progress.py helpers
+
+`ok()` ✔ | `fail()` ✘ | `info()` → | `warn()` ⚠ | `undo()` ↩
+
+Use these helpers. Never construct dicts by hand. Always use `Path(x).name`
+in messages — never full paths. Full paths waste tokens and are unreadable.
+
+---
+
+## 30. Live editing — changes visible while file is open
+
+Write edits appear in the open application without the user closing and reopening.
+
+**macOS:** AppleScript triggers Word/Excel reload after writing.
+**Linux:** LibreOffice polls the file — write normally, it detects the change.
+**Windows:** Shadow file + COM via pywin32 (optional), falls back gracefully.
+
+All projects implement `shared/live_edit.py` with `is_file_open()` and
+`notify_reload()`. Reload is best-effort — never fails the main operation.
+If unavailable, returns `info("File saved — reopen to see changes")`.
+
+---
+
+## 31. File path handling — accept every format
+
+All projects implement `shared/file_utils.resolve_path(raw: str) -> Path`.
+
+Handles: whitespace, wrapping quotes, `\\\\?\\` prefix, null byte check,
+env vars, `~` expansion, backslash normalisation, absolute resolution,
+rejection of `.mcp_versions/` paths.
+
+`file_path` is always the first parameter. Extension is validated immediately
+after resolve. Progress messages use `Path(x).name` only — never full paths.
+
+---
+
+## 32. Operation receipt log — persistent audit trail
+
+`.{stem}.mcp_receipt.json` stored alongside every modified file. Records every
+tool call with timestamp, tool, args, result summary, and backup path.
+
+`shared/receipt.py`: `append_receipt()` (never raises) + `read_receipt_log()`.
+
+Every `_basic` server includes `read_receipt` as a mandatory tool. Every write
+tool has `dry_run: bool = False`. Dry run shows what would change without changing
+anything — the primary trust-building feature for new users.
+
+---
+
+*Version: 1.1*
 *Derived from: office-mcp architecture decisions, 2026-03-25*
 *This document should be linked from every MCP server project's README and CLAUDE.md.*
 *When these standards conflict with a specific project's CLAUDE.md, the project's
