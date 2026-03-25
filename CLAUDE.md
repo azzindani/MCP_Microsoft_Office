@@ -39,6 +39,11 @@ When in doubt, this file overrides your defaults.
 27. [Git integration for document edits](#27-git-integration-for-document-edits)
 28. [Document diff engine](#28-document-diff-engine)
 29. [Project build progress tracker](#29-project-build-progress-tracker)
+30. [Session preview — end-of-session output button](#30-session-preview--end-of-session-output-button)
+31. [8GB VRAM budget — design for constrained local hardware](#31-8gb-vram-budget--design-for-constrained-local-hardware)
+32. [Cross-platform compatibility — Windows, macOS, Linux](#32-cross-platform-compatibility--windows-macos-linux)
+33. [Multi-platform AI compatibility — Claude, ChatGPT, Gemini, and others](#33-multi-platform-ai-compatibility--claude-chatgpt-gemini-and-others)
+34. [Phase 14 — Multi-platform installation checklist](#34-phase-14--multi-platform-installation)
 
 ---
 
@@ -3603,6 +3608,723 @@ Update after each coding session.
 **Rule:** full rewrites must be 0 for all sessions after Phase 0 bootstrap.
 If a full rewrite was necessary, add a note explaining why the str_replace
 protocol could not apply.
+
+---
+
+---
+
+## 30. Session preview — end-of-session output button
+
+Every coding session that modifies, creates, or edits a file must end by calling
+`present_files` on every file that was changed. This surfaces a clickable download
+button in the UI so the user can immediately preview or save the result without
+navigating the filesystem.
+
+### Rule: always call present_files at the end of a session
+
+When a coding session produces or modifies any of these file types, present them:
+
+```
+.docx  .xlsx  .pptx  .pdf      — document outputs the user will open
+.py    .toml  .sh    .bat      — source files that were created or modified
+.md    .json                   — config or documentation that was updated
+```
+
+The pattern is: do the work → verify it → present the files.
+
+```python
+# Example end-of-session sequence
+# 1. Work complete
+# 2. Run tests to verify
+# 3. Present every changed file
+
+present_files([
+    "/mnt/user-data/outputs/servers/docx_basic/engine.py",
+    "/mnt/user-data/outputs/servers/docx_basic/server.py",
+    "/mnt/user-data/outputs/CLAUDE.md",      # if updated this session
+])
+```
+
+### What to present in each phase
+
+| Phase completed | Files to present |
+|---|---|
+| Phase 0 — bootstrap | `pyproject.toml`, `CLAUDE.md`, `.gitignore` |
+| Phase 1 — shared | `shared/version_control.py`, `shared/patch_validator.py`, `shared/file_utils.py` |
+| Any server phase | `servers/{name}/engine.py`, `servers/{name}/server.py`, `servers/{name}/pyproject.toml` |
+| Any test phase | `tests/test_{name}.py` |
+| Installer phase | `install/install.sh`, `install/install.bat`, `install/mcp_config_writer.py` |
+| CLAUDE.md update | `CLAUDE.md` |
+
+### Present the most important file first
+
+The first path in the `present_files` list opens automatically in the preview panel.
+Always put the most user-relevant output first:
+- For server work: `engine.py` first (the actual logic)
+- For documentation: `CLAUDE.md` first
+- For installer work: `install.sh` first
+- For document edits (runtime, not build): the edited `.docx`/`.xlsx`/`.pptx` first
+
+### Never present test fixture files
+
+`tests/fixtures/*.docx`, `tests/fixtures/*.xlsx`, `tests/fixtures/*.pptx` are input
+assets, not outputs. Do not present them unless the user explicitly asks to download
+a fixture.
+
+### The session summary comment
+
+Before calling `present_files`, write a one-paragraph plain English summary of what
+changed this session. Do not use bullet points. Do not repeat the file names — the
+button shows those. State what the code now does that it did not do before.
+
+Example:
+```
+The docx_basic engine now supports surgical paragraph searching and bounded range
+reads. search_paragraphs scans the full document and returns only matching nodes.
+read_paragraph_range enforces a 50-paragraph hard cap so large contracts never
+overflow the context window. All write operations snapshot before executing.
+```
+
+---
+
+## 31. 8GB VRAM budget — design for constrained local hardware
+
+This section defines every decision made specifically to keep the project functional
+on a machine with 8GB VRAM — the most common consumer GPU (RTX 3060, RTX 4060,
+RX 6600). This is the primary hardware target. Everything else is a bonus.
+
+### The hard constraint
+
+At 8GB VRAM, the largest model that fits comfortably in Q4_K_M quantization is
+approximately 8-9B parameters. Qwen 3.5 9B at Q4_K_M occupies ~5.5GB VRAM,
+leaving ~2.5GB for KV cache. That KV cache is the context window budget.
+
+At 2.5GB KV cache with Qwen 3.5 9B, the effective usable context is approximately
+**12,000-16,000 tokens** — not 32K. The model supports 32K but the hardware
+cannot hold the KV cache for it at 8GB VRAM.
+
+**This is why the surgical edit protocol in section 13 exists.** A tool that returns
+5,000 tokens of document content consumes 30-40% of the entire available context on
+an 8GB machine. Every tool return must be treated as precious.
+
+### VRAM budget table
+
+| Component | VRAM usage |
+|---|---|
+| Qwen 3.5 9B Q4_K_M weights | ~5.5 GB |
+| OS + LM Studio app overhead | ~0.8 GB |
+| KV cache (remaining) | ~1.7 GB |
+| **Effective context at 8GB** | **~10,000-12,000 tokens** |
+| Qwen 3.5 9B Q3_K_S weights | ~4.8 GB |
+| KV cache at Q3_K_S | ~2.4 GB |
+| **Effective context at Q3_K_S** | **~14,000-16,000 tokens** |
+
+Recommend Q3_K_S over Q4_K_M for 8GB machines when using MCP tools. The slight
+quality loss from lower quantization is outweighed by the larger usable context.
+Document this recommendation in the README.
+
+### Token budget per tool call — hard ceilings for 8GB machines
+
+These ceilings are stricter than the general limits in section 13. On 8GB VRAM,
+treat these as absolute maximums:
+
+| Tool return type | Max tokens | Enforcement |
+|---|---|---|
+| Document outline (headings only) | 400 tokens | Hard truncate at 50 headings |
+| Single paragraph with runs | 300 tokens | Hard truncate run array at 20 runs |
+| Paragraph range | 800 tokens | Hard limit: 20 paragraphs max on 8GB mode |
+| Cell range | 500 tokens | Hard limit: 100 cells max on 8GB mode |
+| Search results | 400 tokens | Hard limit: 10 matches max on 8GB mode |
+| Single slide text | 300 tokens | Hard truncate shapes at 10 shapes |
+| Tool error/success response | 100 tokens | Keep hints under 50 words |
+
+### 8GB mode — runtime flag
+
+Every server supports an `OFFICE_MCP_8GB_MODE=1` environment variable. When set,
+all tool return limits drop to the 8GB-specific ceilings above. This is set
+automatically by the installer when it detects ≤ 8GB VRAM via platform detection.
+
+```python
+# shared/file_utils.py
+import os
+
+def is_8gb_mode() -> bool:
+    return os.environ.get("OFFICE_MCP_8GB_MODE", "0") == "1"
+
+def get_max_paragraphs() -> int:
+    return 20 if is_8gb_mode() else 50
+
+def get_max_cells() -> int:
+    return 100 if is_8gb_mode() else 200
+
+def get_max_search_results() -> int:
+    return 10 if is_8gb_mode() else 50
+```
+
+Every engine function that returns bounded content calls these helpers instead of
+hardcoding limits. Never hardcode `50` or `200` directly in engine logic.
+
+### KV cache compression strategy — tool schema minimisation
+
+The tool schemas themselves sit in the KV cache for the entire conversation. On 8GB,
+this overhead is significant. Rules to minimise schema size:
+
+**Rule 1 — No parameter descriptions in schema.** Never use `Field(description=...)`.
+Parameter names must be self-documenting. `paragraph_index: int` needs no description.
+Estimated saving: ~30 tokens per parameter with description removed.
+
+**Rule 2 — No optional parameters with complex types.** Every optional parameter that
+remains in the schema costs tokens on every turn. Cut optional parameters aggressively.
+If it is truly optional, consider making it a separate tool.
+
+**Rule 3 — Tool docstrings under 60 characters for 8GB mode.** The general limit is
+80 characters. For 8GB targets, aim for 60. Every character saved in a description
+is saved on every single turn of the agentic loop.
+
+**Rule 4 — Maximum 8 tools per server when targeting 8GB.** The general limit is 10.
+At 8GB, 10 tools with full schemas push the schema overhead to ~800-1000 tokens.
+8 tools keeps it under 700 tokens, leaving more room for document content.
+
+### Model recommendations by VRAM tier
+
+Document these in the README so users choose the right model before installing:
+
+| VRAM | Recommended model | Quant | Effective context |
+|---|---|---|---|
+| 4 GB | Qwen 3.5 4B or Llama 3.2 3B | Q4_K_M | ~6,000 tokens |
+| 6 GB | Qwen 3.5 7B | Q4_K_M | ~8,000 tokens |
+| 8 GB | Qwen 3.5 9B | Q3_K_S | ~12,000 tokens |
+| 12 GB | Qwen 3.5 9B | Q8_0 | ~20,000 tokens |
+| 16 GB | Qwen 3.5 14B | Q4_K_M | ~24,000 tokens |
+| 24 GB+ | Qwen 3.5 32B | Q4_K_M | ~32,000 tokens |
+
+For 4GB and 6GB machines, limit to `docx_basic` with `OFFICE_MCP_8GB_MODE=1` and
+a maximum of 5 tools registered. Single-server, single-task workflows only.
+
+### The fundamental VRAM problem — and the honest answer
+
+The reason most people are not using local LLMs with MCP is exactly what you identified:
+MCP tool schemas are expensive, document content is expensive, and the agentic loop
+accumulates tokens across every round. On 8GB VRAM this hits a wall fast.
+
+The honest answer is that this project mitigates but does not eliminate the problem.
+The surgical protocol means you spend ~500 tokens per edit cycle instead of ~5,000.
+But a complex 10-step editing task still consumes ~5,000 tokens of accumulated history.
+
+The mitigation strategy is:
+
+1. **Short sessions.** Each LM Studio session handles one focused task — "fix payment
+   terms", "update the Q3 figures" — then closes. Fresh context per task.
+2. **Tool result pruning.** After a tool call succeeds and the model has confirmed the
+   result, the user can manually clear the chat history in LM Studio while the MCP
+   server stays running. The document state persists on disk.
+3. **`OFFICE_MCP_8GB_MODE=1`** keeps individual responses small.
+4. **Never load more tools than the task requires.** Contract editing needs `docx_basic`
+   only (8 tools). Table work adds `docx_tables`. Never load all 8 servers.
+
+Document this workflow explicitly in the README as "Working with limited VRAM".
+
+---
+
+## 32. Cross-platform compatibility — Windows, macOS, Linux
+
+Every line of code in this project must run identically on Windows 10+, macOS 12+,
+and Ubuntu 20.04+. This section defines every place where platform differences arise
+and how to handle each one.
+
+### Path handling — never use string concatenation for paths
+
+All path operations use `pathlib.Path`. Never use `os.path.join()`, string
+concatenation with `/` or `\\`, or hardcoded path separators.
+
+```python
+# Wrong — breaks on Windows
+backup_path = base_dir + "/" + filename + ".bak"
+
+# Wrong — breaks on macOS/Linux
+backup_path = base_dir + "\\" + filename + ".bak"
+
+# Correct — works everywhere
+backup_path = Path(base_dir) / (filename + ".bak")
+```
+
+`pathlib.Path` uses the correct separator for the current OS automatically.
+All functions in `shared/file_utils.py` accept both `str` and `Path` and normalise
+internally via `Path(input).resolve()`.
+
+### Line endings — always write UTF-8 with LF
+
+All Python source files, Markdown files, shell scripts, and JSON files use LF line
+endings. Configure this in `.gitattributes`:
+
+```
+# .gitattributes
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+```
+
+`.bat` and `.cmd` files must use CRLF — Windows CMD requires it. All other files
+force LF even on Windows checkouts. This prevents the `\r` character appearing
+in Python string operations on Windows.
+
+### Platform detection — shared/platform_utils.py
+
+Create `shared/platform_utils.py` with these functions. Every platform-specific
+decision in the codebase calls these — never inline `sys.platform` checks.
+
+```python
+import sys
+import os
+from pathlib import Path
+
+
+def is_windows() -> bool:
+    return sys.platform == "win32"
+
+
+def is_macos() -> bool:
+    return sys.platform == "darwin"
+
+
+def is_linux() -> bool:
+    return sys.platform.startswith("linux")
+
+
+def get_lmstudio_mcp_config_path() -> Path:
+    """Return the LM Studio mcp.json path for the current OS."""
+    if is_windows():
+        base = Path(os.environ.get("APPDATA", "~")).expanduser()
+        return base / "LM Studio" / "mcp.json"
+    elif is_macos():
+        return Path.home() / "Library" / "Application Support" / "LM Studio" / "mcp.json"
+    else:
+        return Path.home() / ".config" / "LM Studio" / "mcp.json"
+
+
+def get_claude_desktop_config_path() -> Path:
+    """Return Claude Desktop mcp.json path for the current OS."""
+    if is_windows():
+        base = Path(os.environ.get("APPDATA", "~")).expanduser()
+        return base / "Claude" / "claude_desktop_config.json"
+    elif is_macos():
+        return Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
+    else:
+        return Path.home() / ".config" / "Claude" / "claude_desktop_config.json"
+
+
+def get_pdf_converter() -> str | None:
+    """
+    Return the available PDF conversion tool for the current platform.
+    Returns 'word' if Microsoft Word is available (Windows/macOS).
+    Returns 'libreoffice' if LibreOffice is available.
+    Returns None if neither is available.
+    """
+    import shutil
+    if is_windows():
+        word_paths = [
+            Path("C:/Program Files/Microsoft Office/root/Office16/WINWORD.EXE"),
+            Path("C:/Program Files (x86)/Microsoft Office/root/Office16/WINWORD.EXE"),
+        ]
+        if any(p.exists() for p in word_paths):
+            return "word"
+    elif is_macos():
+        if Path("/Applications/Microsoft Word.app").exists():
+            return "word"
+    if shutil.which("libreoffice") or shutil.which("soffice"):
+        return "libreoffice"
+    return None
+
+
+def get_temp_dir() -> Path:
+    """Return a reliable temp directory for the current platform."""
+    import tempfile
+    return Path(tempfile.gettempdir()) / "office-mcp"
+```
+
+### PDF export — platform matrix
+
+The `export_pdf` tool in `docx_layout` and `pptx_design` must handle all three
+platforms correctly:
+
+| Platform | Primary method | Fallback | Error if unavailable |
+|---|---|---|---|
+| Windows | `docx2pdf` (calls Word via COM) | LibreOffice CLI | Yes — clear message |
+| macOS | `docx2pdf` (calls Word via AppleScript) | LibreOffice CLI | Yes — clear message |
+| Linux | LibreOffice CLI (`soffice --headless`) | None | Yes — with install hint |
+
+On Linux, the error hint must say:
+`"Install LibreOffice: sudo apt install libreoffice (Ubuntu) or sudo dnf install libreoffice (Fedora)"`
+
+Never attempt COM automation on Linux. Never attempt AppleScript on Windows.
+Always call `get_pdf_converter()` from `platform_utils.py` first and route accordingly.
+
+### Shell scripts — install.sh must not use bash-only syntax
+
+`install.sh` must be POSIX sh compatible (`#!/bin/sh`), not bash-specific (`#!/bin/bash`).
+macOS ships with zsh as default shell and bash 3.x (GPL2 licensing issue). Ubuntu
+uses dash for `/bin/sh`. Using `#!/bin/sh` with POSIX syntax ensures compatibility.
+
+POSIX-safe patterns to use:
+```sh
+# String comparison
+if [ "$var" = "value" ]; then    # correct
+if [[ "$var" == "value" ]]; then # wrong — bash only
+
+# Array — POSIX sh has no arrays
+# Use space-separated strings instead
+servers="docx_basic xlsx_basic"
+for s in $servers; do echo "$s"; done
+
+# Check command exists
+if command -v uv > /dev/null 2>&1; then   # correct
+if which uv &>/dev/null; then              # wrong — &> is bash only
+```
+
+### install.bat — Windows compatibility
+
+`install.bat` targets Windows 10+ CMD. Do not use PowerShell syntax inside a `.bat`
+file. For PowerShell operations (like installing uv), call PowerShell explicitly:
+
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Use `%APPDATA%`, `%USERPROFILE%`, and `%LOCALAPPDATA%` for path resolution.
+Never hardcode `C:\Users\` paths.
+
+### File encoding — always UTF-8 with BOM-free
+
+All Python files, JSON files, and Markdown files must be saved as UTF-8 without BOM.
+Windows Notepad historically saves UTF-8 with BOM — this breaks Python's `json.loads()`
+and `open()` calls. The `.editorconfig` file enforces this:
+
+```ini
+# .editorconfig
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.bat]
+end_of_line = crlf
+
+[*.md]
+trim_trailing_whitespace = false
+```
+
+### `.mcp_versions/` path on Windows
+
+On Windows, the `.mcp_versions/` directory path can exceed the 260-character MAX_PATH
+limit if documents are deeply nested. Mitigation:
+
+1. Enable long paths in `install.bat`:
+   ```bat
+   reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
+   ```
+2. `shared/version_control.py` must use `\\\\?\\` prefix for paths on Windows when
+   path length > 200 characters:
+   ```python
+   if is_windows() and len(str(path)) > 200:
+       path = Path("\\\\?\\" + str(path.resolve()))
+   ```
+
+### CI matrix — test on all three platforms
+
+The GitHub Actions CI (section 25) must run on:
+```yaml
+strategy:
+  matrix:
+    os: [ubuntu-22.04, windows-latest, macos-13]
+```
+
+Any test that passes on Linux but fails on Windows is a bug, not a skip. The most
+common cause is path separator assumptions in string operations. Fix them with pathlib.
+
+---
+
+## 33. Multi-platform AI compatibility — Claude, ChatGPT, Gemini, and others
+
+This project's MCP servers are transport-agnostic. The protocol itself is platform-
+independent — any AI that supports MCP can use these tools. This section defines
+what changes between platforms and what stays the same.
+
+### What is the same everywhere
+
+The Python server code is identical regardless of which AI platform calls it.
+`engine.py` does not know or care what model is calling the tools. `server.py` exposes
+the same JSON schemas. The MCP stdio transport is the same protocol.
+
+The only thing that changes per platform is:
+1. Where the `mcp.json` / config file lives
+2. How the server is registered
+3. Whether the platform supports local stdio servers or remote SSE/HTTP only
+
+### Platform support matrix
+
+| Platform | Local stdio MCP | Remote MCP (SSE/HTTP) | Config file location | Notes |
+|---|---|---|---|---|
+| LM Studio 0.4.x | Yes | Yes | OS-specific `mcp.json` | Primary target |
+| Claude Desktop | Yes | Yes | `claude_desktop_config.json` | Full support |
+| Claude Code (CLI) | Yes | Yes | `~/.claude.json` or project `.mcp.json` | Full support |
+| Cursor | Yes | Yes | `.cursor/mcp.json` | Full support |
+| Windsurf | Yes | Yes | `~/.codeium/windsurf/mcp_config.json` | Full support |
+| Continue.dev | Yes | Partial | `.continue/config.json` | MCP support in v1+ |
+| Cline (VS Code) | Yes | Yes | VS Code settings `cline.mcpServers` | Full support |
+| ChatGPT | No | Yes (remote only) | Plugin manifest | Requires HTTP server mode |
+| Gemini (Vertex) | No | Yes (remote only) | GCP config | Requires HTTP server mode |
+| Open WebUI | No | Yes (remote only) | Web UI settings | Requires HTTP server mode |
+
+### Two transport modes — stdio and HTTP
+
+Every server supports both transport modes. The mode is selected at startup via
+environment variable or CLI flag.
+
+**stdio mode** (default — for local AI clients):
+```bash
+uv run --directory servers/docx_basic docx-basic
+# or explicitly:
+uv run --directory servers/docx_basic docx-basic --transport stdio
+```
+
+The server communicates via stdin/stdout. Used by LM Studio, Claude Desktop,
+Cursor, Claude Code, Windsurf, Cline. Zero network overhead. Zero authentication
+needed. Best for local use.
+
+**HTTP mode** (for cloud AI platforms):
+```bash
+uv run --directory servers/docx_basic docx-basic --transport http --port 8765
+# With optional auth token:
+uv run --directory servers/docx_basic docx-basic --transport http --port 8765 --auth-token mytoken
+```
+
+The server exposes an HTTP endpoint at `http://localhost:{port}/mcp`. Used when
+ChatGPT, Gemini, or a remote AI needs to reach the tools. Requires the user's
+machine to be reachable (local network or tunnel).
+
+FastMCP handles both transport modes automatically. The server code does not change —
+only the startup flags change.
+
+### Config file locations per platform
+
+`install/mcp_config_writer.py` supports a `--platform` argument that writes to the
+correct config file for the target platform:
+
+```bash
+python install/mcp_config_writer.py --servers docx_basic --platform lmstudio
+python install/mcp_config_writer.py --servers docx_basic --platform claude-desktop
+python install/mcp_config_writer.py --servers docx_basic --platform cursor
+python install/mcp_config_writer.py --servers docx_basic --platform cline
+python install/mcp_config_writer.py --servers docx_basic --platform windsurf
+```
+
+Config file paths by platform:
+
+```python
+# shared/platform_utils.py — extend get_config_path()
+
+CONFIG_PATHS = {
+    "lmstudio": {
+        "windows": Path(os.environ.get("APPDATA","~")) / "LM Studio" / "mcp.json",
+        "macos":   Path.home() / "Library" / "Application Support" / "LM Studio" / "mcp.json",
+        "linux":   Path.home() / ".config" / "LM Studio" / "mcp.json",
+    },
+    "claude-desktop": {
+        "windows": Path(os.environ.get("APPDATA","~")) / "Claude" / "claude_desktop_config.json",
+        "macos":   Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json",
+        "linux":   Path.home() / ".config" / "Claude" / "claude_desktop_config.json",
+    },
+    "cursor": {
+        "windows": Path.home() / ".cursor" / "mcp.json",
+        "macos":   Path.home() / ".cursor" / "mcp.json",
+        "linux":   Path.home() / ".cursor" / "mcp.json",
+    },
+    "windsurf": {
+        "windows": Path.home() / ".codeium" / "windsurf" / "mcp_config.json",
+        "macos":   Path.home() / ".codeium" / "windsurf" / "mcp_config.json",
+        "linux":   Path.home() / ".codeium" / "windsurf" / "mcp_config.json",
+    },
+    "cline": {
+        # Cline stores config in VS Code settings — use settings.json path
+        "windows": Path(os.environ.get("APPDATA","~")) / "Code" / "User" / "settings.json",
+        "macos":   Path.home() / "Library" / "Application Support" / "Code" / "User" / "settings.json",
+        "linux":   Path.home() / ".config" / "Code" / "User" / "settings.json",
+    },
+}
+```
+
+### Config JSON format per platform
+
+Each platform uses a slightly different JSON structure. `mcp_config_writer.py`
+handles the format differences transparently:
+
+**LM Studio / Claude Desktop / Cursor / Windsurf** (same format):
+```json
+{
+  "mcpServers": {
+    "docx-basic": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/servers/docx_basic", "docx-basic"],
+      "env": {"OFFICE_MCP_8GB_MODE": "0"}
+    }
+  }
+}
+```
+
+**Cline** (VS Code settings.json nested key):
+```json
+{
+  "cline.mcpServers": {
+    "docx-basic": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/servers/docx_basic", "docx-basic"],
+      "env": {}
+    }
+  }
+}
+```
+
+**Claude Code** (project-level `.mcp.json` in repo root):
+```json
+{
+  "mcpServers": {
+    "docx-basic": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/servers/docx_basic", "docx-basic"]
+    }
+  }
+}
+```
+
+### ChatGPT and Gemini — remote HTTP mode
+
+ChatGPT's custom GPT actions and Gemini's tool use require the MCP server to be
+reachable over HTTPS. This means:
+
+1. The user runs the server in HTTP mode on their local machine.
+2. The user exposes it via a tunnel (ngrok, Cloudflare Tunnel, or Tailscale).
+3. The tunnel URL is registered in the platform's tool/plugin config.
+
+The server's `--auth-token` flag protects the endpoint:
+```bash
+uv run --directory servers/docx_basic docx-basic \
+  --transport http --port 8765 --auth-token "$(openssl rand -hex 32)"
+```
+
+The auth token is passed in the `Authorization: Bearer <token>` header by the
+remote platform. The server rejects requests without the correct token.
+
+Document the ngrok setup in the README under "Using with ChatGPT / Gemini".
+This is an advanced use case — clearly mark it as such. The primary experience
+is local with LM Studio or Claude Desktop.
+
+### `--platform` flag in install scripts
+
+Both `install.sh` and `install.bat` prompt the user to select their AI platform
+before writing any config:
+
+```
+Which AI platform do you use?
+  1) LM Studio (recommended for local LLMs)
+  2) Claude Desktop
+  3) Cursor
+  4) Windsurf
+  5) Cline (VS Code)
+  6) Multiple platforms — write all configs
+
+Enter number: _
+```
+
+The installer then writes to all relevant config files for the selected platform.
+If the user selects option 6, it writes to every detected config file that exists.
+
+### Version compatibility notes
+
+MCP protocol versioning is date-based (`2025-11-25` is the current stable spec).
+FastMCP handles protocol negotiation automatically. The servers do not need to
+version-gate for different clients — they advertise their capabilities and the
+client uses what it supports.
+
+The one exception is the `--transport http` mode: some older MCP clients only
+support SSE transport, not the newer Streamable HTTP transport. FastMCP supports
+both. If a platform reports connection errors in HTTP mode, try:
+```bash
+uv run ... docx-basic --transport sse --port 8765
+```
+
+---
+
+## 34. Phase 14 — Multi-platform installation
+
+Add this phase to the progress tracker table and checklist.
+
+### Phase 14 checklist
+
+- [ ] Create `shared/platform_utils.py`
+  - [ ] `is_windows()`, `is_macos()`, `is_linux()` functions
+  - [ ] `get_lmstudio_mcp_config_path()` — all three OS paths
+  - [ ] `get_claude_desktop_config_path()` — all three OS paths
+  - [ ] `get_cursor_config_path()` — all three OS paths
+  - [ ] `get_windsurf_config_path()` — all three OS paths
+  - [ ] `get_cline_config_path()` — all three OS paths
+  - [ ] `get_pdf_converter()` — Word / LibreOffice / None detection
+  - [ ] `get_temp_dir()` — cross-platform temp dir
+  - [ ] `is_8gb_mode()` — reads `OFFICE_MCP_8GB_MODE` env var
+  - [ ] `get_max_paragraphs()`, `get_max_cells()`, `get_max_search_results()`
+- [ ] Update `shared/file_utils.py`
+  - [ ] `resolve_path()` — handles `\\\\?\\` prefix on Windows long paths
+  - [ ] `write_mcp_json()` — routes to correct format per platform
+- [ ] Update every `engine.py` to use `platform_utils` limit helpers
+  - [ ] `docx_basic/engine.py` — replace hardcoded 50/20 with `get_max_paragraphs()`
+  - [ ] `xlsx_basic/engine.py` — replace hardcoded 200 with `get_max_cells()`
+  - [ ] All search functions use `get_max_search_results()`
+- [ ] Update `servers/*/server.py` — add `--transport` and `--port` CLI args
+  - [ ] `docx_basic/server.py` — stdio default, http optional
+  - [ ] `docx_tables/server.py`
+  - [ ] `docx_layout/server.py`
+  - [ ] `xlsx_basic/server.py`
+  - [ ] `xlsx_formulas/server.py`
+  - [ ] `xlsx_charts/server.py`
+  - [ ] `pptx_basic/server.py`
+  - [ ] `pptx_design/server.py`
+- [ ] Update `install/mcp_config_writer.py`
+  - [ ] Add `--platform` argument (lmstudio, claude-desktop, cursor, windsurf, cline, all)
+  - [ ] Route to correct config path per platform + OS
+  - [ ] Write correct JSON structure per platform (mcpServers vs cline.mcpServers)
+  - [ ] Skip platforms whose config file does not exist yet (not installed)
+  - [ ] Report which platforms were configured successfully
+- [ ] Update `install/install.sh`
+  - [ ] Add platform selection menu (6 options)
+  - [ ] Pass `--platform` to `mcp_config_writer.py`
+  - [ ] POSIX sh compatible (`#!/bin/sh`, no bash-isms)
+  - [ ] Add `.gitattributes` LF enforcement check
+- [ ] Update `install/install.bat`
+  - [ ] Add platform selection menu
+  - [ ] Pass `--platform` to `mcp_config_writer.py`
+  - [ ] Enable long paths registry key
+  - [ ] Use `%APPDATA%` not hardcoded paths
+- [ ] Write `tests/test_platform_utils.py`
+  - [ ] `test_config_paths_are_absolute`
+  - [ ] `test_8gb_mode_flag_reduces_limits`
+  - [ ] `test_pdf_converter_detection` (mock filesystem)
+  - [ ] `test_long_path_prefix_windows` (Windows only)
+  - [ ] `test_mcp_config_writer_lmstudio_format`
+  - [ ] `test_mcp_config_writer_cline_format`
+  - [ ] `test_mcp_config_writer_claude_desktop_format`
+  - [ ] `test_mcp_config_writer_skips_missing_platform`
+- [ ] All tests pass on all three CI platforms (Ubuntu, Windows, macOS)
+- [ ] Update overall completion table: add Phase 14 row
+
+### Update overall completion summary table
+
+Add this row to the table in section 29:
+
+| 14 | Multi-platform installation | `[ ]` | After Phase 10 |
 
 ---
 
