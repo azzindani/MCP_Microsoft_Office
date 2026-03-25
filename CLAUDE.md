@@ -44,6 +44,11 @@ When in doubt, this file overrides your defaults.
 32. [Cross-platform compatibility — Windows, macOS, Linux](#32-cross-platform-compatibility--windows-macos-linux)
 33. [Multi-platform AI compatibility — Claude, ChatGPT, Gemini, and others](#33-multi-platform-ai-compatibility--claude-chatgpt-gemini-and-others)
 34. [Phase 14 — Multi-platform installation checklist](#34-phase-14--multi-platform-installation)
+35. [Progress output system — visible tool call feedback](#35-progress-output-system--visible-tool-call-feedback)
+36. [Live editing — watching changes appear in real time](#36-live-editing--watching-changes-appear-in-real-time)
+37. [File path handling — complete specification](#37-file-path-handling--complete-specification)
+38. [Operation receipt log — the persistent audit trail](#38-operation-receipt-log--the-persistent-audit-trail)
+39. [Update to section 20 — additional prohibitions](#39-update-to-section-20--additional-prohibitions)
 
 ---
 
@@ -4325,6 +4330,896 @@ Add this phase to the progress tracker table and checklist.
 Add this row to the table in section 29:
 
 | 14 | Multi-platform installation | `[ ]` | After Phase 10 |
+
+---
+
+---
+
+## 35. Progress output system — visible tool call feedback
+
+### The problem
+
+When a tool runs silently and returns a JSON blob, the user sees nothing until the
+model speaks. On a slow operation — reading a 500-row spreadsheet, replacing text
+across a 200-page contract — the UI appears frozen. The user does not know if anything
+is happening. This erodes trust and encourages repeated prompts that waste context.
+
+### The constraint: stdout belongs to MCP
+
+The MCP stdio transport uses stdout exclusively for JSON-RPC protocol messages. Any
+`print()` to stdout corrupts the channel and breaks the connection. Progress output
+cannot go to stdout.
+
+**The solution is a `progress` array in every tool response.** The model receives
+structured progress steps as part of the return value and presents them inline in
+the chat. This appears as a readable summary in LM Studio and Claude Desktop without
+any terminal involvement.
+
+### The progress field format
+
+Every tool response includes a `"progress"` array. Each entry is a dict with an
+icon, a message, and a count where relevant:
+
+```python
+{
+    "success": True,
+    "op": "apply_patch",
+    "progress": [
+        {"icon": "✔", "msg": "Opened contract_q1.docx",            "detail": "847 paragraphs"},
+        {"icon": "✔", "msg": "Replaced PARTY_A_NAME → Acme Corp",   "detail": "3 occurrences"},
+        {"icon": "✔", "msg": "Replaced PARTY_B_NAME → Widget Ltd",  "detail": "3 occurrences"},
+        {"icon": "✔", "msg": "Replaced EFFECTIVE_DATE → April 1 2026", "detail": "1 occurrence"},
+        {"icon": "✔", "msg": "Snapshot saved",                      "detail": ".mcp_versions/contract_q1_2026-03-25T14-30-00Z.bak"},
+        {"icon": "✔", "msg": "Saved contract_q1.docx",              "detail": "847 paragraphs"},
+    ],
+    "backup": ".mcp_versions/contract_q1_2026-03-25T14-30-00Z.bak",
+    "token_estimate": 180
+}
+```
+
+On failure, the progress array shows how far the operation got before failing:
+
+```python
+{
+    "success": False,
+    "progress": [
+        {"icon": "✔", "msg": "Opened budget_q3.xlsx",    "detail": "12 sheets, 4,200 cells"},
+        {"icon": "✔", "msg": "Snapshot saved",            "detail": ".mcp_versions/budget_q3_...bak"},
+        {"icon": "✘", "msg": "Sheet 'Q4 Revenue' not found", "detail": "Available: Q1 Q2 Q3 Dashboard"},
+    ],
+    "error": "Sheet 'Q4 Revenue' not found",
+    "hint": "Use list_sheets to see available sheet names.",
+    "backup": "...",
+}
+```
+
+### Icon convention
+
+Use these icons consistently across all servers. The model reads these and can
+include them verbatim in its response to the user:
+
+| Icon | Meaning |
+|---|---|
+| `✔` | Step completed successfully |
+| `✘` | Step failed — operation stopped here |
+| `→` | Step in progress or informational |
+| `⚠` | Step completed with a warning |
+| `↩` | Rollback or restore step |
+
+### shared/progress.py — the helper module
+
+Add this to `shared/`:
+
+```python
+# shared/progress.py
+
+from typing import Any
+
+
+def step(icon: str, msg: str, detail: str = "") -> dict:
+    """Create a single progress step dict."""
+    entry: dict[str, Any] = {"icon": icon, "msg": msg}
+    if detail:
+        entry["detail"] = detail
+    return entry
+
+
+def ok(msg: str, detail: str = "") -> dict:
+    """Successful step."""
+    return step("✔", msg, detail)
+
+
+def fail(msg: str, detail: str = "") -> dict:
+    """Failed step — operation stops here."""
+    return step("✘", msg, detail)
+
+
+def info(msg: str, detail: str = "") -> dict:
+    """Informational step — no pass/fail."""
+    return step("→", msg, detail)
+
+
+def warn(msg: str, detail: str = "") -> dict:
+    """Warning step — operation continues."""
+    return step("⚠", msg, detail)
+
+
+def undo(msg: str, detail: str = "") -> dict:
+    """Rollback or restore step."""
+    return step("↩", msg, detail)
+
+
+def format_progress(steps: list[dict]) -> str:
+    """
+    Format a progress list as a human-readable string.
+    Used in the model's narration of what happened.
+    """
+    lines = []
+    for s in steps:
+        line = f"{s['icon']} {s['msg']}"
+        if s.get("detail"):
+            line += f" ({s['detail']})"
+        lines.append(line)
+    return "\n".join(lines)
+```
+
+### Engine function pattern with progress
+
+Every engine function builds a `progress` list and appends to it as it works:
+
+```python
+from shared.progress import ok, fail, info, warn
+from shared.version_control import snapshot
+
+def replace_text(file_path: str, match: str, new_text: str) -> dict:
+    progress = []
+    backup = None
+    try:
+        path = resolve_path(file_path)
+        doc = Document(str(path))
+        para_count = len(doc.paragraphs)
+        progress.append(ok(f"Opened {path.name}", f"{para_count} paragraphs"))
+
+        backup = snapshot(str(path))
+        progress.append(ok("Snapshot saved", Path(backup).name))
+
+        replaced = docxedit.replace_string(doc, match, new_text)
+        if replaced == 0:
+            progress.append(fail(f"'{match}' not found in document"))
+            return {
+                "success": False,
+                "progress": progress,
+                "error": f"match_text not found: '{match}'",
+                "hint": "Use search_paragraphs to verify exact text.",
+                "backup": backup,
+                "token_estimate": len(str(progress)) // 4,
+            }
+        progress.append(ok(f"Replaced '{match}' → '{new_text}'",
+                           f"{replaced} occurrence{'s' if replaced != 1 else ''}"))
+
+        doc.save(str(path))
+        progress.append(ok(f"Saved {path.name}", f"{para_count} paragraphs"))
+
+        return {
+            "success": True,
+            "op": "replace_text",
+            "replaced_count": replaced,
+            "backup": backup,
+            "progress": progress,
+            "token_estimate": len(str(progress)) // 4,
+        }
+    except Exception as e:
+        progress.append(fail(str(e)))
+        return {
+            "success": False,
+            "progress": progress,
+            "error": str(e),
+            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "backup": backup,
+            "token_estimate": len(str(progress)) // 4,
+        }
+```
+
+### Progress messages by operation type
+
+Standard progress message templates for each operation type. Use these exact
+phrasings for consistency — the model learns to read them:
+
+**File operations:**
+- Open: `"Opened {filename}"` / detail: `"{n} paragraphs"` / `"{n} rows, {m} columns"`
+- Save: `"Saved {filename}"` / detail: file size or item count
+- Snapshot: `"Snapshot saved"` / detail: snapshot filename
+- Restore: `"Restored from snapshot"` / detail: snapshot filename
+
+**DOCX operations:**
+- Read: `"Read {filename}"` / detail: `"{n} paragraphs, {t} tables"`
+- Search: `"Found {n} matches for '{query}'"` / detail: paragraph indices
+- Replace: `"Replaced '{old}' → '{new}'"` / detail: `"{n} occurrences"`
+- Insert: `"Inserted paragraph at index {n}"` / detail: style name
+- Delete: `"Deleted paragraph {n}"` / detail: first 40 chars of deleted text
+- Export: `"Exported to PDF"` / detail: output file path
+
+**XLSX operations:**
+- Read: `"Read sheet '{name}'"` / detail: `"{n} rows, {m} columns"`
+- Set cell: `"Set {cell} = {value}"` / detail: sheet name
+- Set formula: `"Set {cell} = {formula}"` / detail: sheet name
+- Add chart: `"Created {type} chart '{title}'"` / detail: anchor cell
+
+**PPTX operations:**
+- Read: `"Read presentation"` / detail: `"{n} slides"`
+- Set text: `"Updated '{shape}' on slide {n}"` / detail: first 40 chars of new text
+- Add slide: `"Added slide {n} '{title}'"` / detail: layout name
+- Delete slide: `"Deleted slide {n} '{title}'"` / detail: none
+
+### What the model should do with progress
+
+The model reads the `progress` array and presents it as a bulleted summary to the
+user. The system prompt (or tool instructions) should include:
+
+```
+When a tool returns a "progress" array, present it as a clean list before
+your analysis. Use the icon and message from each step verbatim.
+```
+
+The user then sees:
+
+```
+✔ Opened contract_q1.docx (847 paragraphs)
+✔ Snapshot saved (contract_q1_2026-03-25T14-30-00Z.bak)
+✔ Replaced 'PARTY_A_NAME' → 'Acme Corp' (3 occurrences)
+✔ Replaced 'PARTY_B_NAME' → 'Widget Ltd' (3 occurrences)
+✔ Saved contract_q1.docx (847 paragraphs)
+```
+
+This appears in the chat UI without the user opening any file or reading any log.
+
+---
+
+## 36. Live editing — watching changes appear in real time
+
+### What this means
+
+When the user has a `.docx`, `.xlsx`, or `.pptx` file open in the native application
+(Word, Excel, PowerPoint), edits made by the MCP tool should appear in the open
+document without the user needing to close and reopen it.
+
+This is possible but the implementation is platform-specific. It is a Phase 15 feature
+— built after all core engines are complete and tested.
+
+### The technical problem: file locking
+
+On Windows, Microsoft Office locks files while they are open. `python-docx` and
+`openpyxl` cannot write to a file that Office has locked with an exclusive lock.
+This is the primary constraint for live editing on Windows.
+
+On macOS, Office uses advisory locks (not mandatory). Another process can write to
+the file, and Word/Excel will detect the change and offer to reload.
+
+On Linux, LibreOffice uses a lock file (`.~lock.{filename}#`) but the actual file
+is not exclusively locked. The engine can write directly and LibreOffice will detect
+the change.
+
+### Platform-specific live editing strategies
+
+**macOS — write + notify (works cleanly)**
+
+On macOS, the pattern is:
+1. Write the edited file to disk normally via `python-docx`/`openpyxl`
+2. Trigger a reload notification to the open application via AppleScript
+
+```python
+# shared/live_edit.py — macOS implementation
+import subprocess
+
+def notify_word_reload(file_path: str) -> bool:
+    """
+    Tell Microsoft Word to reload the document from disk.
+    Returns True if notification was sent, False if Word is not running.
+    """
+    script = f'''
+    tell application "Microsoft Word"
+        set targetDoc to "{file_path}"
+        repeat with d in documents
+            if full name of d is targetDoc then
+                close d saving no
+                open targetDoc
+                return true
+            end if
+        end repeat
+    end tell
+    '''
+    result = subprocess.run(
+        ["osascript", "-e", script],
+        capture_output=True, text=True
+    )
+    return result.returncode == 0
+
+
+def notify_excel_reload(file_path: str) -> bool:
+    """Tell Microsoft Excel to reload the workbook."""
+    script = f'''
+    tell application "Microsoft Excel"
+        set targetWB to "{file_path}"
+        repeat with wb in workbooks
+            if full name of wb is targetWB then
+                close wb saving no
+                open workbook workbook file name targetWB
+                return true
+            end if
+        end repeat
+    end tell
+    '''
+    result = subprocess.run(
+        ["osascript", "-e", script],
+        capture_output=True, text=True
+    )
+    return result.returncode == 0
+```
+
+**Windows — shadow file pattern (works around the lock)**
+
+On Windows, Office locks the file. The engine cannot write directly. The pattern is:
+
+1. Write edits to a shadow copy: `{filename}._mcp_shadow.docx`
+2. Close the original in Word via COM (requires `pywin32`)
+3. Replace the original with the shadow copy
+4. Reopen in Word via COM
+
+This is invasive and requires `pywin32`. It is supported but not the default. The
+engine falls back to normal (non-live) writing if `pywin32` is not installed, and
+adds a progress step `"→ Reopen file to see changes"`.
+
+**Linux — write + poll (LibreOffice detects changes)**
+
+LibreOffice polls the file for changes every ~2 seconds when it is open. Simply
+writing the file via `python-docx` is sufficient — LibreOffice will detect it and
+show a "Document has been modified by another program. Reload?" dialog. The engine
+adds a progress step: `"→ Accept reload prompt in LibreOffice to see changes"`.
+
+### Live edit detection in engine.py
+
+The engine auto-detects whether the file is currently open and selects the appropriate
+strategy. This is implemented in `shared/live_edit.py`:
+
+```python
+# shared/live_edit.py
+
+import sys
+from pathlib import Path
+from shared.platform_utils import is_windows, is_macos, is_linux
+
+
+def is_file_open(file_path: str) -> bool:
+    """
+    Check if the file is currently open in a native application.
+    Uses platform-specific detection.
+    """
+    path = Path(file_path)
+    if is_windows():
+        # Windows: try to open with exclusive access — fails if locked
+        try:
+            with open(path, 'r+b'):
+                return False
+        except PermissionError:
+            return True
+    elif is_macos():
+        # macOS: check for Office temp files
+        lock_file = path.parent / f".~lock.{path.name}#"
+        owner_file = path.parent / f"~${path.name}"
+        return lock_file.exists() or owner_file.exists()
+    else:
+        # Linux: check LibreOffice lock file
+        lock_file = path.parent / f".~lock.{path.name}#"
+        return lock_file.exists()
+
+
+def notify_reload(file_path: str, app_type: str) -> dict:
+    """
+    Attempt to notify the open application to reload the file.
+    Returns a progress step dict indicating what happened.
+    """
+    from shared.progress import ok, info
+
+    if not is_file_open(file_path):
+        return ok("File saved", Path(file_path).name)
+
+    if is_macos():
+        if app_type == "docx":
+            success = _notify_word_reload_macos(file_path)
+        elif app_type == "xlsx":
+            success = _notify_excel_reload_macos(file_path)
+        else:
+            success = False
+        if success:
+            return ok("Live update sent — document reloaded in Word/Excel")
+        else:
+            return info("File saved — reopen to see changes")
+
+    elif is_linux():
+        return info("File saved — accept reload prompt in LibreOffice")
+
+    else:  # Windows
+        return info("File saved — close and reopen to see changes (Word has file locked)")
+```
+
+Every write engine function calls `notify_reload()` as its final progress step:
+
+```python
+# In engine.py after saving
+doc.save(str(path))
+reload_step = notify_reload(str(path), "docx")
+progress.append(reload_step)
+```
+
+### Live editing in the progress output
+
+The user sees this on macOS when Word is open:
+
+```
+✔ Opened contract_q1.docx (847 paragraphs)
+✔ Snapshot saved
+✔ Replaced 'PARTY_A_NAME' → 'Acme Corp' (3 occurrences)
+✔ Saved contract_q1.docx
+✔ Live update sent — document reloaded in Word/Excel
+```
+
+And on Windows:
+
+```
+✔ Opened contract_q1.docx (847 paragraphs)
+✔ Snapshot saved
+✔ Replaced 'PARTY_A_NAME' → 'Acme Corp' (3 occurrences)
+✔ Saved contract_q1.docx
+→ File saved — close and reopen to see changes (Word has file locked)
+```
+
+### Phase 15 checklist
+
+- [ ] Create `shared/live_edit.py`
+  - [ ] `is_file_open()` — Windows, macOS, Linux detection
+  - [ ] `notify_reload()` — routes to platform strategy
+  - [ ] `_notify_word_reload_macos()` — AppleScript implementation
+  - [ ] `_notify_excel_reload_macos()` — AppleScript implementation
+  - [ ] `_notify_libreoffice_linux()` — no-op (polling handles it)
+  - [ ] Windows shadow file pattern — gated on `pywin32` availability
+- [ ] Integrate `notify_reload()` into all write engine functions
+  - [ ] `docx_basic/engine.py` — all write functions
+  - [ ] `docx_tables/engine.py` — all write functions
+  - [ ] `docx_layout/engine.py` — all write functions
+  - [ ] `xlsx_basic/engine.py` — all write functions
+  - [ ] `xlsx_formulas/engine.py` — all write functions
+  - [ ] `xlsx_charts/engine.py` — all write functions
+  - [ ] `pptx_basic/engine.py` — all write functions
+  - [ ] `pptx_design/engine.py` — all write functions
+- [ ] Write `tests/test_live_edit.py`
+  - [ ] `test_is_file_open_detects_locked_file` (Windows only)
+  - [ ] `test_is_file_open_detects_libre_lock` (Linux only)
+  - [ ] `test_notify_reload_returns_progress_step`
+  - [ ] `test_notify_reload_graceful_when_not_open`
+- [ ] Update progress message templates in section 35 with live edit step
+- [ ] Add Phase 15 to overall completion table in section 29
+
+---
+
+## 37. File path handling — complete specification
+
+### The problem with file paths from users
+
+Users provide file paths in many formats depending on how they got the path:
+- Typed manually: `~/Documents/contract.docx`
+- Copy-pasted from Finder/Explorer: `/Users/alex/Documents/contract.docx`
+- Drag-and-drop onto chat: `"/Users/alex/My Documents/contract.docx"` (with quotes)
+- Windows Explorer copy: `C:\Users\alex\Documents\contract.docx`
+- Windows UNC path: `\\server\share\contract.docx`
+- Relative path: `../contracts/contract.docx`
+- With env variable: `$HOME/Documents/contract.docx`
+
+Every tool must accept all of these. The `resolve_path()` function in
+`shared/file_utils.py` is the single place that normalises all formats.
+
+### Complete resolve_path() implementation
+
+```python
+# shared/file_utils.py
+
+import os
+import re
+import sys
+from pathlib import Path
+
+
+def resolve_path(raw: str) -> Path:
+    """
+    Normalise any user-provided file path to an absolute resolved Path.
+
+    Handles:
+    - Leading/trailing whitespace and quotes (drag-and-drop artifacts)
+    - ~ home directory expansion
+    - Environment variable expansion ($HOME, %USERPROFILE%)
+    - Windows backslash paths (converted to forward slashes)
+    - Windows UNC paths (\\server\share\...)
+    - Relative paths (resolved from CWD)
+    - Windows long path prefix (\\\\?\\) stripped for processing
+
+    Raises:
+        ValueError: if the resolved path is inside .mcp_versions/
+        ValueError: if the path contains null bytes or other dangerous chars
+    """
+    # Strip outer whitespace
+    s = raw.strip()
+
+    # Strip wrapping quotes — drag-and-drop on macOS/Windows adds these
+    if (s.startswith('"') and s.endswith('"')) or \
+       (s.startswith("'") and s.endswith("'")):
+        s = s[1:-1].strip()
+
+    # Strip Windows long path prefix if present
+    if s.startswith("\\\\?\\"):
+        s = s[4:]
+
+    # Reject null bytes — security check
+    if "\x00" in s:
+        raise ValueError("Path contains null byte — invalid path.")
+
+    # Expand environment variables ($HOME, %USERPROFILE%, etc.)
+    s = os.path.expandvars(s)
+
+    # Expand ~ and ~user
+    s = os.path.expanduser(s)
+
+    # On Windows, normalise backslashes
+    if sys.platform == "win32":
+        s = s.replace("\\", "/")
+
+    path = Path(s).resolve()
+
+    # Reject paths inside .mcp_versions/ — prevents snapshot-of-snapshot loops
+    if ".mcp_versions" in path.parts:
+        raise ValueError(
+            f"Path '{path}' is inside .mcp_versions/. "
+            "Pass the original document path, not a backup path."
+        )
+
+    return path
+```
+
+### file_path is always the first parameter
+
+Every tool that operates on a file takes `file_path: str` as its first parameter.
+No exceptions. This makes the tool interface predictable — the model always knows
+where to put the path.
+
+```python
+# Correct — file_path first
+def replace_text(file_path: str, match: str, new_text: str) -> dict: ...
+def read_paragraph(file_path: str, index: int) -> dict: ...
+def add_chart(file_path: str, sheet_name: str, chart_type: str, ...) -> dict: ...
+
+# Wrong — path buried in middle
+def replace_text(match: str, file_path: str, new_text: str) -> dict: ...
+```
+
+### Path validation messages
+
+When `resolve_path()` fails, the progress output and error dict must be helpful:
+
+```python
+progress.append(fail(
+    f"Cannot open file",
+    f"Path not found: {raw_path}"
+))
+return {
+    "success": False,
+    "progress": progress,
+    "error": f"File not found: {raw_path}",
+    "hint": (
+        "Provide the full absolute path. "
+        "On Windows use forward slashes: C:/Users/you/doc.docx. "
+        "On macOS/Linux: /Users/you/doc.docx or ~/Documents/doc.docx"
+    ),
+    "token_estimate": 40,
+}
+```
+
+### File type validation
+
+Every engine function validates the file extension immediately after resolving the
+path. Wrong file type is the second most common user error after wrong path.
+
+```python
+_EXPECTED_EXTENSIONS = {
+    "docx_basic":    {".docx"},
+    "docx_tables":   {".docx"},
+    "docx_layout":   {".docx"},
+    "xlsx_basic":    {".xlsx", ".xlsm"},
+    "xlsx_formulas": {".xlsx", ".xlsm"},
+    "xlsx_charts":   {".xlsx", ".xlsm"},
+    "pptx_basic":    {".pptx"},
+    "pptx_design":   {".pptx"},
+}
+
+def validate_extension(path: Path, server: str) -> dict | None:
+    """
+    Returns None if extension is valid.
+    Returns an error dict if extension is wrong.
+    """
+    allowed = _EXPECTED_EXTENSIONS.get(server, set())
+    if path.suffix.lower() not in allowed:
+        return {
+            "success": False,
+            "progress": [fail(
+                f"Wrong file type: {path.suffix}",
+                f"This server handles: {', '.join(sorted(allowed))}"
+            )],
+            "error": f"Expected {'/'.join(sorted(allowed))} file, got {path.suffix}",
+            "hint": f"Use the correct server for {path.suffix} files.",
+            "token_estimate": 30,
+        }
+    return None
+```
+
+### Path in progress output
+
+Always include the filename (not the full path) in progress messages. Full paths
+are long, consume tokens, and are harder to read. `Path(file_path).name` gives
+just the filename.
+
+```python
+# Good — readable, short
+progress.append(ok(f"Opened {Path(file_path).name}", f"{para_count} paragraphs"))
+
+# Bad — long path wastes tokens and is hard to read
+progress.append(ok(f"Opened /Users/alex/Documents/Legal/Contracts/2026/Q1/contract_q1_final_v3.docx"))
+```
+
+---
+
+## 38. Operation receipt log — the persistent audit trail
+
+### What it is
+
+Every tool call that modifies a file appends a structured entry to a persistent
+`.mcp_receipt.json` file stored alongside the document. This is the user's audit
+trail — they can see exactly what changed, when, and by which tool, without opening
+any log file or the document itself.
+
+The receipt log is separate from the `.mcp_versions/` snapshots. Snapshots are for
+rollback. The receipt log is for visibility and trust.
+
+### Receipt log format
+
+```json
+{
+    "file": "contract_q1.docx",
+    "entries": [
+        {
+            "ts":       "2026-03-25T14:30:00Z",
+            "tool":     "replace_text",
+            "server":   "docx_basic",
+            "args":     {"match": "PARTY_A_NAME", "new_text": "Acme Corp"},
+            "result":   "✔ Replaced 3 occurrences",
+            "backup":   ".mcp_versions/contract_q1_2026-03-25T14-30-00Z.bak",
+            "success":  true
+        },
+        {
+            "ts":       "2026-03-25T14:30:05Z",
+            "tool":     "replace_text",
+            "server":   "docx_basic",
+            "args":     {"match": "PARTY_B_NAME", "new_text": "Widget Ltd"},
+            "result":   "✔ Replaced 3 occurrences",
+            "backup":   ".mcp_versions/contract_q1_2026-03-25T14-30-05Z.bak",
+            "success":  true
+        }
+    ]
+}
+```
+
+### shared/receipt.py
+
+```python
+# shared/receipt.py
+
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+from shared.file_utils import resolve_path
+
+
+def append_receipt(
+    file_path: str,
+    tool: str,
+    server: str,
+    args: dict,
+    result: str,
+    backup: str | None,
+    success: bool,
+) -> None:
+    """
+    Append one entry to the receipt log for this file.
+    Creates the log if it does not exist.
+    Never raises — receipt failures must not abort the main operation.
+    """
+    try:
+        path = Path(file_path).resolve()
+        receipt_path = path.parent / f"{path.stem}.mcp_receipt.json"
+
+        if receipt_path.exists():
+            data = json.loads(receipt_path.read_text(encoding="utf-8"))
+        else:
+            data = {"file": path.name, "entries": []}
+
+        data["entries"].append({
+            "ts":      datetime.now(timezone.utc).isoformat(),
+            "tool":    tool,
+            "server":  server,
+            "args":    _sanitise_args(args),
+            "result":  result,
+            "backup":  backup,
+            "success": success,
+        })
+
+        # Atomic write
+        import tempfile, shutil
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", delete=False,
+            suffix=".json", dir=receipt_path.parent
+        ) as tmp:
+            json.dump(data, tmp, indent=2, ensure_ascii=False)
+            tmp_path = tmp.name
+        shutil.move(tmp_path, receipt_path)
+
+    except Exception:
+        pass  # receipt failure must never abort the main operation
+
+
+def _sanitise_args(args: dict) -> dict:
+    """Remove large values from args before logging."""
+    sanitised = {}
+    for k, v in args.items():
+        if isinstance(v, str) and len(v) > 200:
+            sanitised[k] = v[:200] + "... [truncated]"
+        elif isinstance(v, list) and len(v) > 10:
+            sanitised[k] = v[:10] + ["... [truncated]"]
+        else:
+            sanitised[k] = v
+    return sanitised
+```
+
+### read_receipt tool — available in every basic server
+
+Every `_basic` server includes a `read_receipt` tool:
+
+```python
+@mcp.tool()
+def read_receipt(file_path: str, last_n: int = 10) -> dict:
+    """Show recent tool operations on this file. last_n: how many to show."""
+    return engine.read_receipt(file_path, last_n)
+```
+
+The engine function:
+
+```python
+def read_receipt(file_path: str, last_n: int = 10) -> dict:
+    from shared.receipt import read_receipt_log
+    path = resolve_path(file_path)
+    entries = read_receipt_log(str(path), last_n)
+    return {
+        "success": True,
+        "file": path.name,
+        "entries": entries,
+        "token_estimate": len(str(entries)) // 4,
+        "progress": [ok(f"Read receipt log for {path.name}",
+                        f"{len(entries)} recent entries")],
+    }
+```
+
+The user can ask: "What changes have been made to this contract?" and the model
+calls `read_receipt` to show the full history without opening any file.
+
+### Dry run mode
+
+Every write tool supports `dry_run: bool = False`. When `dry_run=True`, the tool
+shows exactly what would change — including the progress output — without actually
+modifying the file. No snapshot is taken. No receipt entry is written.
+
+```python
+@mcp.tool()
+def replace_text(
+    file_path: str,
+    match: str,
+    new_text: str,
+    preserve_style: bool = True,
+    dry_run: bool = False,
+) -> dict:
+    """Find text and replace in-place, preserving run formatting."""
+    return engine.replace_text(file_path, match, new_text, preserve_style, dry_run)
+```
+
+In the engine, dry run bypasses snapshot and save:
+
+```python
+def replace_text(file_path, match, new_text, preserve_style=True, dry_run=False):
+    progress = []
+    ...
+    # Find matches (always runs)
+    matches = find_matches(doc, match)
+    progress.append(info(
+        f"[DRY RUN] Would replace '{match}' → '{new_text}'" if dry_run
+        else f"Replacing '{match}' → '{new_text}'",
+        f"{len(matches)} occurrence{'s' if len(matches) != 1 else ''}"
+    ))
+
+    if dry_run:
+        progress.append(info("Dry run complete — no changes made"))
+        return {
+            "success": True,
+            "op": "replace_text",
+            "dry_run": True,
+            "would_replace": len(matches),
+            "match_locations": [m["paragraph_index"] for m in matches],
+            "progress": progress,
+            "token_estimate": len(str(progress)) // 4,
+        }
+
+    # Actual write only if not dry_run
+    backup = snapshot(str(path))
+    ...
+```
+
+The user can say "show me what would change if you replaced PARTY_A_NAME with Acme Corp"
+and the model calls `replace_text(..., dry_run=True)` to show the result safely.
+
+### Update section 20 — new rules
+
+Add these to the "What Claude must never do" section:
+
+- **Never write a tool that does not include a `"progress"` array in its return
+  dict.** Every tool response must have progress steps. An empty `[]` is acceptable
+  for trivial read operations. A missing key is a bug.
+
+- **Never `print()` progress to stdout.** All user-visible output goes in the
+  `"progress"` array of the return dict. Stdout belongs to MCP.
+
+- **Never skip `append_receipt()` after a write operation.** Receipt logging is
+  mandatory for all tools that modify files. It must be called even on failure
+  (so the user can see what was attempted).
+
+- **Never use raw full paths in progress messages.** Always use `Path(x).name`
+  for filenames in progress steps.
+
+---
+
+## 39. Update to section 20 — additional prohibitions
+
+Add these to the existing "What Claude must never do" list:
+
+15. **Never return a tool response without a `"progress"` array.**
+    Every tool response must include `"progress": [...]`. For trivial read-only
+    tools that have nothing to report, `"progress": []` is acceptable. A missing
+    `"progress"` key is a defect.
+
+16. **Never print progress to stdout.**
+    Progress belongs in the `"progress"` array of the return dict. stdout is the
+    MCP JSON-RPC channel. Any print to stdout corrupts the connection.
+
+17. **Never skip receipt logging after a write.**
+    `shared.receipt.append_receipt()` must be called after every write operation,
+    whether it succeeded or failed. The user's audit trail must be complete.
+
+18. **Never use full absolute paths in progress messages.**
+    Use `Path(file_path).name` — just the filename. Full paths are long, consume
+    tokens, and are unreadable in the chat UI.
+
+19. **Never implement live editing without the `shared/live_edit.py` module.**
+    Platform-specific file-open detection and reload notification must go through
+    the shared module. No inline `subprocess.run(["osascript", ...])` calls in
+    engine.py directly.
+
+20. **Never skip file path normalisation.**
+    Every tool that accepts a `file_path` parameter must call `resolve_path()` from
+    `shared/file_utils.py` as the first operation. Never pass raw user-provided
+    strings directly to `open()`, `Document()`, `load_workbook()`, or any library
+    function.
 
 ---
 
