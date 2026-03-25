@@ -1,75 +1,86 @@
-# STANDARDS.md — MCP Server Development Standards
+# STANDARDS.md — General-Purpose MCP Server Development Standards
 
 This document defines the complete standard for building open-source MCP
-(Model Context Protocol) servers intended for local LLM use. It is derived from
+(Model Context Protocol) servers with local execution engines. It is derived from
 real architectural decisions, real failure modes, and real hardware constraints
-encountered while building production-grade MCP tooling.
+encountered while building production-grade MCP tooling across multiple domains:
+document editing, data analytics, machine learning, media processing, system
+automation, and more.
 
-These standards apply to any MCP server regardless of domain — document editing,
-browser automation, email, calendar, database, file management, or anything else.
-They are not optional guidelines. They are the rules that determine whether a server
-works reliably on constrained hardware with a 9B parameter local model.
-
----
-
-## Table of contents
-
-1.  [Why these standards exist](#1-why-these-standards-exist)
-2.  [The core mental model — what an MCP server actually is](#2-the-core-mental-model--what-an-mcp-server-actually-is)
-3.  [Language and runtime selection](#3-language-and-runtime-selection)
-4.  [Repository structure](#4-repository-structure)
-5.  [The three-tier split — when to build separate servers](#5-the-three-tier-split--when-to-build-separate-servers)
-6.  [Tool count discipline](#6-tool-count-discipline)
-7.  [The four-tool pattern — the fundamental execution loop](#7-the-four-tool-pattern--the-fundamental-execution-loop)
-8.  [Surgical read protocol — never return more than needed](#8-surgical-read-protocol--never-return-more-than-needed)
-9.  [Tool schema design](#9-tool-schema-design)
-10. [The patch protocol — structured ops over full rewrites](#10-the-patch-protocol--structured-ops-over-full-rewrites)
-11. [Engine and server separation](#11-engine-and-server-separation)
-12. [Return value contract](#12-return-value-contract)
-13. [Error handling contract](#13-error-handling-contract)
-14. [State and version control](#14-state-and-version-control)
-15. [Token budget discipline](#15-token-budget-discipline)
-16. [VRAM tiers and hardware constraints](#16-vram-tiers-and-hardware-constraints)
-17. [Testing standards](#17-testing-standards)
-18. [Cross-platform compatibility](#18-cross-platform-compatibility)
-19. [Multi-platform AI client compatibility](#19-multi-platform-ai-client-compatibility)
-20. [Transport modes — stdio and HTTP](#20-transport-modes--stdio-and-http)
-21. [Installation and distribution](#21-installation-and-distribution)
-22. [Naming conventions](#22-naming-conventions)
-23. [Dependency policy](#23-dependency-policy)
-24. [CI/CD requirements](#24-cicd-requirements)
-25. [Documentation requirements](#25-documentation-requirements)
-26. [What to never do](#26-what-to-never-do)
-27. [Checklist — new server from scratch](#27-checklist--new-server-from-scratch)
-28. [Checklist — new tool in existing server](#28-checklist--new-tool-in-existing-server)
+These standards apply to any MCP server regardless of domain. They are not optional
+guidelines. They are the rules that determine whether a server works reliably on
+constrained hardware with a local LLM — or at all.
 
 ---
 
-## 1. Why these standards exist
+## Table of Contents
 
-Most MCP servers are built for cloud AI with large context windows and fast inference.
-When those servers are used with local LLMs on consumer hardware, they fail in
-predictable ways:
+1. [Why these standards exist](#1-why-these-standards-exist)
+2. [The core mental model](#2-the-core-mental-model)
+3. [The self-hosted execution principle](#3-the-self-hosted-execution-principle)
+4. [Language and runtime selection](#4-language-and-runtime-selection)
+5. [Repository structure](#5-repository-structure)
+6. [The three-tier split](#6-the-three-tier-split)
+7. [Tool count discipline](#7-tool-count-discipline)
+8. [The four-tool pattern](#8-the-four-tool-pattern)
+9. [Surgical read protocol](#9-surgical-read-protocol)
+10. [Tool schema design](#10-tool-schema-design)
+11. [The patch protocol](#11-the-patch-protocol)
+12. [Engine and server separation](#12-engine-and-server-separation)
+13. [Return value contract](#13-return-value-contract)
+14. [Error handling contract](#14-error-handling-contract)
+15. [State and version control](#15-state-and-version-control)
+16. [Token budget discipline](#16-token-budget-discipline)
+17. [Hardware tiers and resource constraints](#17-hardware-tiers-and-resource-constraints)
+18. [Progress output](#18-progress-output)
+19. [Live state and reload](#19-live-state-and-reload)
+20. [Operation receipt log](#20-operation-receipt-log)
+21. [Testing standards](#21-testing-standards)
+22. [Cross-platform compatibility](#22-cross-platform-compatibility)
+23. [Multi-client compatibility](#23-multi-client-compatibility)
+24. [Transport modes](#24-transport-modes)
+25. [Installation and distribution](#25-installation-and-distribution)
+26. [Naming conventions](#26-naming-conventions)
+27. [Dependency policy](#27-dependency-policy)
+28. [CI/CD requirements](#28-cicd-requirements)
+29. [Documentation requirements](#29-documentation-requirements)
+30. [What to never do](#30-what-to-never-do)
+31. [Checklist — new server from scratch](#31-checklist--new-server-from-scratch)
+32. [Checklist — new tool in existing server](#32-checklist--new-tool-in-existing-server)
+33. [Domain reference table](#33-domain-reference-table)
 
-- Tool schemas consume 20-30% of the available context window before any work starts
-- Tools return entire file contents when only three lines are needed
-- A single "helpful" tool does too many things, confusing a 9B model into picking wrong
-- No version control means a bad tool call silently corrupts the user's file
+---
+
+## 1. Why These Standards Exist
+
+Most MCP servers are built for cloud AI with large context windows, fast inference,
+and the assumption of always-on internet. When those servers are used with local LLMs
+on consumer hardware, they fail in predictable ways:
+
+- Tool schemas consume 20–30% of the available context window before any work starts
+- Tools return entire datasets when only a slice is needed
+- A single "helpful" tool does too many things, confusing smaller models
+- No version control means a bad tool call silently corrupts user data
+- Tools rely on external APIs, leaking data and requiring paid subscriptions
 - Install requires 15 manual steps, so nobody uses it
 
 These standards exist to prevent all of these failures by design, not by luck.
 
-The target constraint that drives every decision in this document:
+The two target constraints that drive every decision in this document:
 
-> **A user with an 8GB GPU, running a 9B parameter local model, doing real work on
-> real files, must be able to use these tools without hitting context limits, without
-> corrupting data, and without needing a developer to set it up.**
+> **Constraint 1 (hardware):** A user with an 8GB GPU, running a 9B parameter local
+> model, doing real work on real data, must be able to use these tools without hitting
+> context limits, without corrupting data, and without needing a developer to set it up.
 
-Every rule in this document traces back to that constraint.
+> **Constraint 2 (sovereignty):** All execution happens locally. No data leaves the
+> user's machine. No API keys. No cloud subscriptions. No dependency on a third-party
+> server being up. The tool runs on the user's hardware using the user's resources.
+
+Every rule in this document traces back to one or both of these constraints.
 
 ---
 
-## 2. The core mental model — what an MCP server actually is
+## 2. The Core Mental Model
 
 An MCP server is a **structured API that a language model calls with JSON arguments
 and receives JSON results from**. It is not a chat assistant. It is not a script
@@ -78,8 +89,6 @@ runner. It is not an AI agent. It is a deterministic function executor.
 The model provides intelligence — deciding what to call, in what order, with what
 arguments. The MCP server provides execution — doing the operation reliably, returning
 structured confirmation, never guessing.
-
-This distinction matters because it defines the boundary:
 
 ```
 Model's job:        understand intent, choose tools, generate arguments, decide next step
@@ -90,41 +99,99 @@ The server must never cross into the model's job. No AI inference inside tools. 
 "smart" behavior that guesses what the user probably meant. No tools that decide
 to do extra work beyond what was asked. Deterministic in, deterministic out.
 
+This boundary is what makes the server testable, debuggable, and reliable on
+hardware-constrained machines.
+
 ---
 
-## 3. Language and runtime selection
+## 3. The Self-Hosted Execution Principle
+
+This is the founding principle that distinguishes this standard from cloud-first MCP
+servers.
+
+### What it means
+
+Every tool in every server must execute its core operation using local resources:
+local CPU, local GPU, local RAM, local disk, local processes. The tool must not
+require an internet connection to perform its primary function.
+
+### What is allowed
+
+- Reading from and writing to local files and databases
+- Spawning local subprocesses (FFmpeg, Tesseract, LibreOffice, etc.)
+- Using local GPU via CUDA/ROCm/Metal through standard libraries
+- Communicating with services the user runs locally (local Postgres, local Docker,
+  local MLflow, local Redis)
+- Optional enhancement via network (e.g., downloading a model weight on first run)
+  provided the tool degrades gracefully without it
+
+### What is not allowed as a primary execution path
+
+- Calling a third-party paid API to perform the core operation (OpenAI, Google Cloud
+  Vision, AWS Textract, Cohere, etc.)
+- Requiring OAuth or API key authentication to function
+- Sending user data to an external server as part of normal tool execution
+- Depending on a cloud service being online for the tool to succeed
+
+### The test
+
+Ask this question for every tool: **"Can this tool complete its primary operation
+with the machine disconnected from the internet?"** If the answer is no, the tool
+violates this standard.
+
+### Exceptions
+
+Network access is permitted for:
+- One-time model/asset downloads on first run (with local caching)
+- Tools explicitly scoped to network operations (web scraper, feed reader, sitemap
+  crawler) where network access is the stated purpose
+- Optional telemetry that is disabled by default
+
+Document every exception clearly in the tool's docstring and in the README.
+
+---
+
+## 4. Language and Runtime Selection
 
 ### The rule: libraries dictate language, not preference
 
-Choose the language that has the best library support for your domain. Not the language
-you prefer. Not the language that's fashionable. The language where the problem is
-already solved.
+Choose the language that has the best library support for your domain. Not the
+language you prefer. Not the language that is fashionable. The language where the
+problem is already solved locally.
 
-| Domain | Best language | Reason |
+| Domain | Recommended language | Primary local libraries |
 |---|---|---|
-| Office document editing (docx, xlsx, pptx) | Python | python-docx, openpyxl, python-pptx — no equivalents elsewhere |
-| PDF manipulation | Python | pdfplumber, PyMuPDF, reportlab |
+| Document editing (docx, xlsx, pptx) | Python | python-docx, openpyxl, python-pptx |
+| PDF manipulation | Python | PyMuPDF, pdfplumber, reportlab |
+| Data analytics | Python | polars, duckdb, pandas, ydata-profiling |
+| Machine learning | Python | scikit-learn, XGBoost, LightGBM, FLAML |
+| Deep learning / GPU | Python | PyTorch, ONNX Runtime |
+| Image processing | Python | Pillow, OpenCV, scikit-image |
+| Audio processing | Python | librosa, pydub |
+| Video processing | Python | MoviePy, FFmpeg (subprocess) |
+| OCR | Python | easyocr, surya, pytesseract |
 | Browser automation | Python or TypeScript | playwright-python or playwright (Node) |
-| Email / IMAP / SMTP | Python | imaplib, smtplib — mature, stdlib |
-| Database (SQL) | Python or TypeScript | Either has mature connectors |
+| Database (SQL) | Python or TypeScript | duckdb, sqlite3, psycopg2 |
+| System / OS automation | Python or Go | psutil, subprocess; Go single binary |
+| Web scraping | Python | playwright, BeautifulSoup, httpx |
 | File system operations | Go or Rust | Single binary, no runtime, fastest |
 | Web API wrappers | TypeScript | Best for JSON-heavy REST APIs |
-| OS-level automation | Rust or Go | Single binary, zero dependencies |
-| Image processing | Python | Pillow, OpenCV |
+| Geospatial | Python | geopandas, shapely, rasterio |
+| Time series | Python | statsforecast, sktime, neuralprophet |
+| Security tools | Python or Rust | cryptography, bandit, detect-secrets |
 
 ### Python setup
 
-Pin Python to `3.11`. Use `uv` as the package manager. Never use pip directly.
-Never use conda. Never use poetry for new projects — uv workspaces are superior
-for monorepos.
+Pin Python to `3.11`. Use `uv` as the package manager. Never use pip directly in
+production. Never use conda. Never use poetry for new projects.
 
-```toml
+```
 # .python-version
 3.11
 ```
 
 ```toml
-# pyproject.toml (root)
+# pyproject.toml
 [project]
 requires-python = ">=3.11"
 ```
@@ -136,7 +203,7 @@ Use Node.js 20 LTS. Use `npm` with `package-lock.json` committed. Pin the
 
 ### Go setup
 
-Use Go 1.22+. Commit `go.sum`. Use the community MCP SDK (`github.com/mark3labs/mcp-go`).
+Use Go 1.22+. Commit `go.sum`. Use `github.com/mark3labs/mcp-go`.
 
 ### Rust setup
 
@@ -144,58 +211,59 @@ Use Rust stable channel. Use the `rmcp` crate. Commit `Cargo.lock`.
 
 ---
 
-## 4. Repository structure
+## 5. Repository Structure
 
 ### Monorepo is the default for multi-server projects
 
-If you are building more than one MCP server that share a domain (e.g., three servers
-for Word/Excel/PowerPoint, or two servers for email read vs email write), use a monorepo
-with a workspace. One repo, one lockfile, one CI pipeline, one install script.
-
-If you are building a single standalone server, a flat repo is fine.
+If you are building more than one MCP server that share a domain or pipeline
+(e.g., data profiler + data cleaner + statistical analysis, or Word + Excel +
+PowerPoint), use a monorepo with a workspace. One repo, one lockfile, one CI
+pipeline, one install script.
 
 ### Monorepo layout
 
 ```
 {project-name}/
 │
-├── shared/                     # code shared by ALL servers — never duplicate
+├── shared/                         # code shared by ALL servers — never duplicate
 │   ├── __init__.py
-│   ├── version_control.py      # snapshot / rollback — if your tools write files
-│   ├── patch_validator.py      # validate op arrays before applying
-│   ├── file_utils.py           # path resolution, atomic writes, JSON helpers
-│   └── platform_utils.py       # OS detection, config paths, VRAM mode
+│   ├── version_control.py          # snapshot / rollback
+│   ├── patch_validator.py          # validate op arrays before applying
+│   ├── file_utils.py               # path resolution, atomic writes, JSON helpers
+│   ├── platform_utils.py           # OS detection, hardware mode flags
+│   ├── progress.py                 # ok/fail/info/warn/undo progress helpers
+│   └── receipt.py                  # operation receipt log
 │
 ├── servers/
-│   ├── {name}_basic/           # tier 1 — CRUD only
+│   ├── {domain}_{tier}/            # e.g. data_basic, ml_basic, office_basic
 │   │   ├── __init__.py
-│   │   ├── server.py           # FastMCP setup + tool definitions (thin)
-│   │   ├── engine.py           # pure domain logic (no MCP imports)
+│   │   ├── server.py               # FastMCP setup + tool definitions (thin)
+│   │   ├── engine.py               # pure domain logic (no MCP imports)
 │   │   └── pyproject.toml
 │   │
-│   ├── {name}_medium/          # tier 2 — structured operations
+│   ├── {domain}_medium/
 │   │   └── ...
 │   │
-│   └── {name}_advanced/        # tier 3 — complex operations
+│   └── {domain}_advanced/
 │       └── ...
 │
 ├── tests/
-│   ├── fixtures/               # real test files, committed to repo
+│   ├── fixtures/                   # real test data, committed to repo
 │   ├── conftest.py
 │   └── test_{server_name}.py
 │
 ├── install/
-│   ├── install.sh              # Linux / macOS — POSIX sh compatible
-│   ├── install.bat             # Windows CMD
-│   └── mcp_config_writer.py    # writes to AI platform config files
+│   ├── install.sh                  # Linux / macOS — POSIX sh compatible
+│   ├── install.bat                 # Windows CMD
+│   └── mcp_config_writer.py        # writes to AI client config files
 │
-├── pyproject.toml              # root workspace
-├── uv.lock                     # single lockfile
-├── .python-version             # pinned Python version
-├── .gitattributes              # LF line endings, CRLF for .bat
-├── .editorconfig               # UTF-8, 4-space indent, final newline
-├── CLAUDE.md                   # AI coding agent instructions
-├── STANDARDS.md                # this file
+├── pyproject.toml                  # root workspace
+├── uv.lock
+├── .python-version
+├── .gitattributes
+├── .editorconfig
+├── CLAUDE.md
+├── STANDARDS.md
 └── README.md
 ```
 
@@ -205,7 +273,7 @@ If you are building a single standalone server, a flat repo is fine.
 {server-name}/
 ├── server.py
 ├── engine.py
-├── shared/                     # only if truly needed
+├── shared/
 ├── tests/
 │   ├── fixtures/
 │   └── test_engine.py
@@ -214,65 +282,75 @@ If you are building a single standalone server, a flat repo is fine.
 │   └── install.bat
 ├── pyproject.toml
 ├── uv.lock
-├── CLAUDE.md
 └── README.md
 ```
 
 ---
 
-## 5. The three-tier split — when to build separate servers
+## 6. The Three-Tier Split
 
 Every MCP server targets a specific complexity tier. Never mix tiers in one server.
 This is the most important structural decision because it directly controls how many
 tools the local model has to reason about at once.
 
-### Tier 1 — Basic (CRUD only)
+### Tier 1 — Basic (CRUD and direct operations)
 
 Tools that read data and perform simple create/update/delete operations on individual
-nodes. No complex transformations. No formatting. No cross-reference operations.
+nodes. No complex transformations. No multi-step pipelines. No cross-element
+operations.
 
-Examples: read a paragraph, replace text, add a row to a table, set a cell value,
-add a slide, delete a record.
+**Examples across domains:**
+- Documents: read paragraph, replace text, add row to table
+- Data: load file, read column stats, filter rows, export slice
+- ML: load dataset, inspect schema, run single model, get prediction
+- System: read file, list processes, get CPU stats
+- Media: read metadata, crop image, extract audio segment
 
-**Tool count target: 6-8 tools.**
-**This tier must stand alone** — a user doing simple tasks should never need to load
-tier 2 or 3 alongside it.
+**Tool count target: 6–8 tools.**
+This tier must stand alone — a user doing simple tasks should never need to load
+tier 2 or 3.
 
-### Tier 2 — Medium (structured operations)
+### Tier 2 — Medium (structured and pipeline operations)
 
 Tools that perform multi-step structured operations — formulas, conditional logic,
-template filling, relationships between parts. These operations are more complex than
-CRUD but do not require layout or visual reasoning.
+template filling, batch transforms, pipeline stages.
 
-Examples: inject Excel formulas, set data validation, manage table relationships,
-fill template placeholders, parse structured data from documents.
+**Examples across domains:**
+- Documents: fill template placeholders, apply formula set, manage relationships
+- Data: run profiling report, apply cleaning pipeline, compute aggregations
+- ML: train with cross-validation, run feature engineering, compare models
+- System: execute multi-step job, manage process groups, schedule tasks
+- Media: transcode batch, apply filter chain, run OCR pipeline
 
-**Tool count target: 5-7 tools.**
-**Can be loaded alongside tier 1.** Total combined should not exceed 15 tools.
+**Tool count target: 5–7 tools.**
+Can be loaded alongside tier 1. Total combined should not exceed 15 tools.
 
-### Tier 3 — Advanced (layout, visual, export)
+### Tier 3 — Advanced (layout, visual, export, optimization)
 
-Tools that deal with visual layout, formatting, style application, cross-element
-alignment, and export operations. These require more context to use correctly and
-are rarely needed alongside tier 1 operations.
+Tools that deal with visual layout, formatting, model optimization, export operations,
+and complex cross-element interactions. These require more context to use correctly
+and are rarely needed alongside tier 1 operations.
 
-Examples: set fonts, apply styles, create charts, set page margins, export to PDF,
-manage slide layouts, add images with positioning.
+**Examples across domains:**
+- Documents: set styles, create charts, export to PDF, manage layouts
+- Data: generate interactive dashboard, export profiling report, build visualization
+- ML: hyperparameter optimization, model export (ONNX, pickle), deployment package
+- System: performance profiling, resource optimization, audit report
+- Media: video rendering, style transfer, full pipeline export
 
-**Tool count target: 5-6 tools.**
-**Load standalone** — advanced tools are used in dedicated formatting sessions, not
-mixed with content editing.
+**Tool count target: 5–6 tools.**
+Load standalone — advanced tools are used in dedicated sessions.
 
 ### Decision tree for tier assignment
 
 ```
-Does the tool read or write a single named node (paragraph, cell, shape)?
+Does the tool read or write a single named node (row, cell, file, record, frame)?
   Yes → Tier 1
 
-Does the tool apply a structured formula, rule, or relationship between nodes?
+Does the tool apply a structured pipeline, rule, or multi-step transform?
   Yes → Tier 2
 
-Does the tool change visual appearance, layout, or export format?
+Does the tool change visual appearance, export format, or optimize a model/asset?
   Yes → Tier 3
 
 Does the tool span all three concerns?
@@ -281,43 +359,41 @@ Does the tool span all three concerns?
 
 ---
 
-## 6. Tool count discipline
+## 7. Tool Count Discipline
 
-### Hard limits by tier and hardware target
+### Hard limits by hardware target
 
 | Target hardware | Max tools per server | Max tools loaded simultaneously |
 |---|---|---|
-| 4-6 GB VRAM (≤7B model) | 6 | 6 (one server only) |
+| 4–6 GB VRAM (≤7B model) | 6 | 6 (one server only) |
 | 8 GB VRAM (9B model) | 8 | 12 (tier 1 + tier 2) |
-| 12-16 GB VRAM (14B model) | 10 | 16 (any two servers) |
+| 12–16 GB VRAM (14B model) | 10 | 16 (any two servers) |
 | 24 GB+ VRAM (32B+ model) | 12 | 20 |
 
-**The general open-source target is 8GB VRAM.** Design for 8 tools per server, 12
-tools maximum loaded simultaneously. If a domain naturally produces more tools, split
-into more servers at finer tier granularity.
+The general open-source target is **8 GB VRAM**. Design for 8 tools per server,
+12 tools maximum loaded simultaneously.
 
 ### Why tool count matters more than you think
 
 Every tool's JSON schema sits in the model's KV cache for the entire conversation.
-At 8GB VRAM with a 9B model, the KV cache budget is approximately 10,000-12,000 tokens.
-Each tool schema with a docstring and 3-4 parameters consumes approximately 80-120
-tokens. Ten tools consume ~1,000 tokens — roughly 8-10% of the entire available context
+At 8 GB VRAM with a 9B model, the KV cache budget is approximately 10,000–12,000
+tokens. Each tool schema with docstring and 3–4 parameters consumes approximately
+80–120 tokens. Ten tools consume roughly 1,000 tokens — ~8–10% of the entire context
 window — before the model has seen a single byte of user data.
 
-Beyond the token cost, there is a cognitive cost: the model must choose from N tools
-on every turn. At 8 tools, a 9B model makes correct selections reliably. At 15 tools,
-errors increase. At 20 tools, the model frequently confuses similar-named tools or
-hallucinates parameters.
+Beyond tokens, there is a cognitive cost: the model must choose from N tools on every
+turn. At 8 tools, a 9B model makes correct selections reliably. At 15 tools, errors
+increase. At 20 tools, the model frequently confuses similar tools.
 
-**The rule is: fewer tools, sharper tools.** A tool that does one thing precisely is
+**The rule: fewer tools, sharper tools.** A tool that does one thing precisely is
 better than a tool that does three things approximately.
 
 ---
 
-## 7. The four-tool pattern — the fundamental execution loop
+## 8. The Four-Tool Pattern
 
-Every document or data editing task follows this exact four-step loop. Encode this
-in your tool design so the model is guided through it naturally.
+Every data or state-changing task follows this exact four-step loop. Encode this in
+your tool design so the model is guided through it naturally.
 
 ```
 LOCATE  →  INSPECT  →  PATCH  →  VERIFY
@@ -326,281 +402,295 @@ LOCATE  →  INSPECT  →  PATCH  →  VERIFY
 ### Step 1: LOCATE
 
 Find the node(s) that need changing without reading everything else.
-Tool design: `search_*` or `get_*_index` or `list_*` — returns addresses/indices only.
+Returns addresses, indices, IDs — zero actual content.
 
 ### Step 2: INSPECT
 
-Read only the located node(s) to understand current content and structure.
-Tool design: `read_*` with a specific address parameter — returns one node in detail.
+Read only the located node(s) to understand current state.
+Returns one node in detail, bounded by size limits.
 
 ### Step 3: PATCH
 
 Apply the targeted edit to only that node.
-Tool design: `set_*`, `replace_*`, `update_*` — writes to address, returns confirmation.
+Returns a confirmation dict with what changed.
 
 ### Step 4: VERIFY
 
 Read back only the edited node to confirm the change applied correctly.
-Tool design: same `read_*` from Step 2 — model confirms result matches intent.
+Same read tool as Step 2 — model confirms result matches intent.
 
-### Example — updating a value in a database record
+### Example — data analytics domain
 
 ```
-User: "Update the price of Product ID 42 to $149.99"
+User: "Fix the missing values in the revenue column of sales_q3.csv"
 
-Round 1 (LOCATE):   search_records(table="products", where="id=42")
-                    → {"matches": [{"id": 42, "name": "Widget Pro", "price": 129.99}]}
+Round 1 (LOCATE):   search_columns(file="sales_q3.csv", has_nulls=True)
+                    → {"columns": ["revenue", "discount"], "null_counts": {"revenue": 23}}
 
-Round 2 (INSPECT):  read_record(table="products", id=42)
-                    → {"id": 42, "name": "Widget Pro", "price": 129.99, "sku": "WP-001"}
+Round 2 (INSPECT):  read_column_stats(file="sales_q3.csv", column="revenue")
+                    → {"mean": 4200, "median": 3800, "null_count": 23, "dtype": "float64"}
 
-Round 3 (PATCH):    set_field(table="products", id=42, field="price", value=149.99)
-                    → {"success": true, "old_value": 129.99, "new_value": 149.99}
+Round 3 (PATCH):    fill_nulls(file="sales_q3.csv", column="revenue", strategy="median")
+                    → {"success": true, "filled": 23, "value_used": 3800, "backup": "..."}
 
-Round 4 (VERIFY):   read_record(table="products", id=42)
-                    → {"id": 42, "name": "Widget Pro", "price": 149.99, "sku": "WP-001"}
-
-Total tokens read from database: ~200
-If a "read full table" approach had been used: potentially thousands
+Round 4 (VERIFY):   read_column_stats(file="sales_q3.csv", column="revenue")
+                    → {"mean": 4190, "median": 3800, "null_count": 0, "dtype": "float64"}
 ```
 
-### Tools that violate this pattern
+### Example — machine learning domain
 
-These patterns are anti-patterns. If your tool design produces these, refactor:
+```
+User: "Train a classifier on customer_churn.csv targeting the 'churned' column"
 
-- A tool that searches AND reads AND edits in one call — split into three
-- A tool that returns the full dataset to let the model "find what it needs"
+Round 1 (LOCATE):   inspect_dataset(file="customer_churn.csv")
+                    → {"rows": 5000, "columns": 18, "target_candidates": ["churned", "active"]}
+
+Round 2 (INSPECT):  read_column_profile(file="customer_churn.csv", column="churned")
+                    → {"dtype": "bool", "class_balance": {"True": 0.23, "False": 0.77}}
+
+Round 3 (PATCH):    train_classifier(file="customer_churn.csv", target="churned",
+                                     model="xgboost", test_size=0.2)
+                    → {"success": true, "accuracy": 0.87, "f1": 0.79, "model_path": "..."}
+
+Round 4 (VERIFY):   read_model_report(model_path="...")
+                    → {"confusion_matrix": [...], "feature_importance": [...]}
+```
+
+### Anti-patterns that violate this pattern
+
+- A tool that searches AND reads AND edits in one call → split into three
+- A tool that returns the full dataset so the model can "find what it needs"
 - A tool that writes without returning what changed
-- A tool that reads 10 records to let the model pick the right one
+- A tool that trains a model and also evaluates and also exports in one call
 
 ---
 
-## 8. Surgical read protocol — never return more than needed
+## 9. Surgical Read Protocol
 
 ### The fundamental rule
 
 A tool that returns data must return **only the data the model asked for**. Not
-the surrounding context. Not related data "that might be useful". Not the full
-parent structure because reading a child is convenient.
+surrounding context. Not related data "that might be useful". Not the full parent
+structure for convenience.
 
-This is the most important performance decision in the entire server. Get this wrong
-and every operation costs 10x the tokens it should.
+This is the most important performance decision in the entire server.
 
-### Mandatory surgical tools for every domain
-
-Every server that manages structured data must implement these classes of tools:
+### Mandatory tool classes for every domain
 
 **Index tool** — returns structure without content:
+
 ```python
 # Returns keys, addresses, counts, metadata — zero actual content
-get_document_outline()  # heading text + paragraph indices, not body text
-get_sheet_summary()     # column names + row count, not cell values
-list_endpoints()        # route names + methods, not request/response bodies
-list_records()          # IDs + primary key values, not full records
+get_dataset_schema()        # column names + dtypes + row count, not values
+get_model_summary()         # model type + params + metrics, not weights
+get_document_outline()      # heading text + indices, not body text
+list_processes()            # PIDs + names, not memory maps
+list_image_metadata()       # filenames + dimensions + format, not pixels
 ```
 
 **Search tool** — scans content, returns matching addresses:
+
 ```python
-# Returns matches with their addresses — caller then reads only those
-search_paragraphs(query)  # returns paragraph indices, not full paragraphs
-search_cells(query)       # returns cell addresses, not full rows
-search_records(where)     # returns IDs, not full records
-search_logs(pattern)      # returns line numbers, not surrounding lines
+# Returns matches with addresses — caller reads only those
+search_columns(has_nulls=True)          # column names, not full columns
+search_rows(where="revenue > 10000")    # row indices, not full rows
+search_files(pattern="*.csv")           # file paths, not file contents
+search_logs(level="ERROR")              # line numbers, not surrounding lines
 ```
 
 **Bounded read tool** — reads a specific address with a hard size limit:
+
 ```python
 # Returns exactly one node or a bounded slice
-read_paragraph(index)          # one paragraph with run details
-read_cell_range(range_address) # bounded range, hard cap on cells returned
-read_record(id)                # one full record
-read_log_range(start, end)     # bounded line range, hard cap on lines
+read_rows(file, start, end)             # bounded row range
+read_column_stats(file, column)         # stats for one column, not all rows
+read_model_metrics(model_path)          # metrics dict, not full predictions
+read_log_range(path, start, end)        # bounded lines, hard cap enforced
 ```
 
 ### Return size limits by data type
 
-Enforce these limits in the engine, not in the model. The model cannot be trusted
-to limit its own reads.
+Enforce these limits in the engine, not in the model.
 
-| Data type | Default limit | 8GB VRAM limit | Enforcement |
+| Data type | Default limit | 8 GB mode limit | Enforcement |
 |---|---|---|---|
-| Text paragraphs | 50 per call | 20 per call | Error if exceeded |
-| Table/spreadsheet rows | 50 per call | 20 per call | Error if exceeded |
-| Table columns | 20 per call | 10 per call | Truncate with warning |
+| DataFrame rows | 100 per call | 20 per call | Error if exceeded |
+| DataFrame columns | 50 per call | 20 per call | Truncate with warning |
 | Search results | 50 per call | 10 per call | `max_results` parameter |
 | Log lines | 100 per call | 50 per call | Error if exceeded |
+| List items (generic) | 100 per call | 40 per call | Truncate with flag |
 | JSON object depth | 5 levels | 3 levels | Flatten deeper structures |
-| List items | 100 per call | 40 per call | Truncate with flag |
+| Text paragraphs | 50 per call | 20 per call | Error if exceeded |
+| Image array pixels | Never raw | Never raw | Always return stats/path |
+| Model weights | Never raw | Never raw | Always return path + summary |
 
 Every tool response that was limited must include:
+
 ```python
 {
-    "truncated": True,  # or False — always explicit
+    "truncated": True,
     "returned": 20,
-    "total_available": 847,
-    "hint": "Use read_paragraph(index) to read specific paragraphs."
+    "total_available": 5000,
+    "hint": "Use read_rows(file, start, end) to read specific row ranges."
 }
 ```
 
 ### The token_estimate field
 
 Every tool response must include a rough token count of its own output:
+
 ```python
 response["token_estimate"] = len(str(response)) // 4
 ```
 
-This is not for the developer — it's for the model. When the model can see how much
-context each tool call consumed, it can budget remaining calls accordingly without
-exceeding the context window.
+This is for the model to budget remaining context window capacity.
 
 ---
 
-## 9. Tool schema design
+## 10. Tool Schema Design
 
 ### Docstring length — the 80-character rule
 
-Every `@mcp.tool()` docstring must be 80 characters or fewer. These strings are
-sent to the model on every turn as part of the tool schema. They are not documentation
-for humans — they are context that the model uses to decide which tool to call.
-
-Long descriptions waste tokens. Ambiguous descriptions cause wrong tool selection.
-The ideal description is a precise action statement:
+Every `@mcp.tool()` docstring must be 80 characters or fewer. These are sent to the
+model on every turn. They are not documentation for humans — they are selection cues.
 
 ```python
-# Good — 52 characters, unambiguous
-"""Find paragraphs matching query. Returns indices only."""
+# Good — 55 characters, unambiguous
+"""Profile dataset columns. Returns stats and null counts."""
 
-# Bad — 94 characters, wastes tokens
-"""This tool searches through all paragraphs in the document and returns the ones
-that contain the specified query string."""
+# Good — 61 characters
+"""Train classifier on CSV. Returns accuracy, F1, model path."""
 
-# Bad — 38 characters but ambiguous
-"""Search the document."""
+# Bad — 98 characters
+"""This tool analyzes the dataset and returns detailed statistical information
+about each column including mean, median, and missing value counts."""
 ```
 
 Test this in CI: `assert len(tool.__doc__) <= 80`.
 
 ### Parameter naming
 
-Parameters are lowercase snake_case nouns that describe what they contain, not what
-to do with them.
+Parameters are lowercase `snake_case` nouns that describe what they contain.
 
 ```python
 # Correct
 file_path: str
-paragraph_index: int
-sheet_name: str
-cell_address: str
+column_name: str
+model_path: str
+target_column: str
 max_results: int
+test_size: float
+dry_run: bool
 
 # Wrong — verb-first
 get_file_path: str
-target_index: int
+target_col: str       # abbreviation
 
 # Wrong — camelCase
 filePath: str
-sheetName: str
-
-# Wrong — abbreviations
-fp: str
-p_idx: int
+columnName: str
 ```
 
 ### Allowed parameter types
 
 Only use these types in tool function signatures:
-- `str` — paths, names, addresses, text content, enum values as strings
-- `int` — indices, counts, limits
-- `float` — dimensions, percentages, numeric values
+
+- `str` — paths, names, addresses, text, enum values as strings
+- `int` — indices, counts, limits, seeds
+- `float` — ratios, thresholds, percentages
 - `bool` — flags with sensible defaults
-- `list[dict]` — only for batch op arrays
+- `list[dict]` — only for patch op arrays
+- `list[str]` — only for column lists, file lists, label lists
 
 Never use:
+
 - `Optional[T]` — use `T = None` instead
-- `Union[T, S]` — split into two tools or use a discriminated string param
-- `Any` — always type it precisely
-- `dict` — too vague; model hallucinate arbitrary keys
-- Custom Pydantic models — generates complex schemas that confuse small models
-- `Enum` — use `str` with documented valid values in the docstring
-
-### Optional parameters
-
-Optional parameters add to schema size on every turn. Every optional parameter
-that exists has a cost. Rules:
-
-1. Default must be a primitive: `None`, `""`, `0`, `False`, `10`
-2. Never use `[]` or `{}` as defaults — Python mutable default bug
-3. If removing the default makes the tool significantly harder to use, keep it
-4. If the optional parameter is rarely used, consider making it a separate tool
+- `Union[T, S]` — split into two tools or use a discriminated string
+- `Any` — always type precisely
+- `dict` — too vague; model hallucinates arbitrary keys
+- Custom Pydantic models in tool signatures
+- `Enum` — use `str` with valid values documented in the docstring
 
 ### Enum values in docstrings
 
-When a parameter accepts only specific values, list them in the docstring:
-
 ```python
 @mcp.tool()
-def add_chart(
+def fill_nulls(
     file_path: str,
-    sheet_name: str,
-    chart_type: str,    # "bar", "line", "pie", "area", "scatter"
-    data_range: str,
-    title: str,
+    column_name: str,
+    strategy: str,       # "mean", "median", "mode", "ffill", "bfill", "drop"
+    dry_run: bool = False,
 ) -> dict:
-    """Create chart from data range. chart_type: bar line pie area scatter."""
+    """Fill null values in column. strategy: mean median mode ffill bfill drop."""
 ```
 
-List the values compactly in the docstring, not as `Field(description=...)`.
-Both consume tokens but the docstring approach is simpler and keeps the schema
-cleaner.
+### The dry_run parameter
+
+Every write tool must have `dry_run: bool = False`. When `True`, the tool returns
+exactly what it would change without changing anything. This is the primary
+trust-building feature for new users running destructive operations.
+
+```python
+if dry_run:
+    return {
+        "success": True,
+        "dry_run": True,
+        "would_change": description_of_changes,
+        "token_estimate": ...,
+    }
+```
 
 ---
 
-## 10. The patch protocol — structured ops over full rewrites
+## 11. The Patch Protocol
 
 ### When to use a patch protocol
 
 Any tool that modifies structured data should accept a **list of operations** rather
-than a single operation when the task naturally involves multiple changes. A contract
-with 5 placeholder fields should be filled in one `apply_patch` call with 5 ops, not
+than a single operation when the task naturally involves multiple changes. A dataset
+with 5 cleaning steps should be processed in one `apply_patch` call with 5 ops, not
 5 separate tool calls.
-
-The patch protocol reduces agentic loop turns, which directly reduces token consumption
-in the KV cache accumulation across the conversation.
 
 ### Standard op array format
 
-Every patch op array follows this structure:
-
-```json
+```python
 [
-  {
-    "op": "operation_name",
-    "required_field_1": "value",
-    "required_field_2": "value"
-  },
-  {
-    "op": "another_operation",
-    "required_field": "value"
-  }
+    {
+        "op": "fill_nulls",
+        "column": "revenue",
+        "strategy": "median"
+    },
+    {
+        "op": "drop_duplicates",
+        "subset": ["customer_id", "date"]
+    },
+    {
+        "op": "rename_column",
+        "from": "rev",
+        "to": "revenue_usd"
+    }
 ]
 ```
 
 Rules:
 - `"op"` is always the first key
 - All other fields are operation-specific required fields
-- Unknown extra fields are allowed (ignored) for forward compatibility
-- Maximum 50 ops per batch — force multiple calls for larger batches
-- Ops are applied sequentially — document this clearly
+- Maximum 50 ops per batch
+- Ops are applied sequentially
+- Validate entire array before applying any operation
 
 ### Op naming convention
 
 Op names are `verb_noun` snake_case:
-- `replace_text`, `set_cell`, `insert_row`, `delete_paragraph`
-- `add_chart`, `set_formula`, `update_style`
-- Not: `textReplace`, `cell_setter`, `chart-add`
 
-The verb set is: `replace`, `set`, `insert`, `delete`, `add`, `update`, `move`.
-Do not invent new verbs without strong reason.
+```
+fill_nulls        drop_duplicates     rename_column
+replace_text      set_cell            insert_row
+train_model       export_report       apply_transform
+```
+
+Allowed verbs: `fill`, `drop`, `rename`, `replace`, `set`, `insert`, `delete`,
+`add`, `update`, `move`, `train`, `export`, `apply`, `restore`
 
 ### Validation before execution
 
@@ -608,21 +698,17 @@ Always validate the entire op array **before** applying any operation:
 
 ```python
 def apply_patch(file_path: str, ops: list[dict]) -> dict:
-    # Step 1: validate all ops first — no partial application
     valid, error = validate_ops(ops, ALLOWED_OPS)
     if not valid:
         return {"success": False, "error": error, "applied": 0}
 
-    # Step 2: snapshot before any write
     backup = snapshot(file_path)
-
-    # Step 3: apply ops sequentially
     results = []
+
     for op in ops:
         result = _apply_single_op(file_path, op)
         results.append(result)
         if not result["success"]:
-            # Stop on first failure — do not partially apply
             return {
                 "success": False,
                 "error": f"Op {len(results)} failed: {result['error']}",
@@ -636,37 +722,38 @@ def apply_patch(file_path: str, ops: list[dict]) -> dict:
         "applied": len(ops),
         "backup": backup,
         "results": results,
+        "token_estimate": ...,
     }
 ```
 
-Stop on first failure. Never partially apply a batch and report success. Include the
-backup path in the failure response so the model can offer rollback.
+Stop on first failure. Never partially apply a batch and report success.
 
 ---
 
-## 11. Engine and server separation
+## 12. Engine and Server Separation
 
 ### The mandatory split
 
-Every server has exactly two Python files for logic:
+Every server has exactly two files for logic:
 
 **`engine.py`** — pure domain logic, zero MCP imports:
+
 ```python
 # engine.py imports
 from pathlib import Path
 from shared.version_control import snapshot
 from shared.patch_validator import validate_ops
-# domain library imports (docx, openpyxl, requests, sqlite3, etc.)
+from shared.platform_utils import get_max_rows, is_constrained_mode
+# domain library imports (polars, sklearn, Pillow, psutil, etc.)
 
 # engine.py does NOT import:
 # from mcp import ...
 # from fastmcp import ...
-# import mcp
 ```
 
 **`server.py`** — thin MCP wrapper, zero domain logic:
+
 ```python
-# server.py structure
 from mcp.server.fastmcp import FastMCP
 from . import engine
 
@@ -675,50 +762,37 @@ mcp = FastMCP("server-name")
 @mcp.tool()
 def tool_name(param: str) -> dict:
     """Short description under 80 chars."""
-    return engine.tool_name(param)       # one line only
+    return engine.tool_name(param)    # one line only
 
 def main() -> None:
     mcp.run()
 ```
 
-**The rule for what goes where:**
-
-Any line that touches domain data (files, databases, APIs, format-specific libraries)
-belongs in `engine.py`. Any line that touches the MCP protocol belongs in `server.py`.
-If a function body in `server.py` is more than two lines (the `return engine.call()`
-plus maybe one argument-prep line), it has logic that belongs in `engine.py`.
+**The rule:** Any line that touches domain data belongs in `engine.py`. Any line
+that touches the MCP protocol belongs in `server.py`. If a tool body in `server.py`
+is more than two lines, it has logic that belongs in `engine.py`.
 
 ### Why this split matters
 
-1. **Testability** — `pytest` tests import and call `engine.py` directly without
-   starting an MCP server process. Tests are fast, simple, and don't require MCP
-   client infrastructure.
-
-2. **Debuggability** — when a tool fails, you can reproduce the failure in a Python
-   REPL by importing `engine.py` and calling the function with the same arguments.
-   No MCP overhead in the debug loop.
-
-3. **Reusability** — if you build a CLI tool or a web API on top of the same domain
-   logic, you import `engine.py`, not `server.py`.
-
-4. **Clarity** — a reviewer reading `engine.py` sees only domain logic. A reviewer
-   reading `server.py` sees only tool definitions. The concerns are cleanly separated.
+1. **Testability** — tests import `engine.py` directly without starting an MCP
+   server process
+2. **Debuggability** — failures can be reproduced in a Python REPL with zero
+   MCP overhead
+3. **Reusability** — the same engine can power a CLI tool, a web API, or a
+   notebook without changes
+4. **Clarity** — `engine.py` contains only domain logic; `server.py` contains
+   only tool definitions
 
 ---
 
-## 12. Return value contract
+## 13. Return Value Contract
 
 ### Every tool returns a dict
 
-No exceptions. Never return:
-- A plain string: `"Done."` `"Success."` `"Error: file not found."`
-- A list directly: `[item1, item2, item3]`
-- `None`
-- A boolean: `True` or `False`
+No exceptions. Never return a plain string, list, `None`, or boolean.
 
-Always return a dict:
 ```python
-{"success": True, "op": "replace_text", ...}
+{"success": True, "op": "fill_nulls", ...}
 {"success": False, "error": "...", "hint": "..."}
 ```
 
@@ -731,53 +805,48 @@ Always return a dict:
 | `"error"` | `str` | On failure | Human-readable failure reason |
 | `"hint"` | `str` | On failure | Actionable recovery instruction |
 | `"backup"` | `str` | After any write | Path to snapshot taken before write |
+| `"progress"` | `list` | Always | Step-by-step execution log |
+| `"dry_run"` | `bool` | When dry_run=True | Confirms simulation mode |
 | `"token_estimate"` | `int` | Always | `len(str(response)) // 4` |
 | `"truncated"` | `bool` | On bounded reads | Always explicit, never absent |
 
 ### What to include in write confirmations
 
-When a write operation succeeds, return enough information for the model to verify
-the change without needing to make an additional read call:
-
 ```python
 # Good — model can verify without a follow-up read
 {
     "success": True,
-    "op": "replace_text",
-    "match": "30 days",
-    "new_text": "45 days",
-    "replaced_in": [{"paragraph_index": 47, "context": "Payment is due within 45 days"}],
-    "backup": ".mcp_versions/contract_2026-03-25T14-30-00Z.bak",
-    "token_estimate": 42
-}
-
-# Bad — model must make another read call to confirm
-{
-    "success": True,
-    "message": "Text replaced successfully."
+    "op": "fill_nulls",
+    "column": "revenue",
+    "strategy": "median",
+    "filled": 23,
+    "value_used": 3800.0,
+    "backup": ".mcp_versions/sales_q3_2026-03-25T14-30-00Z.bak",
+    "progress": [
+        {"icon": "✔", "msg": "Loaded sales_q3.csv", "detail": "5000 rows"},
+        {"icon": "✔", "msg": "Filled nulls in revenue", "detail": "23 cells → 3800.0"},
+        {"icon": "✔", "msg": "Saved sales_q3.csv", "detail": "snapshot created"},
+    ],
+    "token_estimate": 87
 }
 ```
 
-### What to never include in write confirmations
-
-Never return the full document/file content after a write. If the model wants to see
-the document state after editing, it calls a read tool. Write tools confirm the write;
-read tools read. They are separate concerns.
+Never return raw data arrays, model weights, or full file contents from a write tool.
+Write tools confirm the write. Read tools read.
 
 ---
 
-## 13. Error handling contract
+## 14. Error Handling Contract
 
 ### Never raise exceptions to the caller
 
-All exceptions are caught in `engine.py` and converted to error dicts. The MCP layer
-never sees a Python exception from domain logic — only success or failure dicts.
+All exceptions are caught in `engine.py` and converted to error dicts.
 
 ```python
-def replace_text(file_path: str, match: str, new_text: str) -> dict:
-    path = resolve_path(file_path)
+def train_classifier(file_path: str, target: str, model: str) -> dict:
     backup = None
     try:
+        path = resolve_path(file_path)
         backup = snapshot(str(path))
         # ... do work ...
         return {"success": True, ...}
@@ -786,6 +855,12 @@ def replace_text(file_path: str, match: str, new_text: str) -> dict:
             "success": False,
             "error": f"File not found: {file_path}",
             "hint": "Check that file_path is absolute and the file exists.",
+        }
+    except MemoryError:
+        return {
+            "success": False,
+            "error": "Insufficient RAM to load dataset.",
+            "hint": "Use read_rows() with a bounded range or increase system RAM.",
         }
     except Exception as e:
         return {
@@ -796,90 +871,71 @@ def replace_text(file_path: str, match: str, new_text: str) -> dict:
         }
 ```
 
-### Standard error messages
-
-Use consistent error message phrasing across all tools. The model learns from
-repeated exposure to the same error patterns. Inconsistent messages require more
-context to interpret.
+### Standard error message patterns by category
 
 ```python
 # File errors
 f"File not found: {path}"
-f"Expected .docx file, got .{ext}"
+f"Expected .csv file, got .{ext}"
 f"File is locked by another process: {path}"
 
-# Index/address errors
-f"Index {n} out of range (0–{max_val})"
-f"Invalid cell address: {addr}"
-f"Sheet '{name}' not found"
-f"Column '{name}' not found"
+# Data errors
+f"Column '{name}' not found. Available: {', '.join(columns)}"
+f"Target column '{name}' has only 1 unique value — cannot train classifier"
+f"Row index {n} out of range (0–{max_val})"
 
-# Content errors
-f"Match text not found: '{match}'"
-f"Record ID {id} not found"
-f"Template variable '{var}' not found in document"
+# Resource errors
+f"Insufficient RAM: need ~{required_gb:.1f} GB, available ~{available_gb:.1f} GB"
+f"GPU not available. Set device='cpu' to run on CPU."
+f"Model file too large for available VRAM. Use quantized variant."
 
 # Validation errors
-f"Unknown op: '{op_name}'. Allowed: {', '.join(allowed_ops)}"
-f"Required field missing: '{field}'"
-f"Value '{value}' not in allowed values: {', '.join(allowed)}"
+f"Unknown op: '{op}'. Allowed: {', '.join(allowed_ops)}"
+f"Required parameter missing: '{field}'"
+f"Value '{val}' not in allowed values: {', '.join(allowed)}"
+
+# Domain errors
+f"Dataset has {rows} rows but need at least {min_rows} to train reliably"
+f"Image resolution {w}x{h} exceeds processing limit {max_px}px"
 ```
 
-### The hint field — rules for writing actionable hints
+### The hint field rules
 
-The `"hint"` field is what allows a local 9B model to self-correct without human
-intervention. Bad hints make the model repeat the same mistake. Good hints give a
-specific next action.
+The hint must complete the sentence "To fix this, ..." and must name a specific
+tool to call or a specific value to check.
 
 ```python
 # Bad hints
 "hint": "Invalid input."
 "hint": "Try again."
-"hint": "Check the parameters."
 
 # Good hints
-"hint": "Use read_document() to get current paragraph count before using paragraph_index."
-"hint": "Sheet names are case-sensitive. Use list_sheets() to see available names."
-"hint": "Cell address must use Excel notation like B5 or C12."
-"hint": "Allowed ops for this server: replace_text, insert_paragraph, delete_paragraph"
+"hint": "Use inspect_dataset() first to verify column names and dtypes."
+"hint": "Set device='cpu' if no GPU is available."
+"hint": f"Available strategies: mean, median, mode, ffill, bfill, drop"
+"hint": "Use read_rows(file, 0, 100) to preview data before patching."
 ```
-
-The hint should complete the sentence "To fix this, ..." and should name a specific
-tool to call or a specific value to check.
 
 ---
 
-## 14. State and version control
+## 15. State and Version Control
 
 ### The snapshot rule
 
 **Every tool that modifies persistent data must snapshot before writing.**
 
-This is non-negotiable. It applies to:
-- Files on disk (documents, spreadsheets, databases)
-- Database records (include a `before_state` in the response)
-- Configuration files
-- Any data that cannot be trivially regenerated
-
-If your domain cannot support snapshots (e.g., you are calling an external API that
-has no undo), document this limitation clearly and make the write tool require an
-explicit `confirm: bool = False` parameter that defaults to False, forcing the model
-to explicitly pass `confirm=True` before any destructive write.
-
-### Snapshot implementation
+This applies to:
+- Files on disk (datasets, documents, models, configs)
+- Database records (include `before_state` in response)
+- Generated outputs that took significant compute to produce
 
 ```python
-# shared/version_control.py pattern
+# shared/version_control.py
 from pathlib import Path
 from datetime import datetime, timezone
 import shutil
 
 def snapshot(file_path: str) -> str:
-    """
-    Copy file to .mcp_versions/{name}_{timestamp}.bak
-    Returns the backup path string.
-    Raises FileNotFoundError if source does not exist.
-    """
     source = Path(file_path).resolve()
     if not source.exists():
         raise FileNotFoundError(f"Cannot snapshot: {source}")
@@ -895,29 +951,22 @@ def snapshot(file_path: str) -> str:
 
 ### The companion state file pattern
 
-For complex structured files (spreadsheets, databases, configuration), maintain a
-companion JSON state file alongside the working file:
+For complex files, maintain a companion JSON state file:
 
 ```
-budget_q3.xlsx
-budget_q3.xlsx.mcp_state.json   ← companion
+sales_q3.csv
+sales_q3.csv.mcp_state.json    ← companion
 ```
-
-The state file tracks the current known values of key nodes, the patch history, and
-the last modification timestamp. The model reads the state file instead of parsing
-the full binary file to understand current state:
 
 ```json
 {
-    "version": 4,
-    "file": "budget_q3.xlsx",
+    "version": 3,
+    "file": "sales_q3.csv",
     "last_modified": "2026-03-25T14:30:00Z",
-    "known_state": {
-        "Q3 Revenue.B5": {"value": 142500, "formula": null},
-        "Q3 Revenue.D5": {"formula": "=SUM(B5:C5)*1.1"}
-    },
+    "schema": {"revenue": "float64", "customer_id": "int64"},
+    "known_stats": {"revenue": {"mean": 4190, "null_count": 0}},
     "patches": [
-        {"version": 1, "ts": "2026-03-25T10:00Z", "ops": 3},
+        {"version": 1, "ts": "2026-03-25T10:00Z", "ops": 2},
         {"version": 2, "ts": "2026-03-25T14:30Z", "ops": 1}
     ]
 }
@@ -925,7 +974,7 @@ the full binary file to understand current state:
 
 ### Restore tool — mandatory in tier 1
 
-Every tier 1 server must include a `restore_version` tool:
+Every tier 1 server must include `restore_version`:
 
 ```python
 @mcp.tool()
@@ -934,11 +983,24 @@ def restore_version(file_path: str, timestamp: str) -> dict:
     return engine.restore_version(file_path, timestamp)
 ```
 
-This is the undo button. Without it, every mistake is permanent on the user's machine.
+### Confirming explicit destructive writes
+
+For operations with no undo (external API side effects, irreversible transforms),
+add an explicit confirm parameter:
+
+```python
+def delete_all_nulls(file_path: str, confirm: bool = False) -> dict:
+    if not confirm:
+        return {
+            "success": False,
+            "error": "This operation permanently deletes rows. Pass confirm=True to proceed.",
+            "hint": "Use dry_run=True first to preview what would be deleted.",
+        }
+```
 
 ---
 
-## 15. Token budget discipline
+## 16. Token Budget Discipline
 
 ### The VRAM → context window → token budget chain
 
@@ -946,146 +1008,253 @@ This is the undo button. Without it, every mistake is permanent on the user's ma
 GPU VRAM
   └→ Model weights occupy most of VRAM
        └→ Remaining VRAM = KV cache
-            └→ KV cache size = effective context window in tokens
-                 └→ Token budget per tool call = context / expected_turns
+            └→ KV cache size = effective context window
+                 └→ Token budget per call = context / expected_turns
 ```
 
-On an 8GB GPU with a 9B model in Q4_K_M quantization:
+On 8 GB GPU with 9B model (Q4_K_M):
 - Model weights: ~5.5 GB
 - Available KV cache: ~1.7 GB
-- Effective context: ~10,000-12,000 tokens
-
-Across a 10-turn agentic loop, that is ~1,000 tokens per turn maximum — including
-the tool schema overhead (~700 tokens for 8 tools), system prompt (~200 tokens),
-and the turn's conversation. The actual per-tool content budget is approximately
-**100-300 tokens per turn** on an 8GB machine.
+- Effective context: ~10,000–12,000 tokens
+- Per-turn content budget: ~100–300 tokens after schema + history overhead
 
 ### Budget rules
 
-1. **Tool schemas (set once per session):** keep under 700 tokens total (≤8 tools,
-   ≤80 char docstrings, ≤4 params each)
+1. Tool schemas: keep under 700 tokens total (≤8 tools, ≤80 char docstrings)
+2. Read tool responses: under 500 tokens
+3. Write confirmations: under 150 tokens
+4. Never return raw arrays, pixel data, weight tensors, or full file contents
 
-2. **Per-tool response (set per call):** keep under 500 tokens for read tools,
-   under 150 tokens for write confirmations
+### The hardware mode flag
 
-3. **Accumulated history:** the model's full conversation history stays in KV cache.
-   After 10 turns, the accumulated tokens approach the limit. Design for short focused
-   sessions — one task, then fresh session.
-
-4. **The `token_estimate` field** in every response lets the model track its own
-   budget consumption. Include it. The model will use it.
-
-### The 8GB mode flag
-
-Every server reads the `OFFICE_MCP_8GB_MODE` environment variable and reduces all
-return size limits when it is set:
+Every server reads a `MCP_CONSTRAINED_MODE` environment variable:
 
 ```python
 # shared/platform_utils.py
 import os
 
-def is_8gb_mode() -> bool:
-    return os.environ.get("OFFICE_MCP_8GB_MODE", "0") == "1"
+def is_constrained_mode() -> bool:
+    return os.environ.get("MCP_CONSTRAINED_MODE", "0") == "1"
 
-def get_max_items() -> int:
-    """Max items to return in a list or search result."""
-    return 10 if is_8gb_mode() else 50
+def get_max_rows() -> int:
+    return 20 if is_constrained_mode() else 100
+
+def get_max_results() -> int:
+    return 10 if is_constrained_mode() else 50
 
 def get_max_depth() -> int:
-    """Max nesting depth for returned JSON structures."""
-    return 3 if is_8gb_mode() else 5
+    return 3 if is_constrained_mode() else 5
 ```
 
-The installer sets `OFFICE_MCP_8GB_MODE=1` automatically when it detects ≤8GB VRAM.
-Never hardcode limits in engine functions — always call these helpers.
+The installer sets `MCP_CONSTRAINED_MODE=1` automatically on machines with ≤8 GB
+VRAM. Never hardcode limits in engine functions — always call these helpers.
 
 ---
 
-## 16. VRAM tiers and hardware constraints
+## 17. Hardware Tiers and Resource Constraints
 
-### Design for 8GB — test on 16GB — document for 24GB
+### Design for constrained — test on standard — document for high-end
 
-The project must work on 8GB. It should work well on 16GB. On 24GB it should be
-excellent. Write code for 8GB constraints and let users with more hardware benefit
-automatically through the absence of artificial limits.
+Write code for constrained hardware constraints and let users with more hardware
+benefit automatically through the absence of artificial limits.
 
-### Model recommendation table
-
-Document this in your README so users choose the right model before installing:
+### Model and hardware reference
 
 | VRAM | Model family | Quant | Context | Max tools |
 |---|---|---|---|---|
-| 4 GB | 3-4B models | Q4_K_M | ~5K tokens | 5 |
+| 4 GB | 3–4B models | Q4_K_M | ~5K tokens | 5 |
 | 6 GB | 7B models | Q4_K_M | ~7K tokens | 6 |
 | 8 GB | 9B models | Q3_K_S | ~12K tokens | 8 |
 | 12 GB | 9B models | Q8_0 | ~20K tokens | 10 |
 | 16 GB | 14B models | Q4_K_M | ~24K tokens | 12 |
 | 24 GB | 32B models | Q4_K_M | ~32K tokens | 15 |
 
-### The honest statement to include in README
+### Resource-aware execution
 
-Include this exact paragraph in every MCP server README:
+For compute-heavy domains (ML training, video processing, large dataset profiling),
+tools must check available resources before starting and fail fast with a helpful
+message:
 
-> **A note on local LLMs and context limits:**
-> MCP tool schemas consume real context window tokens on every turn. On 8GB VRAM with
-> a 9B model, your effective context is approximately 10,000-12,000 tokens — not the
-> 32K the model theoretically supports. This server is designed to stay within that
-> budget through surgical read tools that fetch only what is needed. For best results,
-> run one focused task per session, then start a fresh chat. Loading fewer tools
-> means more context for your actual work.
+```python
+import psutil
+
+def check_memory(required_gb: float) -> dict | None:
+    available = psutil.virtual_memory().available / 1e9
+    if available < required_gb:
+        return {
+            "success": False,
+            "error": f"Need ~{required_gb:.1f} GB RAM, only {available:.1f} GB available.",
+            "hint": "Use a row-sampled subset with read_rows(file, 0, 10000) first.",
+        }
+    return None
+```
+
+### The README hardware statement
+
+Include this in every MCP server README:
+
+> **A note on local execution and context limits:**
+> This server runs entirely on your hardware — no data leaves your machine. On 8 GB
+> VRAM with a 9B model, your effective context window is approximately 10,000–12,000
+> tokens. This server is designed to stay within that budget through surgical read
+> tools. For best results, run one focused task per session, then start a fresh chat.
+> Fewer loaded tools means more context for your actual work.
 
 ---
 
-## 17. Testing standards
+## 18. Progress Output
 
-### The test-engine-not-server rule
+### The rule
 
-Tests import and call `engine.py` functions directly. Never spin up an MCP server
-process in a test. The MCP layer is thin wrapper — test the domain logic, not the
-protocol.
+Every tool response includes a `"progress"` array. Never print to stdout.
+All visible output goes in the progress array.
+
+```python
+{
+    "success": True,
+    "progress": [
+        {"icon": "✔", "msg": "Loaded sales_q3.csv",           "detail": "5,000 rows × 12 cols"},
+        {"icon": "✔", "msg": "Detected 23 nulls in revenue",  "detail": "0.46% of column"},
+        {"icon": "✔", "msg": "Filled with median",            "detail": "value: 3800.0"},
+        {"icon": "✔", "msg": "Saved sales_q3.csv",            "detail": "snapshot created"},
+    ],
+    "token_estimate": 95
+}
+```
+
+### shared/progress.py helpers
+
+```python
+def ok(msg: str, detail: str = "") -> dict:
+    return {"icon": "✔", "msg": msg, "detail": detail}
+
+def fail(msg: str, detail: str = "") -> dict:
+    return {"icon": "✘", "msg": msg, "detail": detail}
+
+def info(msg: str, detail: str = "") -> dict:
+    return {"icon": "→", "msg": msg, "detail": detail}
+
+def warn(msg: str, detail: str = "") -> dict:
+    return {"icon": "⚠", "msg": msg, "detail": detail}
+
+def undo(msg: str, detail: str = "") -> dict:
+    return {"icon": "↩", "msg": msg, "detail": detail}
+```
+
+Use these helpers. Never construct progress dicts by hand. Always use `Path(x).name`
+in messages — never full paths.
+
+---
+
+## 19. Live State and Reload
+
+For servers that edit files that may be open in another application (documents,
+spreadsheets, config files), implement `shared/live_edit.py`:
+
+```python
+def is_file_open(path: Path) -> bool: ...
+def notify_reload(path: Path) -> dict: ...    # best-effort, never fails main op
+```
+
+Platform behavior:
+- **macOS**: AppleScript triggers reload in Office apps
+- **Windows**: Shadow file + optional COM via pywin32, graceful fallback
+- **Linux**: Most apps poll the file; write normally
+
+If reload is unavailable, return `info("File saved — reopen to see changes")` in the
+progress array. Never fail the main operation because reload failed.
+
+---
+
+## 20. Operation Receipt Log
+
+Every server that writes data maintains a persistent receipt log alongside modified
+files:
+
+```
+sales_q3.csv
+sales_q3.csv.mcp_receipt.json    ← receipt
+```
+
+```json
+[
+    {
+        "ts": "2026-03-25T14:30:00Z",
+        "tool": "fill_nulls",
+        "args": {"column": "revenue", "strategy": "median"},
+        "result": "filled 23 nulls",
+        "backup": ".mcp_versions/sales_q3_2026-03-25T14-30-00Z.bak"
+    }
+]
+```
+
+### shared/receipt.py
+
+```python
+def append_receipt(file_path: str, tool: str, args: dict, result: str,
+                   backup: str | None) -> None:
+    """Append one record to receipt log. Never raises."""
+
+def read_receipt_log(file_path: str) -> list[dict]:
+    """Read full receipt log for a file."""
+```
+
+`append_receipt` must never raise — it wraps all I/O in try/except and silently
+drops the record on failure rather than crashing the main operation.
+
+Every tier 1 server includes a `read_receipt` tool:
+
+```python
+@mcp.tool()
+def read_receipt(file_path: str) -> dict:
+    """Read operation history for a file. Returns log entries."""
+    return engine.read_receipt_log(file_path)
+```
+
+---
+
+## 21. Testing Standards
+
+### Test engine, not server
+
+Tests import and call `engine.py` directly. Never spin up an MCP server process.
 
 ```python
 # Correct
-from servers.docx_basic.engine import replace_text, search_paragraphs
+from servers.data_basic.engine import fill_nulls, search_columns
 
-def test_replace_text(tmp_path, contract_fixture):
-    doc = tmp_path / "contract.docx"
-    shutil.copy(contract_fixture, doc)
-    result = replace_text(str(doc), "PARTY_A", "Acme Corp")
+def test_fill_nulls(tmp_path, csv_fixture):
+    f = tmp_path / "sales.csv"
+    shutil.copy(csv_fixture, f)
+    result = fill_nulls(str(f), "revenue", "median")
     assert result["success"] is True
-    assert result["replaced_in"][0]["new_text"] == "Acme Corp"
-
-# Wrong
-def test_replace_text():
-    subprocess.run(["uv", "run", "docx-basic", "--transport", "stdio"])
-    # ... MCP client setup ...
-    # This is testing MCP infrastructure, not your logic
+    assert result["filled"] == 23
+    assert ".mcp_versions" in result["backup"]
 ```
 
-### Real fixture files — never generated
+### Real fixture data — never purely synthetic
 
-Test fixtures must be real files created by the actual application (Word, Excel,
-PowerPoint). Never use files generated programmatically as primary fixtures.
-
-The reason: bugs in format-specific operations (run-level editing, formula
-evaluation, style application) only appear in real documents with real formatting
-history. A programmatically-generated clean document hides the edge cases.
+Test fixtures must represent real-world messiness: nulls, mixed types, irregular
+formatting, edge-case values, encoding issues. A perfectly clean synthetic fixture
+hides the bugs that matter.
 
 Required fixture categories:
-- `simple` — plain content, minimal formatting, no edge cases
-- `complex` — mixed formatting, embedded objects, tracked changes, tables
-- `large` — >50 pages / >500 rows to test truncation and performance
+- `simple` — clean data, minimal edge cases
+- `messy` — nulls, type mismatches, encoding issues, duplicate rows
+- `large` — enough rows/records to test truncation and performance
 
 ### What to test for every write operation
 
-1. **Success** — operation completes, return dict has `"success": True`
-2. **Content correct** — read back the written node, verify content matches
-3. **Snapshot created** — `.mcp_versions/` directory has a new `.bak` file
-4. **Backup in response** — `"backup"` key present in return dict
-5. **Formatting preserved** — for rich-format files, verify style/bold/font unchanged
-6. **Wrong file type** — passing `.xlsx` to a DOCX tool returns error dict
-7. **File not found** — missing file returns error dict with correct hint
-8. **Index out of range** — bad index returns error dict with total count hint
+1. **Success** — operation completes, `"success": True`
+2. **Content correct** — read back the written node, verify content
+3. **Snapshot created** — `.mcp_versions/` has a new `.bak` file
+4. **Backup in response** — `"backup"` key present
+5. **Dry run** — `dry_run=True` returns `"would_change"` without modifying file
+6. **Progress present** — `"progress"` array in response
+7. **Wrong file type** — error dict with correct hint
+8. **File not found** — error dict with correct hint
+9. **Index/column out of range** — error dict with available options in hint
+10. **Constrained mode** — `MCP_CONSTRAINED_MODE=1` enforces smaller limits
 
 ### Coverage requirements
 
@@ -1093,7 +1262,7 @@ Required fixture categories:
 |---|---|
 | `shared/` | 100% |
 | `engine.py` | ≥ 90% |
-| Error paths | All documented error conditions tested |
+| Error paths | All documented conditions tested |
 | Happy paths | All tools tested |
 
 ### CI must run on all three platforms
@@ -1104,30 +1273,21 @@ strategy:
     os: [ubuntu-22.04, windows-latest, macos-13]
 ```
 
-A test that passes on Linux but fails on Windows is a bug. Path separator assumptions
-are the most common cause. Fix with `pathlib.Path`.
-
 ---
 
-## 18. Cross-platform compatibility
+## 22. Cross-Platform Compatibility
 
 ### The path rule — pathlib everywhere
 
-Never use string concatenation or `os.path.join()` for paths. Always use
-`pathlib.Path`. This is the single most impactful cross-platform rule.
-
 ```python
-# Wrong on Windows — / separator
+# Wrong
 path = base_dir + "/" + filename
 
-# Wrong — hides platform issues
-path = os.path.join(base_dir, filename)
-
-# Correct — works everywhere
+# Correct
 path = Path(base_dir) / filename
 ```
 
-### Line endings — enforce in .gitattributes
+### Line endings
 
 ```
 # .gitattributes
@@ -1136,94 +1296,85 @@ path = Path(base_dir) / filename
 *.cmd text eol=crlf
 ```
 
-All files use LF. Windows batch files use CRLF (CMD requires it).
-
 ### Shell scripts — POSIX sh, not bash
 
-`install.sh` must use `#!/bin/sh` and POSIX-compatible syntax. macOS ships bash 3.x
-under GPL restrictions. Ubuntu uses dash for `/bin/sh`. Using bash-specific syntax
-breaks on both.
-
-```sh
-#!/bin/sh
-# Correct POSIX
-if [ "$var" = "value" ]; then echo "yes"; fi
-command -v uv > /dev/null 2>&1 && echo "found"
-
-# Wrong — bash only
-if [[ "$var" == "value" ]]; then echo "yes"; fi
-uv 2>/dev/null && echo "found"   # &> is bash only
-```
+`install.sh` must use `#!/bin/sh` and POSIX-compatible syntax.
 
 ### stdout is the MCP protocol channel
 
-Never write to stdout in any engine or server module. LM Studio and Claude Desktop
-use stdout for MCP JSON-RPC communication. Any `print()` statement in server code
-corrupts the channel and breaks the connection.
+Never write to stdout in any engine or server module. Any `print()` statement
+corrupts the MCP stdio channel.
 
 ```python
-# Wrong — breaks MCP on stdio transport
+# Wrong
 print("Processing file...")
-print(f"Found {count} paragraphs")
 
-# Correct — logs go to stderr only
+# Correct — all logs go to stderr
 import logging
 logger = logging.getLogger(__name__)
-logger.debug("Processing file...")   # goes to stderr, not stdout
+logger.debug("Processing file...")
 ```
 
-Configure logging to stderr in `server.py`:
+Configure in `server.py`:
+
 ```python
 import sys, logging
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 ```
 
-### Windows-specific concerns
+### Windows long paths
 
-**Long paths:** Windows has a 260-character MAX_PATH limit by default. If your server
-handles files in deeply-nested directories, use the `\\\\?\\` prefix on Windows:
 ```python
 if sys.platform == "win32" and len(str(path)) > 200:
     path = Path("\\\\?\\" + str(path.resolve()))
 ```
 
-Enable long paths in `install.bat`:
-```bat
-reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
-```
+### Atomic file writes
 
-**File locking:** Windows locks open files more aggressively than Unix. When writing
-to a file that might be open in another application, use a temp-file-then-rename
-pattern for atomic writes:
 ```python
 import tempfile, shutil
 with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=path.parent) as tmp:
     # write to tmp
     tmp_path = tmp.name
-shutil.move(tmp_path, path)  # atomic on same filesystem
+shutil.move(tmp_path, path)
 ```
 
 ---
 
-## 19. Multi-platform AI client compatibility
+## 23. Multi-Client Compatibility
 
-### Every server supports two transport modes
+### Config file locations by platform
 
-**stdio** (default) — for local AI clients (LM Studio, Claude Desktop, Cursor,
-Windsurf, Cline):
-```bash
+| Client | Config (macOS) | Config (Windows) |
+|---|---|---|
+| LM Studio | `~/Library/Application Support/LM Studio/mcp.json` | `%APPDATA%\LM Studio\mcp.json` |
+| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Cursor | `~/.cursor/mcp.json` | `~/.cursor/mcp.json` |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` | `~/.codeium/windsurf/mcp_config.json` |
+| Cline | `~/Library/Application Support/Code/User/settings.json` | `%APPDATA%\Code\User\settings.json` |
+
+The `mcp_config_writer.py` in `install/` handles all client differences.
+Server code is identical regardless of client.
+
+---
+
+## 24. Transport Modes
+
+### Every server supports two modes
+
+**stdio** (default) — for local AI clients:
+
+```
 uv run --directory servers/my_server my-server
 ```
 
-**HTTP** (for cloud AI platforms with remote tool access — ChatGPT, Gemini):
-```bash
-uv run --directory servers/my_server my-server --transport http --port 8765 --auth-token <token>
+**HTTP** — for remote or multi-user access:
+
+```
+uv run --directory servers/my_server my-server --transport http --port 8765
 ```
 
-Add this to every `server.py`:
 ```python
-import argparse
-
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--transport", choices=["stdio", "http"], default="stdio")
@@ -1238,192 +1389,87 @@ def main() -> None:
         mcp.run()
 ```
 
-### Config file locations by platform
-
-The `mcp_config_writer.py` in `install/` writes to the correct config file for
-each AI client platform:
-
-| Platform | Config file (macOS) | Config file (Windows) |
-|---|---|---|
-| LM Studio | `~/Library/Application Support/LM Studio/mcp.json` | `%APPDATA%\LM Studio\mcp.json` |
-| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` | `%APPDATA%\Claude\claude_desktop_config.json` |
-| Cursor | `~/.cursor/mcp.json` | `~/.cursor/mcp.json` |
-| Windsurf | `~/.codeium/windsurf/mcp_config.json` | `~/.codeium/windsurf/mcp_config.json` |
-| Cline | `~/Library/Application Support/Code/User/settings.json` | `%APPDATA%\Code\User\settings.json` |
-
-The JSON structure differs slightly by platform. LM Studio, Claude Desktop, and
-Cursor use `"mcpServers": {}`. Cline uses `"cline.mcpServers": {}`. The config writer
-handles these differences — server code is identical regardless of client.
-
-### Installer platform selection menu
-
-```
-Which AI platform do you use?
-  1) LM Studio (recommended for local LLMs)
-  2) Claude Desktop
-  3) Cursor
-  4) Windsurf
-  5) Cline (VS Code)
-  6) Multiple — write all detected configs
-
-Enter number: _
-```
+Auth tokens for HTTP mode must be generated by the installer (32+ random hex chars),
+stored in config, never hardcoded in source.
 
 ---
 
-## 20. Transport modes — stdio and HTTP
-
-### stdio — default for local use
-
-The MCP server communicates via stdin/stdout JSON-RPC. LM Studio starts the server
-as a child process and communicates through its stdio pipes.
-
-Key rules for stdio mode:
-- **Never write to stdout** — only the MCP framework writes to stdout
-- **Always write logs to stderr** — `logging.basicConfig(stream=sys.stderr)`
-- **No interactive prompts** — the server is headless
-- **Fast startup** — the client may kill and restart the server between sessions
-
-### HTTP / Streamable HTTP — for remote use
-
-When `--transport http` is specified, the server listens on `http://localhost:{port}/mcp`.
-For security, always require an auth token in HTTP mode:
-
-```python
-# Reject requests without valid auth token
-if args.auth_token:
-    # FastMCP handles token validation via headers
-    mcp.run(transport="streamable-http", auth_token=args.auth_token, ...)
-```
-
-The auth token should be:
-- Generated by the installer and stored in the config
-- Never hardcoded in source
-- At least 32 random hex characters
-- Changed by the user via `--auth-token <new-token>` if compromised
-
-### SSE transport — legacy fallback
-
-Some older MCP clients support only Server-Sent Events transport, not Streamable HTTP.
-FastMCP supports both. If a user reports connection errors in HTTP mode, document
-the SSE fallback:
-```bash
-uv run ... my-server --transport sse --port 8765
-```
-
----
-
-## 21. Installation and distribution
+## 25. Installation and Distribution
 
 ### The install experience standard
 
-A user who has never used a terminal must be able to install and use your MCP server.
-The standard is:
+A user who has never used a terminal must be able to install and use the server:
 
-1. Download the repo (as a zip from GitHub, or via `git clone`)
+1. Download the repo (zip or `git clone`)
 2. Double-click `install.bat` (Windows) or run `./install.sh` (macOS/Linux)
-3. Answer one menu question (which AI platform)
+3. Answer one menu question (which AI client)
 4. Restart their AI client
 5. Start using the tools
-
-If any step requires manual JSON editing, terminal commands, or developer knowledge,
-the install experience is failing the standard.
 
 ### install.sh checklist
 
 ```sh
 #!/bin/sh
-
 # 1. Check Python 3.11+
-python_version=$(python3 --version 2>&1 | cut -d' ' -f2)
-# compare version, print URL and exit 1 if too old
-
 # 2. Check/install uv
-if ! command -v uv > /dev/null 2>&1; then
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    export PATH="$HOME/.local/bin:$PATH"
-fi
-
-# 3. Install all dependencies
-uv sync
-
-# 4. Ask which platforms
-# ... menu ...
-
-# 5. Write mcp config
-python3 install/mcp_config_writer.py --servers "$selected" --platform "$platform"
-
-# 6. Confirm
-echo "Done. Restart your AI client to activate the tools."
+# 3. uv sync
+# 4. Detect hardware (VRAM) and set MCP_CONSTRAINED_MODE if ≤ 8GB
+# 5. Ask which AI client platforms
+# 6. python3 install/mcp_config_writer.py --servers "$selected" --platform "$platform"
+# 7. echo "Done. Restart your AI client."
 ```
 
 ### mcp_config_writer.py rules
 
-- Parse existing config with `json5` — handles comments and trailing commas
+- Parse existing config with `json5` (handles comments and trailing commas)
 - Append-only — never modify or remove existing entries
-- Skip servers already registered (idempotent — safe to run twice)
-- Write with `json.dumps()` — output is strict valid JSON
-- Use atomic write (temp file + rename) — never corrupt config on partial write
-- Print which servers were added, which were skipped (already registered)
-
-### GitHub release artifacts
-
-For every version tag, build and attach release archives:
-- `{project}-windows-x64.zip` — repo + install.bat + pre-downloaded wheels
-- `{project}-macos.tar.gz` — repo + install.sh + pre-downloaded wheels
-- `{project}-linux.tar.gz` — repo + install.sh + pre-downloaded wheels
-
-Pre-bundling wheels means the user does not need internet access after downloading.
-Use `uv export --frozen > requirements.txt` and `pip download` to collect wheels.
+- Idempotent — safe to run twice
+- Write with `json.dumps()` — strict valid JSON output
+- Atomic write (temp file + rename)
 
 ---
 
-## 22. Naming conventions
+## 26. Naming Conventions
 
-### Files and directories
+### Server directories
 
 ```
-servers/{domain}_{tier}/    — server directories (docx_basic, xlsx_charts)
-shared/                     — shared utilities
-tests/                      — all tests in one flat directory
-install/                    — installer scripts
+servers/{domain}_{tier}/    # data_basic, ml_medium, office_advanced, media_basic
 ```
 
 ### Python identifiers
 
 ```python
 # Functions — snake_case verb
-read_document()
+read_dataset()
 apply_patch()
-search_paragraphs()
+train_classifier()
 
 # Classes — PascalCase
 PatchValidator
 VersionControl
 
 # Constants — UPPER_SNAKE_CASE
-MAX_SEARCH_RESULTS = 50
-DEFAULT_TIMEOUT = 30
+MAX_ROWS = 100
+DEFAULT_TEST_SIZE = 0.2
 
 # Private helpers — leading underscore
 _apply_single_op()
-_parse_address()
+_resolve_strategy()
 ```
 
-### MCP tool function names
+### MCP tool function names — verb_noun
 
-Tool names follow the pattern `verb_noun`:
-```python
-read_document    list_sheets      search_records
-set_cell         add_row          delete_paragraph
-replace_text     insert_after     restore_version
+```
+read_dataset        list_columns        search_rows
+fill_nulls          drop_duplicates     rename_column
+train_classifier    export_model        apply_patch
+restore_version     read_receipt        inspect_dataset
 ```
 
-Allowed verbs: `read`, `list`, `search`, `get`, `set`, `add`, `insert`, `delete`,
-`replace`, `restore`, `export`, `apply`
-
-Do not use: `fetch` (ambiguous), `query` (SQL-specific), `pull` (Git-specific),
-`push` (Git-specific), `run` (too general), `process` (vague)
+Allowed verbs: `read`, `list`, `search`, `get`, `inspect`, `set`, `fill`, `drop`,
+`rename`, `replace`, `insert`, `delete`, `add`, `update`, `move`, `train`, `export`,
+`apply`, `restore`, `run`, `generate`
 
 ### Commit message format
 
@@ -1433,56 +1479,44 @@ Do not use: `fetch` (ambiguous), `query` (SQL-specific), `pull` (Git-specific),
 Types:   feat | fix | test | docs | refactor | chore
 Scope:   server name, shared, install, or root
 
-feat(docx_basic): add surgical paragraph search tool
+feat(data_basic): add surgical column search tool
 fix(shared): handle Windows long path in snapshot
-test(xlsx_basic): add formula injection edge cases
-docs(readme): add VRAM budget guidance
+test(ml_basic): add OOM failure test for large datasets
 ```
 
 ---
 
-## 23. Dependency policy
+## 27. Dependency Policy
 
-### License requirements
+### Approved licenses
 
-Only libraries with these licenses are permitted:
-- MIT
-- Apache 2.0
-- BSD 2-Clause or 3-Clause
-- ISC
-- Python Software Foundation License
+- MIT, Apache 2.0, BSD 2-Clause / 3-Clause, ISC, PSF
 
-**Not permitted:**
-- GPL / LGPL — copyleft infects the project
-- Commercial / proprietary — not open source
-- No license — legally unsafe
+**Not permitted:** GPL / LGPL, commercial / proprietary, unlicensed
 
-### Dependency vetting checklist
+### Vetting checklist before adding any library
 
-Before adding any new library:
-- [ ] License is in the approved list above
-- [ ] Last release within 12 months (not abandoned)
-- [ ] No known CVEs via `uv audit`
-- [ ] Does not pull in a large dependency tree unnecessarily
-- [ ] Alternative using an already-approved library does not exist
-- [ ] Documented in `pyproject.toml` with minimum version constraint (`>=x.y.z`)
-- [ ] Added to STANDARDS.md approved table
+- License is in the approved list
+- Last release within 12 months
+- No known CVEs via `uv audit`
+- Does not pull in an unnecessarily large dependency tree
+- No existing approved alternative
+- Pinned in `pyproject.toml` with minimum version (`>=x.y.z`)
 
-### Prohibited libraries (Python)
+### Prohibited libraries
 
 ```
 win32com / pywin32     — Windows only
-Spire.Doc              — commercial license
+Spire.*                — commercial license
 Aspose.*               — commercial license
-pandas                 — too heavy; use openpyxl directly
-LibreOffice UNO API    — too complex a dependency; use subprocess instead
+Any cloud SDK used as primary execution engine (boto3 for ML, google-cloud-*, etc.)
 ```
 
 ---
 
-## 24. CI/CD requirements
+## 28. CI/CD Requirements
 
-### Required CI checks on every PR
+### Required checks on every PR
 
 ```yaml
 jobs:
@@ -1496,355 +1530,297 @@ jobs:
       - uv run ruff format --check .
       - uv run pyright servers/ shared/
       - uv run pytest tests/ --cov=servers --cov=shared --cov-fail-under=90
-      - python verify_tool_docstrings.py   # fails if any docstring > 80 chars
+      - python verify_tool_docstrings.py
+    env:
+      MCP_CONSTRAINED_MODE: "1"
 ```
 
 ### verify_tool_docstrings.py
 
-This script is part of every project. It enforces the 80-character docstring rule:
-
 ```python
-import ast
-import pathlib
-import sys
+import ast, pathlib, sys
 
 errors = []
 for f in pathlib.Path("servers").rglob("server.py"):
     tree = ast.parse(f.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef):
-            has_tool_decorator = any(
+            has_tool = any(
                 (isinstance(d, ast.Attribute) and d.attr == "tool") or
-                (isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute) and d.func.attr == "tool")
+                (isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute)
+                 and d.func.attr == "tool")
                 for d in node.decorator_list
             )
-            if has_tool_decorator:
-                docstring = ast.get_docstring(node) or ""
-                if len(docstring) > 80:
-                    errors.append(f"{f}:{node.lineno} {node.name}: {len(docstring)} chars > 80")
+            if has_tool:
+                doc = ast.get_docstring(node) or ""
+                if len(doc) > 80:
+                    errors.append(f"{f}:{node.lineno} {node.name}: {len(doc)} chars > 80")
 
 if errors:
     print("\n".join(errors))
     sys.exit(1)
 ```
 
-### Required CI environment variables
-
-```yaml
-env:
-  OFFICE_MCP_8GB_MODE: "1"   # run CI in 8GB mode to catch limit violations
-```
-
-Running CI with `OFFICE_MCP_8GB_MODE=1` ensures that tests validate the stricter
-8GB return size limits, catching tools that would fail on consumer hardware.
-
 ---
 
-## 25. Documentation requirements
+## 29. Documentation Requirements
 
 ### README.md required sections
 
-Every MCP server project must have these sections in `README.md`:
-
-1. **One-line description** — what domain, what tier, how many tools
-2. **Prerequisites** — Python version, uv, any OS-specific requirements
-3. **Quick install** — three commands or fewer to get running
-4. **Platform setup** — per-platform screenshots or JSON snippets for LM Studio,
-   Claude Desktop, Cursor (the three most common)
-5. **Tool reference** — table of tools with name, description, key parameters
-6. **Recommended usage patterns** — 2-3 example prompts showing the four-tool loop
-7. **Hardware requirements** — VRAM table with model recommendations
-8. **The VRAM honesty paragraph** — see section 16 for exact wording
-9. **Contributing** — how to add tools, link to STANDARDS.md
-10. **License**
+1. One-line description — domain, tier, tool count
+2. Prerequisites — Python version, uv, hardware requirements
+3. Quick install — three commands or fewer
+4. Platform setup — LM Studio, Claude Desktop, Cursor config snippets
+5. Tool reference — table of tools with name, description, key parameters
+6. Usage patterns — 2–3 example prompts showing the four-tool loop
+7. Hardware requirements — VRAM table with recommendations
+8. The hardware sovereignty statement (see section 17)
+9. Contributing — how to add tools, link to STANDARDS.md
+10. License
 
 ### CLAUDE.md — required in every repo
 
-Every repository that an AI coding agent will work in must have a `CLAUDE.md`.
-This file is the authoritative instruction set for the AI. It must include:
-
+Every repository that an AI coding agent will work in must have a `CLAUDE.md`
+containing:
 - Project overview and goals
 - Repository structure
-- Architecture principles (at minimum: engine/server split, tool count limits,
-  surgical read protocol, snapshot-before-write)
-- Tool design rules specific to this domain
-- What the AI must never do (the prohibitions list)
-- The progress tracker with checkboxes
-
-CLAUDE.md is not documentation for humans. It is a machine-readable instruction
-set optimised for AI coding agents. Write it accordingly — prescriptive, numbered,
-checkboxes, explicit prohibitions.
+- Architecture principles (engine/server split, tool count limits, surgical read,
+  snapshot-before-write, self-hosted execution)
+- Domain-specific tool design rules
+- What the AI must never do
+- Progress tracker with checkboxes
 
 ### In-code documentation
 
 ```python
-# Tool docstrings — ≤ 80 chars, machine-readable
-"""Find paragraphs matching query. Returns indices only."""
+# Tool docstrings — ≤ 80 chars, machine-readable selection cues
+"""Fill null values in column. strategy: mean median mode ffill bfill drop."""
 
 # Engine function docstrings — full human-readable explanation
-def replace_text(file_path: str, match: str, new_text: str) -> dict:
+def fill_nulls(file_path: str, column: str, strategy: str,
+               dry_run: bool = False) -> dict:
     """
-    Replace the first occurrence of match_text in the document with new_text.
-    Uses run-level editing to preserve all character formatting.
+    Fill null values in the specified column using the given strategy.
     Snapshots the file before writing.
+    Supports dry_run to preview changes without modifying the file.
 
     Returns:
-        dict with "success", "replaced_in" (list of paragraph indices),
-        "backup" (snapshot path), "token_estimate"
+        dict with "success", "filled" (count), "value_used", "backup",
+        "progress", "token_estimate"
     Raises:
-        Never — all exceptions are caught and returned as error dicts
+        Never — all exceptions caught and returned as error dicts
     """
 ```
 
 ---
 
-## 26. What to never do
+## 30. What to Never Do
 
 These are absolute prohibitions. Any code that violates them is a defect.
 
-### Never
-
 1. **Print to stdout in any server or engine module.**
-   Stdout is the MCP JSON-RPC channel. Any print statement corrupts it.
-   All logging goes to stderr.
+   Stdout is the MCP channel. Any print statement corrupts it.
 
-2. **Return a plain string from a tool function.**
-   Always return a dict. The model depends on structured responses.
+2. **Return a plain string, list, None, or boolean from a tool.**
+   Always return a dict.
 
-3. **Write to a file without calling `snapshot()` first.**
+3. **Write to data without calling `snapshot()` first.**
    No exceptions for "small changes" or "non-destructive edits".
 
 4. **Swallow exceptions silently.**
-   Every exception must either be re-raised or converted to an error dict with
-   `"success": False`, `"error"`, and `"hint"`.
+   Every exception becomes an error dict with `"success": False`, `"error"`,
+   and `"hint"`.
 
-5. **Return the entire file content from a write tool.**
-   Write tools confirm the write. Read tools read. They are separate.
+5. **Return full file contents or raw data arrays from a write tool.**
+   Write tools confirm the write. Read tools read.
 
-6. **Return all records/rows/paragraphs from a search that finds zero matches.**
-   Return an empty list and a helpful hint. Never fall back to "here's everything".
+6. **Fall back to returning everything when a search finds nothing.**
+   Return an empty list and a helpful hint.
 
 7. **Exceed 10 tools in a single server.**
-   Split into multiple servers before exceeding this limit.
+   Split into more servers at finer tier granularity.
 
 8. **Put business logic in server.py.**
-   Tool functions in server.py are one-liners that call engine.py.
+   Tool functions in `server.py` are one-liners calling `engine.py`.
 
-9. **Use `paragraph.text = value` to edit a Word document.**
-   (Or equivalent "full node replacement" in any rich-format library.)
-   This destroys formatting. Always edit at the run/cell/shape level.
+9. **Hardcode token or size limits as magic numbers.**
+   Always call `get_max_rows()`, `get_max_results()` from `platform_utils.py`.
 
-10. **Hardcode token or size limits as magic numbers in engine functions.**
-    Always call `get_max_items()`, `get_max_depth()` from `platform_utils.py`.
-    This allows the 8GB mode flag to work.
-
-11. **Use string concatenation for file paths.**
+10. **Use string concatenation for file paths.**
     Always use `pathlib.Path / operator`.
 
-12. **Write a tool that both reads and writes in a single call.**
-    LOCATE and INSPECT are separate from PATCH. Keep them separate.
+11. **Write a tool that both reads and writes in a single call.**
+    LOCATE and INSPECT are separate from PATCH.
 
-13. **Add a dependency without checking its license.**
+12. **Add a dependency without checking its license.**
     GPL dependencies are never permitted.
 
-14. **Make the installer require terminal commands from the user.**
-    The install experience standard requires zero terminal interaction.
+13. **Make the installer require terminal commands from the user.**
+    Zero terminal interaction after download.
+
+14. **Use a cloud API as the primary execution engine.**
+    The self-hosted execution principle is non-negotiable.
+
+15. **Return raw model weights, pixel arrays, or audio buffers.**
+    Return paths, summaries, and stats. Never raw binary-equivalent data.
+
+16. **Make a tool that cannot run offline.**
+    Unless network access is the explicit stated purpose of the tool.
 
 ---
 
-## 27. Checklist — new server from scratch
-
-Use this checklist every time you create a new MCP server. Do not skip steps.
+## 31. Checklist — New Server from Scratch
 
 ### Discovery
-
-- [ ] Define the domain clearly — what real-world task does this server support?
-- [ ] Define the tier — Basic / Medium / Advanced (one tier per server)
-- [ ] List all tools — count them before writing any code
-- [ ] Confirm tool count ≤ 10 (target 6-8)
-- [ ] Identify the surgical read tools — `search_*`, `get_*_index`, `list_*`
-- [ ] Identify the write tools — confirm each has a snapshot before write
-- [ ] Choose language based on library availability, not preference
+- [ ] Define the domain clearly
+- [ ] Define the tier (Basic / Medium / Advanced)
+- [ ] List all tools — count before writing any code
+- [ ] Confirm tool count ≤ 10 (target 6–8)
+- [ ] Identify the surgical read tools (`search_*`, `inspect_*`, `list_*`)
+- [ ] Identify write tools — confirm each has a snapshot before write
+- [ ] Choose language based on local library availability
 - [ ] Confirm all required libraries have approved licenses
+- [ ] Verify every tool can run offline (self-hosted execution test)
 
 ### Setup
-
-- [ ] Create server directory: `servers/{domain}_{tier}/`
-- [ ] Create `__init__.py` (empty)
+- [ ] Create `servers/{domain}_{tier}/`
+- [ ] Create `__init__.py`
 - [ ] Create `pyproject.toml` with `shared` dependency
 - [ ] Add to workspace `pyproject.toml` members list
-- [ ] Run `uv sync` — no errors
+- [ ] `uv sync` — no errors
 
-### Shared module
-
-- [ ] `shared/version_control.py` exists and is tested
-- [ ] `shared/patch_validator.py` exists and is tested
-- [ ] `shared/file_utils.py` exists and is tested
-- [ ] `shared/platform_utils.py` exists with `is_8gb_mode()` and limit helpers
+### Shared modules
+- [ ] `shared/version_control.py` — tested
+- [ ] `shared/patch_validator.py` — tested
+- [ ] `shared/file_utils.py` — tested
+- [ ] `shared/platform_utils.py` — `is_constrained_mode()` and limit helpers
+- [ ] `shared/progress.py` — ok/fail/info/warn/undo helpers
+- [ ] `shared/receipt.py` — append_receipt / read_receipt_log
 
 ### Engine
-
-- [ ] Create `engine.py` with zero MCP imports
-- [ ] Implement all tools in `engine.py` first
-- [ ] Surgical read tools implemented first (LOCATE and INSPECT before PATCH)
-- [ ] Every tool returns a dict with `"success"` as first key
+- [ ] `engine.py` with zero MCP imports
+- [ ] Surgical read tools implemented first
+- [ ] Every tool returns dict with `"success"` as first key
 - [ ] Every write tool calls `snapshot()` before writing
 - [ ] Every write tool includes `"backup"` in return dict
+- [ ] Every write tool includes `"dry_run"` path
+- [ ] Every tool response includes `"progress"` array
 - [ ] Every tool response includes `"token_estimate"`
-- [ ] Bounded reads use `get_max_*()` from `platform_utils`, never hardcoded
-- [ ] No `print()` statements
-- [ ] `restore_version` tool delegates to `shared.version_control.restore()`
+- [ ] Bounded reads use `get_max_*()` helpers
+- [ ] No `print()` statements anywhere
+- [ ] `restore_version` delegates to `shared.version_control`
 
 ### Server
-
-- [ ] Create `server.py` with FastMCP setup
+- [ ] `server.py` with FastMCP setup
 - [ ] One `@mcp.tool()` per tool, each body is `return engine.func(params)`
 - [ ] Every docstring ≤ 80 characters
-- [ ] All parameters typed with allowed types only
+- [ ] All parameters typed with allowed types
 - [ ] `--transport` and `--port` CLI args in `main()`
 - [ ] `project.scripts` entry in `pyproject.toml`
 
 ### Tests
-
-- [ ] Create `tests/fixtures/` with real files (simple + complex)
-- [ ] Create `tests/test_{server_name}.py`
+- [ ] `tests/fixtures/` with real data (simple + messy + large)
+- [ ] `tests/test_{server_name}.py`
 - [ ] Test every tool: success case
-- [ ] Test every tool: file-not-found error case
-- [ ] Test every write tool: snapshot was created
-- [ ] Test every write tool: `"backup"` in return dict
+- [ ] Test every tool: file-not-found error
+- [ ] Test every write tool: snapshot created
+- [ ] Test every write tool: `"backup"` in response
+- [ ] Test every write tool: `dry_run=True` does not modify file
 - [ ] Test every bounded read: truncation at limit
 - [ ] Test `restore_version`: file reverts correctly
+- [ ] Run with `MCP_CONSTRAINED_MODE=1`: limits enforced
 - [ ] `uv run pytest` — all pass
 - [ ] `uv run pyright servers/{name}/` — no errors
 - [ ] `uv run ruff check servers/{name}/` — no errors
-- [ ] Run on all three platforms if CI is not yet set up
 
 ### Distribution
-
-- [ ] Add server to `install/install.sh` menu
-- [ ] Add server to `install/install.bat` menu
-- [ ] Add server to `install/mcp_config_writer.py` registry
-- [ ] Test install on clean machine (or VM)
-- [ ] Document mcp.json snippet in README
+- [ ] Add to `install/install.sh` menu
+- [ ] Add to `install/install.bat` menu
+- [ ] Add to `install/mcp_config_writer.py` registry
+- [ ] Test install on clean machine or VM
 
 ### Review
-
-- [ ] Run `verify_tool_docstrings.py` — all ≤ 80 chars
-- [ ] Manual test in LM Studio with Qwen 3.5 9B — four-tool loop works
+- [ ] `verify_tool_docstrings.py` — all ≤ 80 chars
+- [ ] Manual test in LM Studio (9B model) — four-tool loop works
 - [ ] Manual test in Claude Desktop — tools appear and execute
-- [ ] Token budget test: run 10-step task, confirm context window not exceeded
-- [ ] Update CLAUDE.md progress tracker
+- [ ] 10-step task test — context window not exceeded
+- [ ] Update `CLAUDE.md` progress tracker
 
 ---
 
-## 28. Checklist — new tool in existing server
+## 32. Checklist — New Tool in Existing Server
 
-- [ ] Confirm server tool count will not exceed 10 after adding this tool
-- [ ] Confirm tool name follows `verb_noun` snake_case convention
-- [ ] Confirm verb is in the approved verb list
-- [ ] Write engine function in `engine.py` first — no MCP imports
+- [ ] Server tool count will not exceed 10 after adding
+- [ ] Tool name follows `verb_noun` snake_case convention
+- [ ] Verb is in the approved verb list
+- [ ] Write engine function in `engine.py` first (no MCP imports)
 - [ ] Engine function returns dict with `"success"` as first key
-- [ ] Engine function builds `progress` list and appends steps as it works
-- [ ] Engine function calls `resolve_path()` as first operation on file_path
-- [ ] Engine function validates file extension after resolve_path()
-- [ ] Engine function calls `snapshot()` if it writes anything
-- [ ] Engine function includes `"backup"` in return dict on writes
-- [ ] Engine function calls `append_receipt()` after every write (success or fail)
-- [ ] Engine function calls `notify_reload()` as final step after save
-- [ ] Engine function includes `"progress"` array in return dict
-- [ ] Engine function includes `"token_estimate"` in return dict
-- [ ] Engine function catches all exceptions and returns error dict
-- [ ] Error dict includes `"hint"` with actionable recovery instruction
-- [ ] Engine function calls `get_max_*()` helpers for any bounded return
-- [ ] No `print()` statements — progress goes in return dict only
-- [ ] Write tool has `dry_run: bool = False` parameter
-- [ ] Add `@mcp.tool()` decorator in `server.py` calling engine function
-- [ ] Tool docstring is ≤ 80 characters
-- [ ] All parameters have type annotations using allowed types only
+- [ ] Engine function calls `resolve_path()` as first operation on any file path
+- [ ] Engine function validates file extension after resolve
+- [ ] Engine function calls `snapshot()` if it writes
+- [ ] Engine function includes `"backup"` in write responses
+- [ ] Engine function includes `"dry_run"` path if it writes
+- [ ] Engine function calls `append_receipt()` after every write
+- [ ] Engine function includes `"progress"` array
+- [ ] Engine function includes `"token_estimate"`
+- [ ] Engine function catches all exceptions → error dict
+- [ ] Error dict includes `"hint"` with actionable recovery
+- [ ] Engine function uses `get_max_*()` helpers for bounded returns
+- [ ] No `print()` statements
+- [ ] Tool can run offline (self-hosted execution principle)
+- [ ] Add `@mcp.tool()` in `server.py` calling engine function
+- [ ] Tool docstring ≤ 80 characters
+- [ ] All parameters have allowed type annotations
 - [ ] Optional parameters have primitive defaults
-- [ ] Add success test in `tests/test_{server_name}.py`
-- [ ] Add file-not-found failure test
-- [ ] Add snapshot-created test (if write tool)
-- [ ] Add dry_run test (if write tool)
-- [ ] Add progress array present test
-- [ ] Run `uv run pytest tests/test_{server_name}.py` — all pass
-- [ ] Run `uv run ruff check servers/{name}/`
-- [ ] Run `uv run pyright servers/{name}/`
-- [ ] Run `verify_tool_docstrings.py` — ≤ 80 chars confirmed
+- [ ] Add success test
+- [ ] Add file-not-found / missing data failure test
+- [ ] Add snapshot-created test (write tools)
+- [ ] Add `dry_run=True` test (write tools)
+- [ ] Add progress array test
+- [ ] `uv run pytest tests/test_{server_name}.py` — all pass
+- [ ] `uv run ruff check servers/{name}/`
+- [ ] `uv run pyright servers/{name}/`
+- [ ] `verify_tool_docstrings.py` — ≤ 80 chars confirmed
 
 ---
 
-## 29. Progress output — every tool call must be visible
+## 33. Domain Reference Table
 
-### The rule
+This table maps domains to their local execution engines, giving a quick reference
+for building new servers that comply with the self-hosted execution principle.
 
-Every tool response includes a `"progress"` array. Never print to stdout — it
-corrupts the MCP stdio channel. All visible output goes in the progress array.
-
-```python
-{
-    "success": True,
-    "progress": [
-        {"icon": "✔", "msg": "Opened sales_data.xlsx",           "detail": "1,250 rows"},
-        {"icon": "✔", "msg": "Removed duplicate entries",        "detail": "32 removed"},
-        {"icon": "✔", "msg": "Filled missing values in Revenue", "detail": "8 filled"},
-        {"icon": "✔", "msg": "Saved Sales_Report_March.xlsx",    "detail": "1,210 rows"},
-    ],
-    "token_estimate": 95
-}
-```
-
-### shared/progress.py helpers
-
-`ok()` ✔ | `fail()` ✘ | `info()` → | `warn()` ⚠ | `undo()` ↩
-
-Use these helpers. Never construct dicts by hand. Always use `Path(x).name`
-in messages — never full paths. Full paths waste tokens and are unreadable.
-
----
-
-## 30. Live editing — changes visible while file is open
-
-Write edits appear in the open application without the user closing and reopening.
-
-**macOS:** AppleScript triggers Word/Excel reload after writing.
-**Linux:** LibreOffice polls the file — write normally, it detects the change.
-**Windows:** Shadow file + COM via pywin32 (optional), falls back gracefully.
-
-All projects implement `shared/live_edit.py` with `is_file_open()` and
-`notify_reload()`. Reload is best-effort — never fails the main operation.
-If unavailable, returns `info("File saved — reopen to see changes")`.
+| Domain | Server name pattern | Primary local engine | Cloud alternative replaced |
+|---|---|---|---|
+| Document editing | `office_basic` | python-docx, openpyxl, python-pptx | Google Docs API, Office 365 API |
+| PDF processing | `pdf_basic` | PyMuPDF, pdfplumber, reportlab | Adobe API, AWS Textract |
+| Data profiling | `data_basic` | ydata-profiling, sweetviz, polars | DataRobot, AWS Glue |
+| Data cleaning | `data_medium` | pyjanitor, great_expectations, polars | Trifacta, OpenRefine cloud |
+| SQL analytics | `sql_basic` | DuckDB, SQLite | BigQuery, Snowflake, Redshift |
+| Statistical analysis | `stats_basic` | scipy, pingouin, statsmodels | SAS, SPSS cloud |
+| Time series | `timeseries_basic` | statsforecast, sktime, neuralprophet | AWS Forecast, Azure Time Series |
+| AutoML | `ml_basic` | FLAML, autosklearn, TPOT | Google AutoML, Azure AutoML |
+| Model training | `ml_medium` | scikit-learn, XGBoost, LightGBM | SageMaker, Vertex AI |
+| Deep learning | `dl_basic` | PyTorch, ONNX Runtime | OpenAI fine-tune, Cohere |
+| Model evaluation | `ml_advanced` | SHAP, LIME, evidently, yellowbrick | Fiddler, Arize |
+| MLflow tracking | `mlops_basic` | MLflow (local server) | MLflow cloud, W&B |
+| OCR | `ocr_basic` | easyocr, surya, pytesseract | Google Vision, AWS Textract |
+| Image processing | `image_basic` | Pillow, OpenCV, scikit-image | Google Vision, Cloudinary |
+| Audio processing | `audio_basic` | librosa, pydub, FFmpeg | AWS Transcribe, Azure Speech |
+| Video processing | `video_basic` | MoviePy, FFmpeg (subprocess) | AWS MediaConvert, Mux |
+| Web scraping | `web_basic` | Playwright, BeautifulSoup, httpx | Apify, ScrapingBee |
+| System monitoring | `sys_basic` | psutil, py-cpuinfo, GPUtil | Datadog, New Relic |
+| Log analysis | `log_basic` | regex engine, structlog | Splunk, Papertrail |
+| Docker management | `docker_basic` | docker-py SDK (local daemon) | Docker Hub API, AWS ECS |
+| Secret scanning | `security_basic` | detect-secrets, bandit, pip-audit | Snyk, GitHub Advanced Security |
+| Geospatial | `geo_basic` | geopandas, shapely, rasterio | Google Maps API, ArcGIS |
+| Report generation | `report_basic` | HTML/CSS/JS engine, Playwright PDF | Tableau, PowerBI |
+| Local search | `search_basic` | MeiliSearch (local), Whoosh, tantivy | Algolia, Elasticsearch cloud |
 
 ---
 
-## 31. File path handling — accept every format
-
-All projects implement `shared/file_utils.resolve_path(raw: str) -> Path`.
-
-Handles: whitespace, wrapping quotes, `\\\\?\\` prefix, null byte check,
-env vars, `~` expansion, backslash normalisation, absolute resolution,
-rejection of `.mcp_versions/` paths.
-
-`file_path` is always the first parameter. Extension is validated immediately
-after resolve. Progress messages use `Path(x).name` only — never full paths.
-
----
-
-## 32. Operation receipt log — persistent audit trail
-
-`.{stem}.mcp_receipt.json` stored alongside every modified file. Records every
-tool call with timestamp, tool, args, result summary, and backup path.
-
-`shared/receipt.py`: `append_receipt()` (never raises) + `read_receipt_log()`.
-
-Every `_basic` server includes `read_receipt` as a mandatory tool. Every write
-tool has `dry_run: bool = False`. Dry run shows what would change without changing
-anything — the primary trust-building feature for new users.
-
----
-
-*Version: 1.1*
-*Derived from: office-mcp architecture decisions, 2026-03-25*
+*Version: 2.0*
+*Derived from: MCP_Microsoft_Office STANDARDS.md v1.1, expanded for general-purpose
+self-hosted MCP server development.*
 *This document should be linked from every MCP server project's README and CLAUDE.md.*
 *When these standards conflict with a specific project's CLAUDE.md, the project's
 CLAUDE.md takes precedence for that project. These are the defaults.*
