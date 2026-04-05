@@ -1,0 +1,56 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build release (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            artifact: office-mcp-linux.tar.gz
+          - os: windows-latest
+            artifact: office-mcp-windows-x64.zip
+          - os: macos-13
+            artifact: office-mcp-macos.tar.gz
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python 3.11
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --all-packages --frozen
+
+      - name: Build Linux/macOS archive
+        if: runner.os != 'Windows'
+        run: |
+          tar --exclude='.git' --exclude='.venv' --exclude='__pycache__' \
+              --exclude='*.pyc' --exclude='.mcp_versions' \
+              -czf "${{ matrix.artifact }}" .
+
+      - name: Build Windows archive
+        if: runner.os == 'Windows'
+        run: |
+          $exclude = @('.git', '.venv', '__pycache__', '*.pyc', '.mcp_versions')
+          Compress-Archive -Path . -DestinationPath "${{ matrix.artifact }}" -Force
+        shell: pwsh
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.artifact }}

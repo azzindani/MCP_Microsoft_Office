@@ -1,0 +1,642 @@
+"""PPTX Design engine — pure python-pptx logic, zero MCP imports."""
+
+import copy
+import subprocess
+from pathlib import Path
+from typing import Any
+
+from pptx import Presentation
+from pptx.chart.data import ChartData
+from pptx.dml.color import RGBColor
+from pptx.enum.chart import XL_CHART_TYPE  # type: ignore[attr-defined]
+from pptx.util import Inches, Pt
+
+from shared.file_utils import resolve_path
+from shared.live_edit import notify_reload
+from shared.platform_utils import get_pdf_converter
+from shared.progress import fail, info, ok, warn
+from shared.version_control import snapshot
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+CHART_TYPE_MAP: dict[str, Any] = {
+    "bar": XL_CHART_TYPE.BAR_CLUSTERED,
+    "line": XL_CHART_TYPE.LINE,
+    "pie": XL_CHART_TYPE.PIE,
+}
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _open_prs(path: Path, progress: list[dict[str, Any]]) -> tuple[Any, dict[str, Any] | None]:
+    """Load presentation; return (prs, None) or (None, error_dict)."""
+    if not path.exists():
+        progress.append(fail("File not found", str(path)))
+        return None, {
+            "success": False,
+            "error": f"File not found: {path}",
+            "hint": "Check that file_path is absolute and the file exists.",
+            "progress": progress,
+            "token_estimate": 20,
+        }
+    if path.suffix.lower() != ".pptx":
+        progress.append(fail(f"Wrong file type: {path.suffix}"))
+        return None, {
+            "success": False,
+            "error": f"Expected .pptx file, got {path.suffix}",
+            "hint": "Use the correct server for this file type.",
+            "progress": progress,
+            "token_estimate": 20,
+        }
+    prs = Presentation(str(path))
+    return prs, None
+
+
+def _check_slide(prs: Any, slide_index: int, progress: list[dict[str, Any]], backup: str | None) -> tuple[Any, dict[str, Any] | None]:
+    """Return (slide, None) or (None, error_dict) if index out of range."""
+    count = len(prs.slides)
+    if slide_index < 0 or slide_index >= count:
+        progress.append(fail(
+            f"Slide index {slide_index} out of range",
+            f"Presentation has {count} slide(s)"
+        ))
+        return None, {
+            "success": False,
+            "error": f"slide_index {slide_index} out of range (0-{count - 1})",
+            "hint": "Use read_presentation to get current slide count.",
+            "backup": backup,
+            "progress": progress,
+            "token_estimate": 15,
+        }
+    return prs.slides[slide_index], None
+
+
+def _find_shape(slide: Any, shape_name: str, progress: list[dict[str, Any]], backup: str | None) -> tuple[Any, dict[str, Any] | None]:
+    """Return (shape, None) or (None, error_dict) if shape not found."""
+    for shape in slide.shapes:
+        if shape.name == shape_name:
+            return shape, None
+    names = [s.name for s in slide.shapes]
+    progress.append(fail(f"Shape '{shape_name}' not found"))
+    return None, {
+        "success": False,
+        "error": f"Shape '{shape_name}' not found on slide",
+        "hint": f"Available shapes: {', '.join(names)}",
+        "backup": backup,
+        "progress": progress,
+        "token_estimate": 15,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Tool implementations
+# ---------------------------------------------------------------------------
+
+
+def set_background(
+    file_path: str,
+    slide_index: int,
+    color_hex: str = "",
+    image_path: str = "",
+) -> dict[str, Any]:
+    """Set slide background to a solid color or image."""
+    progress: list[dict[str, Any]] = []
+    backup: str | None = None
+    try:
+        if not color_hex and not image_path:
+            progress.append(fail("Must provide color_hex or image_path"))
+            return {
+                "success": False,
+                "error": "Must provide either color_hex or image_path",
+                "hint": "Provide a 6-char hex color like 'FF0000' or an image file path.",
+                "progress": progress,
+                "token_estimate": 15,
+            }
+
+        path = resolve_path(file_path)
+        prs, err = _open_prs(path, progress)
+        if err:
+            return err
+
+        progress.append(ok(f"Opened {path.name}", f"{len(prs.slides)} slides"))
+
+        backup = snapshot(str(path))
+        progress.append(ok("Snapshot saved", Path(backup).name))
+
+        slide, err = _check_slide(prs, slide_index, progress, backup)
+        if err:
+            return err
+
+        if color_hex:
+            clean = color_hex.lstrip("#")
+            background = slide.background
+            fill = background.fill
+            fill.solid()
+            fill.fore_color.rgb = RGBColor(
+                int(clean[0:2], 16),
+                int(clean[2:4], 16),
+                int(clean[4:6], 16),
+            )
+            progress.append(ok(f"Set background color #{clean}", f"slide {slide_index}"))
+
+        elif image_path:
+            img_path = Path(image_path).resolve()
+            if not img_path.exists():
+                progress.append(fail(f"Image not found: {img_path.name}"))
+                return {
+                    "success": False,
+                    "error": f"Image file not found: {image_path}",
+                    "hint": "Check that image_path is absolute and the file exists.",
+                    "backup": backup,
+                    "progress": progress,
+                    "token_estimate": 15,
+                }
+            slide_width = prs.slide_width
+            slide_height = prs.slide_height
+            slide.shapes.add_picture(
+                str(img_path), 0, 0, slide_width, slide_height
+            )
+            # Move image to back (index 0 in spTree after two required elements)
+            sp_tree = slide.shapes._spTree
+            pic_el = sp_tree[-1]
+            sp_tree.remove(pic_el)
+            sp_tree.insert(2, pic_el)
+            progress.append(ok(f"Set background image", img_path.name))
+
+        prs.save(str(path))
+        progress.append(notify_reload(str(path), "pptx"))
+
+        result: dict[str, Any] = {
+            "success": True,
+            "op": "set_background",
+            "slide_index": slide_index,
+            "color_hex": color_hex,
+            "image_path": image_path,
+            "backup": backup,
+            "progress": progress,
+        }
+        result["token_estimate"] = len(str(result)) // 4
+        return result
+
+    except Exception as e:
+        progress.append(fail(str(e)))
+        return {
+            "success": False,
+            "error": str(e),
+            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "backup": backup,
+            "progress": progress,
+            "token_estimate": 15,
+        }
+
+
+def set_font_style(
+    file_path: str,
+    slide_index: int,
+    shape_name: str,
+    font_name: str = "",
+    font_size: float = 0,
+    bold: bool = False,
+    color_hex: str = "",
+) -> dict[str, Any]:
+    """Apply font name, size, bold, and/or color to all runs in a shape."""
+    progress: list[dict[str, Any]] = []
+    backup: str | None = None
+    try:
+        path = resolve_path(file_path)
+        prs, err = _open_prs(path, progress)
+        if err:
+            return err
+
+        progress.append(ok(f"Opened {path.name}"))
+
+        backup = snapshot(str(path))
+        progress.append(ok("Snapshot saved", Path(backup).name))
+
+        slide, err = _check_slide(prs, slide_index, progress, backup)
+        if err:
+            return err
+
+        shape, err = _find_shape(slide, shape_name, progress, backup)
+        if err:
+            return err
+
+        if not shape.has_text_frame:
+            progress.append(fail(f"Shape '{shape_name}' has no text frame"))
+            return {
+                "success": False,
+                "error": f"Shape '{shape_name}' has no text frame",
+                "hint": "Only text shapes support font styling.",
+                "backup": backup,
+                "progress": progress,
+                "token_estimate": 15,
+            }
+
+        rgb: RGBColor | None = None
+        if color_hex:
+            clean = color_hex.lstrip("#")
+            rgb = RGBColor(
+                int(clean[0:2], 16),
+                int(clean[2:4], 16),
+                int(clean[4:6], 16),
+            )
+
+        runs_updated = 0
+        for para in shape.text_frame.paragraphs:
+            for run in para.runs:
+                if font_name:
+                    run.font.name = font_name
+                if font_size > 0:
+                    run.font.size = Pt(font_size)
+                if bold:
+                    run.font.bold = True
+                if rgb is not None:
+                    run.font.color.rgb = rgb
+                runs_updated += 1
+
+        prs.save(str(path))
+        progress.append(notify_reload(str(path), "pptx"))
+        progress.append(ok(f"Updated font style in '{shape_name}'", f"{runs_updated} runs"))
+
+        result: dict[str, Any] = {
+            "success": True,
+            "op": "set_font_style",
+            "slide_index": slide_index,
+            "shape_name": shape_name,
+            "font_name": font_name,
+            "font_size": font_size,
+            "bold": bold,
+            "color_hex": color_hex,
+            "runs_updated": runs_updated,
+            "backup": backup,
+            "progress": progress,
+        }
+        result["token_estimate"] = len(str(result)) // 4
+        return result
+
+    except Exception as e:
+        progress.append(fail(str(e)))
+        return {
+            "success": False,
+            "error": str(e),
+            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "backup": backup,
+            "progress": progress,
+            "token_estimate": 15,
+        }
+
+
+def add_table(
+    file_path: str,
+    slide_index: int,
+    rows: int,
+    cols: int,
+    data: list[list[str]],
+    left: float = 1.0,
+    top: float = 2.0,
+    width: float = 8.0,
+    height: float = 3.0,
+) -> dict[str, Any]:
+    """Insert a table with data on a slide."""
+    progress: list[dict[str, Any]] = []
+    backup: str | None = None
+    try:
+        if rows <= 0 or cols <= 0:
+            progress.append(fail("rows and cols must be positive integers"))
+            return {
+                "success": False,
+                "error": "rows and cols must be positive",
+                "hint": "Provide positive integers for rows and cols.",
+                "progress": progress,
+                "token_estimate": 15,
+            }
+
+        path = resolve_path(file_path)
+        prs, err = _open_prs(path, progress)
+        if err:
+            return err
+
+        progress.append(ok(f"Opened {path.name}"))
+
+        backup = snapshot(str(path))
+        progress.append(ok("Snapshot saved", Path(backup).name))
+
+        slide, err = _check_slide(prs, slide_index, progress, backup)
+        if err:
+            return err
+
+        table_shape = slide.shapes.add_table(
+            rows, cols,
+            Inches(left), Inches(top),
+            Inches(width), Inches(height),
+        )
+        table = table_shape.table
+
+        for ri, row_data in enumerate(data):
+            if ri >= rows:
+                break
+            for ci, cell_text in enumerate(row_data):
+                if ci >= cols:
+                    break
+                table.cell(ri, ci).text = str(cell_text)
+
+        prs.save(str(path))
+        progress.append(notify_reload(str(path), "pptx"))
+        progress.append(ok(f"Added {rows}×{cols} table", f"slide {slide_index}"))
+
+        result: dict[str, Any] = {
+            "success": True,
+            "op": "add_table",
+            "slide_index": slide_index,
+            "rows": rows,
+            "cols": cols,
+            "backup": backup,
+            "progress": progress,
+        }
+        result["token_estimate"] = len(str(result)) // 4
+        return result
+
+    except Exception as e:
+        progress.append(fail(str(e)))
+        return {
+            "success": False,
+            "error": str(e),
+            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "backup": backup,
+            "progress": progress,
+            "token_estimate": 15,
+        }
+
+
+def add_chart(
+    file_path: str,
+    slide_index: int,
+    chart_type: str,
+    data: dict[str, Any],
+    title: str = "",
+    left: float = 1.0,
+    top: float = 2.0,
+    width: float = 6.0,
+    height: float = 4.5,
+) -> dict[str, Any]:
+    """Add a bar, line, or pie chart to a slide."""
+    progress: list[dict[str, Any]] = []
+    backup: str | None = None
+    try:
+        if chart_type not in CHART_TYPE_MAP:
+            progress.append(fail(f"Unsupported chart type: {chart_type}"))
+            return {
+                "success": False,
+                "error": f"Unsupported chart type: {chart_type}",
+                "hint": f"Allowed types: {', '.join(sorted(CHART_TYPE_MAP))}",
+                "progress": progress,
+                "token_estimate": 15,
+            }
+
+        path = resolve_path(file_path)
+        prs, err = _open_prs(path, progress)
+        if err:
+            return err
+
+        progress.append(ok(f"Opened {path.name}"))
+
+        backup = snapshot(str(path))
+        progress.append(ok("Snapshot saved", Path(backup).name))
+
+        slide, err = _check_slide(prs, slide_index, progress, backup)
+        if err:
+            return err
+
+        chart_data = ChartData()
+        categories = data.get("categories", [])
+        chart_data.categories = categories
+
+        for series_def in data.get("series", []):
+            chart_data.add_series(series_def["name"], series_def["values"])
+
+        xl_chart_type = CHART_TYPE_MAP[chart_type]
+        chart_shape = slide.shapes.add_chart(
+            xl_chart_type,
+            Inches(left), Inches(top),
+            Inches(width), Inches(height),
+            chart_data,
+        )
+
+        if title:
+            chart_shape.chart.has_title = True
+            chart_shape.chart.chart_title.text_frame.text = title
+
+        prs.save(str(path))
+        progress.append(notify_reload(str(path), "pptx"))
+        progress.append(ok(f"Added {chart_type} chart", f"slide {slide_index}"))
+
+        result: dict[str, Any] = {
+            "success": True,
+            "op": "add_chart",
+            "slide_index": slide_index,
+            "chart_type": chart_type,
+            "title": title,
+            "backup": backup,
+            "progress": progress,
+        }
+        result["token_estimate"] = len(str(result)) // 4
+        return result
+
+    except Exception as e:
+        progress.append(fail(str(e)))
+        return {
+            "success": False,
+            "error": str(e),
+            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "backup": backup,
+            "progress": progress,
+            "token_estimate": 15,
+        }
+
+
+def duplicate_slide(
+    file_path: str,
+    slide_index: int,
+    insert_at: int = -1,
+) -> dict[str, Any]:
+    """Copy a slide and insert it at the specified position (-1 = end)."""
+    progress: list[dict[str, Any]] = []
+    backup: str | None = None
+    try:
+        path = resolve_path(file_path)
+        prs, err = _open_prs(path, progress)
+        if err:
+            return err
+
+        progress.append(ok(f"Opened {path.name}", f"{len(prs.slides)} slides"))
+
+        backup = snapshot(str(path))
+        progress.append(ok("Snapshot saved", Path(backup).name))
+
+        slide, err = _check_slide(prs, slide_index, progress, backup)
+        if err:
+            return err
+
+        # Add a blank slide using the same layout as the source
+        src_layout = slide.slide_layout
+        new_slide = prs.slides.add_slide(src_layout)
+
+        # Copy all shapes from the source slide
+        for shape in slide.shapes:
+            new_el = copy.deepcopy(shape.element)
+            new_slide.shapes._spTree.insert(2, new_el)
+
+        new_idx = len(prs.slides) - 1
+
+        # Reorder if insert_at is specified and not -1
+        if insert_at >= 0 and insert_at < new_idx:
+            # Move the new slide (currently at new_idx) to insert_at
+            xml_slides = prs.slides._sldIdLst
+            slides_list = list(xml_slides)
+            moved = slides_list.pop(new_idx)
+            slides_list.insert(insert_at, moved)
+            for item in reversed(slides_list):
+                xml_slides.remove(item)
+                xml_slides.insert(0, item)
+            new_idx = insert_at
+
+        prs.save(str(path))
+        progress.append(notify_reload(str(path), "pptx"))
+        progress.append(ok(f"Duplicated slide {slide_index} → position {new_idx}",
+                           f"{len(prs.slides)} slides total"))
+
+        result: dict[str, Any] = {
+            "success": True,
+            "op": "duplicate_slide",
+            "source_index": slide_index,
+            "new_index": new_idx,
+            "slide_count": len(prs.slides),
+            "backup": backup,
+            "progress": progress,
+        }
+        result["token_estimate"] = len(str(result)) // 4
+        return result
+
+    except Exception as e:
+        progress.append(fail(str(e)))
+        return {
+            "success": False,
+            "error": str(e),
+            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "backup": backup,
+            "progress": progress,
+            "token_estimate": 15,
+        }
+
+
+def export_pdf(
+    file_path: str,
+    output_path: str = "",
+) -> dict[str, Any]:
+    """Export PPTX to PDF using LibreOffice or Microsoft PowerPoint."""
+    progress: list[dict[str, Any]] = []
+    try:
+        path = resolve_path(file_path)
+        if not path.exists():
+            progress.append(fail("File not found", str(path)))
+            return {
+                "success": False,
+                "error": f"File not found: {path}",
+                "hint": "Check that file_path is absolute and the file exists.",
+                "progress": progress,
+                "token_estimate": 15,
+            }
+        if path.suffix.lower() != ".pptx":
+            progress.append(fail(f"Wrong file type: {path.suffix}"))
+            return {
+                "success": False,
+                "error": f"Expected .pptx file, got {path.suffix}",
+                "hint": "This tool only exports .pptx files.",
+                "progress": progress,
+                "token_estimate": 15,
+            }
+
+        converter = get_pdf_converter()
+        if not converter:
+            progress.append(fail("No PDF converter available"))
+            return {
+                "success": False,
+                "error": "No PDF converter found on this system",
+                "hint": (
+                    "Install LibreOffice: "
+                    "sudo apt install libreoffice (Ubuntu) or "
+                    "sudo dnf install libreoffice (Fedora). "
+                    "On Windows/macOS, install Microsoft PowerPoint."
+                ),
+                "progress": progress,
+                "token_estimate": 20,
+            }
+
+        out = Path(output_path).resolve() if output_path else path.with_suffix(".pdf")
+
+        if converter == "libreoffice":
+            result_proc = subprocess.run(
+                [
+                    "libreoffice", "--headless",
+                    "--convert-to", "pdf",
+                    "--outdir", str(out.parent),
+                    str(path),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if result_proc.returncode != 0:
+                progress.append(fail("LibreOffice conversion failed", result_proc.stderr[:200]))
+                return {
+                    "success": False,
+                    "error": "LibreOffice PDF conversion failed",
+                    "hint": result_proc.stderr[:200] if result_proc.stderr else "Check LibreOffice installation.",
+                    "progress": progress,
+                    "token_estimate": 15,
+                }
+            # LibreOffice names the output after the input file
+            expected_out = out.parent / path.with_suffix(".pdf").name
+            if output_path and expected_out != out:
+                expected_out.rename(out)
+
+        elif converter == "word":
+            try:
+                import docx2pdf  # type: ignore[import-untyped]
+                docx2pdf.convert(str(path), str(out))
+            except Exception as conv_err:
+                progress.append(fail("PowerPoint conversion failed", str(conv_err)[:200]))
+                return {
+                    "success": False,
+                    "error": f"PowerPoint PDF conversion failed: {conv_err}",
+                    "hint": "Ensure Microsoft PowerPoint is installed.",
+                    "progress": progress,
+                    "token_estimate": 15,
+                }
+
+        progress.append(ok(f"Exported to PDF", out.name))
+        result: dict[str, Any] = {
+            "success": True,
+            "op": "export_pdf",
+            "input": str(path),
+            "output": str(out),
+            "converter": converter,
+            "progress": progress,
+        }
+        result["token_estimate"] = len(str(result)) // 4
+        return result
+
+    except Exception as e:
+        progress.append(fail(str(e)))
+        return {
+            "success": False,
+            "error": str(e),
+            "hint": "Check file path and that a PDF converter is installed.",
+            "progress": progress,
+            "token_estimate": 15,
+        }
