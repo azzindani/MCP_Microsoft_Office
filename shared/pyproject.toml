@@ -11,8 +11,5 @@ dependencies = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.hatch.build]
-include = ["*.py"]
-
 [tool.hatch.build.targets.wheel]
-include = ["*.py"]
+packages = ["shared"]
