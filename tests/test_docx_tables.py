@@ -22,7 +22,7 @@ def _copy(name: str, tmp_path: Path) -> Path:
 
 class TestListTables:
     def test_list_tables_returns_dimensions(self, tmp_path):
-        from servers.docx_tables.engine import list_tables
+        from docx_tables.engine import list_tables
 
         path = _copy("report_tables.docx", tmp_path)
         result = list_tables(str(path))
@@ -35,7 +35,7 @@ class TestListTables:
         assert tables[0]["cols"] == 4
 
     def test_list_tables_has_progress(self, tmp_path):
-        from servers.docx_tables.engine import list_tables
+        from docx_tables.engine import list_tables
 
         path = _copy("report_tables.docx", tmp_path)
         result = list_tables(str(path))
@@ -43,14 +43,14 @@ class TestListTables:
         assert len(result["progress"]) > 0
 
     def test_list_tables_file_not_found(self, tmp_path):
-        from servers.docx_tables.engine import list_tables
+        from docx_tables.engine import list_tables
 
         result = list_tables(str(tmp_path / "missing.docx"))
         assert result["success"] is False
         assert "not found" in result["error"].lower()
 
     def test_list_tables_wrong_type(self, tmp_path):
-        from servers.docx_tables.engine import list_tables
+        from docx_tables.engine import list_tables
 
         f = tmp_path / "test.xlsx"
         f.write_bytes(b"fake")
@@ -64,7 +64,7 @@ class TestListTables:
 
 class TestReadTable:
     def test_read_table_returns_2d_array(self, tmp_path):
-        from servers.docx_tables.engine import read_table
+        from docx_tables.engine import read_table
 
         path = _copy("report_tables.docx", tmp_path)
         result = read_table(str(path), 0)
@@ -81,7 +81,7 @@ class TestReadTable:
         assert data[0][3]["text"] == "Total"
 
     def test_read_table_cells_have_col_key(self, tmp_path):
-        from servers.docx_tables.engine import read_table
+        from docx_tables.engine import read_table
 
         path = _copy("report_tables.docx", tmp_path)
         result = read_table(str(path), 0)
@@ -92,7 +92,7 @@ class TestReadTable:
 
     def test_read_table_handles_merged_cells(self, tmp_path):
         """Merged cell detection should not crash even on normal tables."""
-        from servers.docx_tables.engine import read_table
+        from docx_tables.engine import read_table
 
         path = _copy("report_tables.docx", tmp_path)
         result = read_table(str(path), 0)
@@ -103,7 +103,7 @@ class TestReadTable:
                 assert "text" in cell
 
     def test_read_table_index_out_of_range(self, tmp_path):
-        from servers.docx_tables.engine import read_table
+        from docx_tables.engine import read_table
 
         path = _copy("report_tables.docx", tmp_path)
         result = read_table(str(path), 99)
@@ -112,7 +112,7 @@ class TestReadTable:
         assert "hint" in result
 
     def test_read_table_file_not_found(self, tmp_path):
-        from servers.docx_tables.engine import read_table
+        from docx_tables.engine import read_table
 
         result = read_table(str(tmp_path / "nope.docx"), 0)
         assert result["success"] is False
@@ -123,7 +123,7 @@ class TestReadTable:
 
 class TestSearchTableCells:
     def test_search_table_cells_finds_match(self, tmp_path):
-        from servers.docx_tables.engine import search_table_cells
+        from docx_tables.engine import search_table_cells
 
         path = _copy("report_tables.docx", tmp_path)
         result = search_table_cells(str(path), "North")
@@ -137,7 +137,7 @@ class TestSearchTableCells:
         assert "North" in match["text"]
 
     def test_search_table_cells_no_match(self, tmp_path):
-        from servers.docx_tables.engine import search_table_cells
+        from docx_tables.engine import search_table_cells
 
         path = _copy("report_tables.docx", tmp_path)
         result = search_table_cells(str(path), "ZZZNOMATCH")
@@ -145,14 +145,14 @@ class TestSearchTableCells:
         assert result["matches"] == []
 
     def test_search_table_cells_empty_query(self, tmp_path):
-        from servers.docx_tables.engine import search_table_cells
+        from docx_tables.engine import search_table_cells
 
         path = _copy("report_tables.docx", tmp_path)
         result = search_table_cells(str(path), "")
         assert result["success"] is False
 
     def test_search_table_cells_respects_max_results(self, tmp_path):
-        from servers.docx_tables.engine import search_table_cells
+        from docx_tables.engine import search_table_cells
 
         path = _copy("report_tables.docx", tmp_path)
         # "Region" appears in both tables header row
@@ -161,7 +161,7 @@ class TestSearchTableCells:
         assert len(result["matches"]) <= 1
 
     def test_search_table_cells_case_insensitive(self, tmp_path):
-        from servers.docx_tables.engine import search_table_cells
+        from docx_tables.engine import search_table_cells
 
         path = _copy("report_tables.docx", tmp_path)
         result_lower = search_table_cells(str(path), "north")
@@ -176,7 +176,7 @@ class TestSearchTableCells:
 
 class TestReadTableRow:
     def test_read_table_row_returns_cells(self, tmp_path):
-        from servers.docx_tables.engine import read_table_row
+        from docx_tables.engine import read_table_row
 
         path = _copy("report_tables.docx", tmp_path)
         result = read_table_row(str(path), 0, 0)
@@ -189,7 +189,7 @@ class TestReadTableRow:
         assert cells[1]["text"] == "Q1"
 
     def test_read_table_row_second_row(self, tmp_path):
-        from servers.docx_tables.engine import read_table_row
+        from docx_tables.engine import read_table_row
 
         path = _copy("report_tables.docx", tmp_path)
         result = read_table_row(str(path), 0, 1)
@@ -197,7 +197,7 @@ class TestReadTableRow:
         assert result["cells"][0]["text"] == "North"
 
     def test_read_table_row_out_of_range(self, tmp_path):
-        from servers.docx_tables.engine import read_table_row
+        from docx_tables.engine import read_table_row
 
         path = _copy("report_tables.docx", tmp_path)
         result = read_table_row(str(path), 0, 99)
@@ -205,7 +205,7 @@ class TestReadTableRow:
         assert "out of range" in result["error"]
 
     def test_read_table_row_table_out_of_range(self, tmp_path):
-        from servers.docx_tables.engine import read_table_row
+        from docx_tables.engine import read_table_row
 
         path = _copy("report_tables.docx", tmp_path)
         result = read_table_row(str(path), 99, 0)
@@ -217,7 +217,7 @@ class TestReadTableRow:
 
 class TestSetCell:
     def test_set_cell_writes_value(self, tmp_path):
-        from servers.docx_tables.engine import read_table, set_cell
+        from docx_tables.engine import read_table, set_cell
 
         path = _copy("report_tables.docx", tmp_path)
         result = set_cell(str(path), 0, 1, 0, "East")
@@ -228,7 +228,7 @@ class TestSetCell:
         assert read_result["data"][1][0]["text"] == "East"
 
     def test_set_cell_creates_snapshot(self, tmp_path):
-        from servers.docx_tables.engine import set_cell
+        from docx_tables.engine import set_cell
 
         path = _copy("report_tables.docx", tmp_path)
         result = set_cell(str(path), 0, 1, 1, "99999")
@@ -239,7 +239,7 @@ class TestSetCell:
         assert backup_path.exists()
 
     def test_set_cell_returns_old_text(self, tmp_path):
-        from servers.docx_tables.engine import set_cell
+        from docx_tables.engine import set_cell
 
         path = _copy("report_tables.docx", tmp_path)
         result = set_cell(str(path), 0, 1, 0, "NewVal")
@@ -247,7 +247,7 @@ class TestSetCell:
         assert result["old_text"] == "North"
 
     def test_set_cell_out_of_range_row(self, tmp_path):
-        from servers.docx_tables.engine import set_cell
+        from docx_tables.engine import set_cell
 
         path = _copy("report_tables.docx", tmp_path)
         result = set_cell(str(path), 0, 99, 0, "x")
@@ -256,7 +256,7 @@ class TestSetCell:
         assert "hint" in result
 
     def test_set_cell_out_of_range_col(self, tmp_path):
-        from servers.docx_tables.engine import set_cell
+        from docx_tables.engine import set_cell
 
         path = _copy("report_tables.docx", tmp_path)
         result = set_cell(str(path), 0, 0, 99, "x")
@@ -264,14 +264,14 @@ class TestSetCell:
         assert "out of range" in result["error"]
 
     def test_set_cell_out_of_range_table(self, tmp_path):
-        from servers.docx_tables.engine import set_cell
+        from docx_tables.engine import set_cell
 
         path = _copy("report_tables.docx", tmp_path)
         result = set_cell(str(path), 99, 0, 0, "x")
         assert result["success"] is False
 
     def test_set_cell_has_progress(self, tmp_path):
-        from servers.docx_tables.engine import set_cell
+        from docx_tables.engine import set_cell
 
         path = _copy("report_tables.docx", tmp_path)
         result = set_cell(str(path), 0, 0, 0, "Header")
@@ -284,7 +284,7 @@ class TestSetCell:
 
 class TestAddRow:
     def test_add_row_appends_data(self, tmp_path):
-        from servers.docx_tables.engine import add_row, list_tables, read_table
+        from docx_tables.engine import add_row, list_tables, read_table
 
         path = _copy("report_tables.docx", tmp_path)
         # Table 0 starts with 5 rows
@@ -301,7 +301,7 @@ class TestAddRow:
         assert last_row[1]["text"] == "15000"
 
     def test_add_row_creates_snapshot(self, tmp_path):
-        from servers.docx_tables.engine import add_row
+        from docx_tables.engine import add_row
 
         path = _copy("report_tables.docx", tmp_path)
         result = add_row(str(path), 0, ["A", "B", "C", "D"])
@@ -312,7 +312,7 @@ class TestAddRow:
 
     def test_add_row_partial_data(self, tmp_path):
         """Rows with fewer data items than cols should fill remaining with empty."""
-        from servers.docx_tables.engine import add_row, read_table
+        from docx_tables.engine import add_row, read_table
 
         path = _copy("report_tables.docx", tmp_path)
         result = add_row(str(path), 0, ["OnlyOne"])
@@ -324,7 +324,7 @@ class TestAddRow:
         assert last_row[1]["text"] == ""
 
     def test_add_row_table_out_of_range(self, tmp_path):
-        from servers.docx_tables.engine import add_row
+        from docx_tables.engine import add_row
 
         path = _copy("report_tables.docx", tmp_path)
         result = add_row(str(path), 99, ["x"])
@@ -336,7 +336,7 @@ class TestAddRow:
 
 class TestDeleteRow:
     def test_delete_row_shifts_up(self, tmp_path):
-        from servers.docx_tables.engine import delete_row, list_tables, read_table
+        from docx_tables.engine import delete_row, list_tables, read_table
 
         path = _copy("report_tables.docx", tmp_path)
         # Row 1 is "North". Delete it — row 2 ("South") becomes new row 1.
@@ -349,7 +349,7 @@ class TestDeleteRow:
         assert read_result["data"][1][0]["text"] == "South"
 
     def test_delete_row_creates_snapshot(self, tmp_path):
-        from servers.docx_tables.engine import delete_row
+        from docx_tables.engine import delete_row
 
         path = _copy("report_tables.docx", tmp_path)
         result = delete_row(str(path), 0, 0)
@@ -359,7 +359,7 @@ class TestDeleteRow:
         assert backup_path.exists()
 
     def test_delete_row_returns_deleted_text(self, tmp_path):
-        from servers.docx_tables.engine import delete_row
+        from docx_tables.engine import delete_row
 
         path = _copy("report_tables.docx", tmp_path)
         result = delete_row(str(path), 0, 0)
@@ -368,7 +368,7 @@ class TestDeleteRow:
         assert result["deleted_text"][0] == "Region"
 
     def test_delete_row_out_of_range(self, tmp_path):
-        from servers.docx_tables.engine import delete_row
+        from docx_tables.engine import delete_row
 
         path = _copy("report_tables.docx", tmp_path)
         result = delete_row(str(path), 0, 99)
@@ -376,7 +376,7 @@ class TestDeleteRow:
         assert "out of range" in result["error"]
 
     def test_delete_row_table_out_of_range(self, tmp_path):
-        from servers.docx_tables.engine import delete_row
+        from docx_tables.engine import delete_row
 
         path = _copy("report_tables.docx", tmp_path)
         result = delete_row(str(path), 99, 0)
@@ -388,7 +388,7 @@ class TestDeleteRow:
 
 class TestAddTable:
     def test_add_table_at_position(self, tmp_path):
-        from servers.docx_tables.engine import add_table, list_tables
+        from docx_tables.engine import add_table, list_tables
 
         path = _copy("report_tables.docx", tmp_path)
         result = add_table(str(path), 0, rows=2, cols=3)
@@ -399,7 +399,7 @@ class TestAddTable:
         assert tables_result["table_count"] == 3
 
     def test_add_table_with_data(self, tmp_path):
-        from servers.docx_tables.engine import add_table, list_tables
+        from docx_tables.engine import add_table, list_tables
 
         path = _copy("report_tables.docx", tmp_path)
         data = [["Name", "Score"], ["Alice", "95"]]
@@ -410,7 +410,7 @@ class TestAddTable:
         assert tables_result["table_count"] == 3
 
     def test_add_table_creates_snapshot(self, tmp_path):
-        from servers.docx_tables.engine import add_table
+        from docx_tables.engine import add_table
 
         path = _copy("report_tables.docx", tmp_path)
         result = add_table(str(path), 0, rows=2, cols=2)
@@ -420,7 +420,7 @@ class TestAddTable:
         assert backup_path.exists()
 
     def test_add_table_paragraph_out_of_range(self, tmp_path):
-        from servers.docx_tables.engine import add_table
+        from docx_tables.engine import add_table
 
         path = _copy("report_tables.docx", tmp_path)
         result = add_table(str(path), 9999, rows=2, cols=2)
@@ -428,7 +428,7 @@ class TestAddTable:
         assert "out of range" in result["error"]
 
     def test_add_table_invalid_dimensions(self, tmp_path):
-        from servers.docx_tables.engine import add_table
+        from docx_tables.engine import add_table
 
         path = _copy("report_tables.docx", tmp_path)
         result = add_table(str(path), 0, rows=0, cols=2)
@@ -440,7 +440,7 @@ class TestAddTable:
 
 class TestDeleteTable:
     def test_delete_table_removes_correctly(self, tmp_path):
-        from servers.docx_tables.engine import delete_table, list_tables
+        from docx_tables.engine import delete_table, list_tables
 
         path = _copy("report_tables.docx", tmp_path)
         result = delete_table(str(path), 0)
@@ -451,7 +451,7 @@ class TestDeleteTable:
         assert tables_result["table_count"] == 1
 
     def test_delete_table_creates_snapshot(self, tmp_path):
-        from servers.docx_tables.engine import delete_table
+        from docx_tables.engine import delete_table
 
         path = _copy("report_tables.docx", tmp_path)
         result = delete_table(str(path), 0)
@@ -461,7 +461,7 @@ class TestDeleteTable:
         assert backup_path.exists()
 
     def test_delete_table_out_of_range(self, tmp_path):
-        from servers.docx_tables.engine import delete_table
+        from docx_tables.engine import delete_table
 
         path = _copy("report_tables.docx", tmp_path)
         result = delete_table(str(path), 99)
@@ -470,7 +470,7 @@ class TestDeleteTable:
         assert "hint" in result
 
     def test_delete_table_second_table(self, tmp_path):
-        from servers.docx_tables.engine import delete_table, list_tables
+        from docx_tables.engine import delete_table, list_tables
 
         path = _copy("report_tables.docx", tmp_path)
         result = delete_table(str(path), 1)

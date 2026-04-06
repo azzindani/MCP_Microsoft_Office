@@ -5,8 +5,7 @@ from pathlib import Path
 
 import pytest
 from pptx import Presentation
-
-from servers.pptx_design.engine import (
+from pptx_design.engine import (
     add_chart,
     add_table,
     duplicate_slide,
@@ -307,7 +306,7 @@ def test_export_pdf_no_converter(deck: Path, monkeypatch: pytest.MonkeyPatch) ->
 
     monkeypatch.setattr(platform_utils, "get_pdf_converter", lambda: None)
     # Re-import engine to pick up monkeypatched value
-    from servers.pptx_design import engine as pptx_engine
+    from pptx_design import engine as pptx_engine
 
     monkeypatch.setattr(pptx_engine, "get_pdf_converter", lambda: None)
 

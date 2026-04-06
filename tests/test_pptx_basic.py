@@ -4,8 +4,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-
-from servers.pptx_basic.engine import (
+from pptx_basic.engine import (
     add_slide,
     add_text_box,
     delete_slide,
