@@ -34,22 +34,28 @@ ALL_SERVERS = [
     "docx_basic",
     "docx_tables",
     "docx_layout",
+    "docx_new",
     "xlsx_basic",
     "xlsx_formulas",
     "xlsx_charts",
+    "xlsx_new",
     "pptx_basic",
     "pptx_design",
+    "pptx_new",
 ]
 
 SERVER_DISPLAY_NAMES = {
     "docx_basic": "docx-basic",
     "docx_tables": "docx-tables",
     "docx_layout": "docx-layout",
+    "docx_new": "docx-new",
     "xlsx_basic": "xlsx-basic",
     "xlsx_formulas": "xlsx-formulas",
     "xlsx_charts": "xlsx-charts",
+    "xlsx_new": "xlsx-new",
     "pptx_basic": "pptx-basic",
     "pptx_design": "pptx-design",
+    "pptx_new": "pptx-new",
 }
 
 PLATFORM_CONFIG_PATHS = {

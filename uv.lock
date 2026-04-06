@@ -6,14 +6,17 @@ requires-python = ">=3.11"
 members = [
     "docx-basic",
     "docx-layout",
+    "docx-new",
     "docx-tables",
     "office-mcp",
     "pptx-basic",
     "pptx-design",
+    "pptx-new",
     "shared",
     "xlsx-basic",
     "xlsx-charts",
     "xlsx-formulas",
+    "xlsx-new",
 ]
 
 [[package]]
@@ -371,6 +374,25 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "docx2pdf", specifier = ">=0.1.8" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0" },
+    { name = "python-docx", specifier = ">=1.1.0" },
+    { name = "shared", editable = "shared" },
+]
+
+[[package]]
+name = "docx-new"
+version = "0.1.0"
+source = { editable = "servers/docx_new" }
+dependencies = [
+    { name = "docxedit" },
+    { name = "mcp", extra = ["cli"] },
+    { name = "python-docx" },
+    { name = "shared" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "docxedit", specifier = ">=1.2.0" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.2.0" },
     { name = "python-docx", specifier = ">=1.1.0" },
     { name = "shared", editable = "shared" },
@@ -862,6 +884,23 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "docx2pdf", specifier = ">=0.1.8" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0" },
+    { name = "python-pptx", specifier = ">=0.6.23" },
+    { name = "shared", editable = "shared" },
+]
+
+[[package]]
+name = "pptx-new"
+version = "0.1.0"
+source = { editable = "servers/pptx_new" }
+dependencies = [
+    { name = "mcp", extra = ["cli"] },
+    { name = "python-pptx" },
+    { name = "shared" },
+]
+
+[package.metadata]
+requires-dist = [
     { name = "mcp", extras = ["cli"], specifier = ">=1.2.0" },
     { name = "python-pptx", specifier = ">=0.6.23" },
     { name = "shared", editable = "shared" },
@@ -1494,6 +1533,23 @@ requires-dist = [
 name = "xlsx-formulas"
 version = "0.1.0"
 source = { editable = "servers/xlsx_formulas" }
+dependencies = [
+    { name = "mcp", extra = ["cli"] },
+    { name = "openpyxl" },
+    { name = "shared" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0" },
+    { name = "openpyxl", specifier = ">=3.1.0" },
+    { name = "shared", editable = "shared" },
+]
+
+[[package]]
+name = "xlsx-new"
+version = "0.1.0"
+source = { editable = "servers/xlsx_new" }
 dependencies = [
     { name = "mcp", extra = ["cli"] },
     { name = "openpyxl" },

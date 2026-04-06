@@ -99,31 +99,37 @@ select_platform() {
 select_servers() {
     echo ""
     echo "Which servers do you want to register?"
-    echo "  1) docx_basic   — Word documents (read, edit, search)"
-    echo "  2) docx_tables  — Word tables (CRUD)"
-    echo "  3) docx_layout  — Word styles, fonts, margins, PDF export"
-    echo "  4) xlsx_basic   — Excel sheets (read, edit cells)"
-    echo "  5) xlsx_formulas — Excel formulas, validation, filters"
-    echo "  6) xlsx_charts  — Excel charts and pivot tables"
-    echo "  7) pptx_basic   — PowerPoint slides (read, edit, add)"
-    echo "  8) pptx_design  — PowerPoint styling, backgrounds, charts"
-    echo "  9) All servers"
+    echo "  1)  docx_basic   — Word documents (read, edit, search)"
+    echo "  2)  docx_tables  — Word tables (CRUD)"
+    echo "  3)  docx_layout  — Word styles, fonts, margins, PDF export"
+    echo "  4)  docx_new     — Create new Word documents from scratch"
+    echo "  5)  xlsx_basic   — Excel sheets (read, edit cells)"
+    echo "  6)  xlsx_formulas — Excel formulas, validation, filters"
+    echo "  7)  xlsx_charts  — Excel charts and pivot tables"
+    echo "  8)  xlsx_new     — Create new Excel workbooks from scratch"
+    echo "  9)  pptx_basic   — PowerPoint slides (read, edit, add)"
+    echo "  10) pptx_design  — PowerPoint styling, backgrounds, charts"
+    echo "  11) pptx_new     — Create new PowerPoint presentations from scratch"
+    echo "  12) All servers"
     echo ""
-    printf "Enter number(s) separated by space [9]: "
+    printf "Enter number(s) separated by space [12]: "
     read SERVER_CHOICES
 
     SERVERS=""
     for choice in $SERVER_CHOICES; do
         case "$choice" in
-            1) SERVERS="$SERVERS docx_basic" ;;
-            2) SERVERS="$SERVERS docx_tables" ;;
-            3) SERVERS="$SERVERS docx_layout" ;;
-            4) SERVERS="$SERVERS xlsx_basic" ;;
-            5) SERVERS="$SERVERS xlsx_formulas" ;;
-            6) SERVERS="$SERVERS xlsx_charts" ;;
-            7) SERVERS="$SERVERS pptx_basic" ;;
-            8) SERVERS="$SERVERS pptx_design" ;;
-            *) SERVERS="all" ; break ;;
+            1)  SERVERS="$SERVERS docx_basic" ;;
+            2)  SERVERS="$SERVERS docx_tables" ;;
+            3)  SERVERS="$SERVERS docx_layout" ;;
+            4)  SERVERS="$SERVERS docx_new" ;;
+            5)  SERVERS="$SERVERS xlsx_basic" ;;
+            6)  SERVERS="$SERVERS xlsx_formulas" ;;
+            7)  SERVERS="$SERVERS xlsx_charts" ;;
+            8)  SERVERS="$SERVERS xlsx_new" ;;
+            9)  SERVERS="$SERVERS pptx_basic" ;;
+            10) SERVERS="$SERVERS pptx_design" ;;
+            11) SERVERS="$SERVERS pptx_new" ;;
+            *)  SERVERS="all" ; break ;;
         esac
     done
 

@@ -510,7 +510,7 @@ def add_header_footer(
         return _error(str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup)
 
 
-def export_pdf(file_path: str, output_path: str = "") -> dict[str, Any]:
+def export_pdf(file_path: str, output_path: str = "", open_after: bool = True) -> dict[str, Any]:
     """Export .docx to PDF. Requires Word (Win/Mac) or LibreOffice (Linux)."""
     progress: list[dict[str, Any]] = []
     try:
@@ -579,11 +579,17 @@ def export_pdf(file_path: str, output_path: str = "") -> dict[str, Any]:
 
         progress.append(ok(f"Exported to PDF", out_path.name))
 
+        if open_after:
+            from shared.platform_utils import open_file
+            open_file(out_path)
+            progress.append(ok("Opened PDF in default viewer"))
+
         return {
             "success": True,
             "op": "export_pdf",
             "input": str(path),
             "output": str(out_path),
+            "output_name": out_path.name,
             "converter": converter,
             "progress": progress,
             "token_estimate": len(str(progress)) // 4,

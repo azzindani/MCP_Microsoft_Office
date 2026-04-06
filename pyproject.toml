@@ -12,11 +12,14 @@ members = [
     "servers/docx_basic",
     "servers/docx_tables",
     "servers/docx_layout",
+    "servers/docx_new",
     "servers/xlsx_basic",
     "servers/xlsx_formulas",
     "servers/xlsx_charts",
+    "servers/xlsx_new",
     "servers/pptx_basic",
     "servers/pptx_design",
+    "servers/pptx_new",
 ]
 
 [tool.uv.sources]

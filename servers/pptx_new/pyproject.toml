@@ -1,0 +1,20 @@
+[project]
+name = "pptx-new"
+version = "0.1.0"
+description = "MCP server — create new PowerPoint presentations from scratch"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp[cli]>=1.2.0",
+    "python-pptx>=0.6.23",
+    "shared",
+]
+
+[project.scripts]
+pptx-new = "pptx_new.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pptx_new"]

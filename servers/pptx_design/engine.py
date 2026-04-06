@@ -537,6 +537,7 @@ def duplicate_slide(
 def export_pdf(
     file_path: str,
     output_path: str = "",
+    open_after: bool = True,
 ) -> dict[str, Any]:
     """Export PPTX to PDF using LibreOffice or Microsoft PowerPoint."""
     progress: list[dict[str, Any]] = []
@@ -620,11 +621,18 @@ def export_pdf(
                 }
 
         progress.append(ok(f"Exported to PDF", out.name))
+
+        if open_after:
+            from shared.platform_utils import open_file
+            open_file(out)
+            progress.append(ok("Opened PDF in default viewer"))
+
         result: dict[str, Any] = {
             "success": True,
             "op": "export_pdf",
             "input": str(path),
             "output": str(out),
+            "output_name": out.name,
             "converter": converter,
             "progress": progress,
         }

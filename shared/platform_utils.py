@@ -1,9 +1,12 @@
 """Platform detection and path utilities for office-mcp."""
+from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
+import webbrowser
 from pathlib import Path
 
 
@@ -119,3 +122,19 @@ def get_max_cells() -> int:
 def get_max_search_results() -> int:
     """Maximum search results to return."""
     return 10 if is_8gb_mode() else 50
+
+
+def open_file(path: Path) -> None:
+    """Open file in the default system application. Silently ignored on failure."""
+    try:
+        webbrowser.open(f"file://{path.resolve()}")
+    except Exception:
+        try:
+            if is_windows():
+                subprocess.Popen(["start", str(path.resolve())], shell=True)
+            elif is_macos():
+                subprocess.Popen(["open", str(path.resolve())])
+            else:
+                subprocess.Popen(["xdg-open", str(path.resolve())])
+        except Exception:
+            pass

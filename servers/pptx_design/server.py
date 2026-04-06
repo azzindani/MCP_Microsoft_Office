@@ -80,9 +80,10 @@ def duplicate_slide(
 def export_pdf(
     file_path: str,
     output_path: str = "",
+    open_after: bool = True,
 ) -> dict:
     """Export PPTX to PDF using LibreOffice or PowerPoint."""
-    return engine.export_pdf(file_path, output_path)
+    return engine.export_pdf(file_path, output_path, open_after)
 
 
 def main() -> None:
