@@ -12,7 +12,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from shared.platform_utils import open_file  # noqa: E402
+from shared.platform_utils import open_file, resolve_output_path  # noqa: E402
 from shared.progress import fail, info, ok, warn  # noqa: E402
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
@@ -60,7 +60,7 @@ def create_document(output_path: str, open_after: bool = True) -> dict[str, Any]
     try:
         from docx import Document  # type: ignore[import-untyped]
 
-        path = Path(output_path).resolve()
+        path = resolve_output_path(output_path, "document.docx")
         _ensure_parent(path)
         progress.append(info("Creating blank document", path.name))
 
@@ -107,7 +107,7 @@ def create_from_text(
                 'Pass a list like [{"text": "Hello", "style": "Normal"}].',
             )
 
-        path = Path(output_path).resolve()
+        path = resolve_output_path(output_path, "document.docx")
         _ensure_parent(path)
         progress.append(info(f"Creating document from {len(paragraphs)} paragraphs", path.name))
 
@@ -169,7 +169,7 @@ def create_from_sections(
                 'Pass a list like [{"heading": "Intro", "body": "Text here"}].',
             )
 
-        path = Path(output_path).resolve()
+        path = resolve_output_path(output_path, "document.docx")
         _ensure_parent(path)
         progress.append(info("Creating structured document", path.name))
 
@@ -243,7 +243,7 @@ def create_from_template(
                 "Use the correct server for this file type.",
             )
 
-        out_path = Path(output_path).resolve()
+        out_path = resolve_output_path(output_path, "document.docx")
         _ensure_parent(out_path)
 
         progress.append(ok(f"Opened template {tpl_path.name}"))
@@ -316,7 +316,7 @@ def create_letter(
     try:
         from docx import Document  # type: ignore[import-untyped]
 
-        path = Path(output_path).resolve()
+        path = resolve_output_path(output_path, "document.docx")
         _ensure_parent(path)
         progress.append(info("Creating business letter", path.name))
 
@@ -409,7 +409,7 @@ def merge_documents(
                 "Pass a list of absolute paths to .docx files.",
             )
 
-        out_path = Path(output_path).resolve()
+        out_path = resolve_output_path(output_path, "document.docx")
         if out_path.suffix.lower() != ".docx":
             progress.append(fail("output_path must end in .docx", out_path.suffix))
             return _err(
@@ -527,7 +527,7 @@ def batch_create_from_template(
                 'Pass a list like [{"NAME": "Alice", "DATE": "April 1"}].',
             )
 
-        out_dir = Path(output_dir).resolve()
+        out_dir = resolve_output_path(output_dir, "documents")
         out_dir.mkdir(parents=True, exist_ok=True)
         progress.append(info(f"Generating {len(data_list)} documents", str(out_dir)))
 

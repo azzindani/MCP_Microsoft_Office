@@ -17,7 +17,7 @@ if str(_ROOT) not in sys.path:
 import openpyxl  # noqa: E402
 from openpyxl.styles import Font  # noqa: E402
 
-from shared.platform_utils import open_file  # noqa: E402
+from shared.platform_utils import open_file, resolve_output_path  # noqa: E402
 from shared.progress import fail, info, ok, warn  # noqa: E402
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
@@ -64,7 +64,7 @@ def create_workbook(
     """Create a blank Excel workbook with one sheet."""
     progress: list[dict[str, Any]] = []
     try:
-        path = Path(output_path).resolve()
+        path = resolve_output_path(output_path, "workbook.xlsx")
         _ensure_parent(path)
         progress.append(info("Creating blank workbook", path.name))
 
@@ -113,7 +113,7 @@ def create_from_data(
     """Create an Excel workbook from headers and data rows."""
     progress: list[dict[str, Any]] = []
     try:
-        path = Path(output_path).resolve()
+        path = resolve_output_path(output_path, "workbook.xlsx")
         _ensure_parent(path)
 
         col_count = len(headers)
@@ -183,7 +183,7 @@ def create_report(
     """Create a multi-sheet Excel workbook with a Cover sheet."""
     progress: list[dict[str, Any]] = []
     try:
-        path = Path(output_path).resolve()
+        path = resolve_output_path(output_path, "workbook.xlsx")
         _ensure_parent(path)
 
         sheet_count = len(sheets)
@@ -282,7 +282,7 @@ def create_from_template(
                 "token_estimate": _token_estimate(progress),
             }
 
-        dst = Path(output_path).resolve()
+        dst = resolve_output_path(output_path, "workbook.xlsx")
         _ensure_parent(dst)
 
         progress.append(info("Loading template", src.name))
@@ -360,7 +360,7 @@ def create_from_csv(
                 "token_estimate": _token_estimate(progress),
             }
 
-        out_path = Path(output_path).resolve()
+        out_path = resolve_output_path(output_path, "workbook.xlsx")
         _ensure_parent(out_path)
         progress.append(info("Reading CSV", src.name))
 
@@ -449,7 +449,7 @@ def create_invoice(
                 "token_estimate": _token_estimate(progress),
             }
 
-        out_path = Path(output_path).resolve()
+        out_path = resolve_output_path(output_path, "workbook.xlsx")
         _ensure_parent(out_path)
         progress.append(info("Creating invoice", out_path.name))
 
