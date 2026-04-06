@@ -57,7 +57,7 @@ A self-hosted MCP server that gives local LLMs full control over Word, Excel, an
 
 ### All Servers — Complete mcp.json
 
-Copy-paste this to register all 11 servers at once. The first server entry clones the repo and installs dependencies; the rest reuse the same local clone.
+Copy-paste this to register all 11 servers at once. Every server entry is self-sufficient — each one clones the repo if missing, pulls the latest updates, installs dependencies, and runs.
 
 ```json
 {
@@ -75,7 +75,7 @@ Copy-paste this to register all 11 servers at once. The first server entry clone
       "command": "powershell",
       "args": [
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\docx_tables') docx-tables"
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\docx_tables') docx-tables"
       ],
       "env": { "OFFICE_MCP_8GB_MODE": "0" },
       "timeout": 600000
@@ -84,7 +84,7 @@ Copy-paste this to register all 11 servers at once. The first server entry clone
       "command": "powershell",
       "args": [
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\docx_layout') docx-layout"
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\docx_layout') docx-layout"
       ],
       "env": { "OFFICE_MCP_8GB_MODE": "0" },
       "timeout": 600000
@@ -93,7 +93,7 @@ Copy-paste this to register all 11 servers at once. The first server entry clone
       "command": "powershell",
       "args": [
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\docx_new') docx-new"
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\docx_new') docx-new"
       ],
       "env": { "OFFICE_MCP_8GB_MODE": "0" },
       "timeout": 600000
@@ -102,7 +102,7 @@ Copy-paste this to register all 11 servers at once. The first server entry clone
       "command": "powershell",
       "args": [
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\xlsx_basic') xlsx-basic"
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\xlsx_basic') xlsx-basic"
       ],
       "env": { "OFFICE_MCP_8GB_MODE": "0" },
       "timeout": 600000
@@ -111,7 +111,7 @@ Copy-paste this to register all 11 servers at once. The first server entry clone
       "command": "powershell",
       "args": [
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\xlsx_formulas') xlsx-formulas"
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\xlsx_formulas') xlsx-formulas"
       ],
       "env": { "OFFICE_MCP_8GB_MODE": "0" },
       "timeout": 600000
@@ -120,7 +120,7 @@ Copy-paste this to register all 11 servers at once. The first server entry clone
       "command": "powershell",
       "args": [
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\xlsx_charts') xlsx-charts"
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\xlsx_charts') xlsx-charts"
       ],
       "env": { "OFFICE_MCP_8GB_MODE": "0" },
       "timeout": 600000
@@ -129,7 +129,7 @@ Copy-paste this to register all 11 servers at once. The first server entry clone
       "command": "powershell",
       "args": [
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\xlsx_new') xlsx-new"
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\xlsx_new') xlsx-new"
       ],
       "env": { "OFFICE_MCP_8GB_MODE": "0" },
       "timeout": 600000
@@ -138,7 +138,7 @@ Copy-paste this to register all 11 servers at once. The first server entry clone
       "command": "powershell",
       "args": [
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\pptx_basic') pptx-basic"
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\pptx_basic') pptx-basic"
       ],
       "env": { "OFFICE_MCP_8GB_MODE": "0" },
       "timeout": 600000
@@ -147,7 +147,7 @@ Copy-paste this to register all 11 servers at once. The first server entry clone
       "command": "powershell",
       "args": [
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\pptx_design') pptx-design"
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\pptx_design') pptx-design"
       ],
       "env": { "OFFICE_MCP_8GB_MODE": "0" },
       "timeout": 600000
@@ -156,7 +156,7 @@ Copy-paste this to register all 11 servers at once. The first server entry clone
       "command": "powershell",
       "args": [
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\pptx_new') pptx-new"
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\pptx_new') pptx-new"
       ],
       "env": { "OFFICE_MCP_8GB_MODE": "0" },
       "timeout": 600000
@@ -374,7 +374,7 @@ Pick only what you need. Each block is standalone — paste it inside the `"mcpS
       "command": "powershell",
       "args": [
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\xlsx_formulas') xlsx-formulas"
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\xlsx_formulas') xlsx-formulas"
       ],
       "env": { "OFFICE_MCP_8GB_MODE": "0" },
       "timeout": 600000
@@ -383,7 +383,7 @@ Pick only what you need. Each block is standalone — paste it inside the `"mcpS
       "command": "powershell",
       "args": [
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\xlsx_new') xlsx-new"
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\xlsx_new') xlsx-new"
       ],
       "env": { "OFFICE_MCP_8GB_MODE": "0" },
       "timeout": 600000
