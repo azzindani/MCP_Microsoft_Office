@@ -24,7 +24,7 @@ def _copy(name: str, tmp_path: Path) -> Path:
 
 class TestSetHeading:
     def test_applies_heading_style(self, tmp_path):
-        from servers.docx_layout.engine import set_heading
+        from docx_layout.engine import set_heading
 
         path = _copy("contract_simple.docx", tmp_path)
         result = set_heading(str(path), 0, 1)
@@ -35,8 +35,7 @@ class TestSetHeading:
 
     def test_heading_style_persisted(self, tmp_path):
         from docx import Document
-
-        from servers.docx_layout.engine import set_heading
+        from docx_layout.engine import set_heading
 
         path = _copy("contract_simple.docx", tmp_path)
         set_heading(str(path), 0, 2)
@@ -44,7 +43,7 @@ class TestSetHeading:
         assert "Heading" in doc.paragraphs[0].style.name
 
     def test_heading_levels_1_through_6(self, tmp_path):
-        from servers.docx_layout.engine import set_heading
+        from docx_layout.engine import set_heading
 
         path = _copy("contract_simple.docx", tmp_path)
         for level in range(1, 7):
@@ -52,7 +51,7 @@ class TestSetHeading:
             assert result["success"] is True, f"Level {level} failed: {result}"
 
     def test_invalid_level_returns_error(self, tmp_path):
-        from servers.docx_layout.engine import set_heading
+        from docx_layout.engine import set_heading
 
         path = _copy("contract_simple.docx", tmp_path)
         result = set_heading(str(path), 0, 7)
@@ -60,14 +59,14 @@ class TestSetHeading:
         assert "7" in result["error"]
 
     def test_invalid_level_zero_returns_error(self, tmp_path):
-        from servers.docx_layout.engine import set_heading
+        from docx_layout.engine import set_heading
 
         path = _copy("contract_simple.docx", tmp_path)
         result = set_heading(str(path), 0, 0)
         assert result["success"] is False
 
     def test_out_of_range_index(self, tmp_path):
-        from servers.docx_layout.engine import set_heading
+        from docx_layout.engine import set_heading
 
         path = _copy("contract_simple.docx", tmp_path)
         result = set_heading(str(path), 9999, 1)
@@ -75,14 +74,14 @@ class TestSetHeading:
         assert "range" in result["error"].lower()
 
     def test_file_not_found(self, tmp_path):
-        from servers.docx_layout.engine import set_heading
+        from docx_layout.engine import set_heading
 
         result = set_heading(str(tmp_path / "ghost.docx"), 0, 1)
         assert result["success"] is False
         assert "not found" in result["error"].lower()
 
     def test_wrong_file_type(self, tmp_path):
-        from servers.docx_layout.engine import set_heading
+        from docx_layout.engine import set_heading
 
         f = tmp_path / "test.xlsx"
         f.write_bytes(b"fake")
@@ -98,8 +97,7 @@ class TestSetHeading:
 class TestSetFont:
     def test_sets_font_name(self, tmp_path):
         from docx import Document
-
-        from servers.docx_layout.engine import set_font
+        from docx_layout.engine import set_font
 
         path = _copy("contract_complex.docx", tmp_path)
         result = set_font(str(path), 0, font_name="Arial")
@@ -111,8 +109,7 @@ class TestSetFont:
     def test_sets_font_size(self, tmp_path):
         from docx import Document
         from docx.shared import Pt
-
-        from servers.docx_layout.engine import set_font
+        from docx_layout.engine import set_font
 
         path = _copy("contract_complex.docx", tmp_path)
         result = set_font(str(path), 0, font_size=14)
@@ -123,8 +120,7 @@ class TestSetFont:
 
     def test_sets_bold(self, tmp_path):
         from docx import Document
-
-        from servers.docx_layout.engine import set_font
+        from docx_layout.engine import set_font
 
         path = _copy("contract_simple.docx", tmp_path)
         result = set_font(str(path), 0, bold=True)
@@ -135,8 +131,7 @@ class TestSetFont:
 
     def test_sets_italic(self, tmp_path):
         from docx import Document
-
-        from servers.docx_layout.engine import set_font
+        from docx_layout.engine import set_font
 
         path = _copy("contract_simple.docx", tmp_path)
         result = set_font(str(path), 0, italic=True)
@@ -146,14 +141,14 @@ class TestSetFont:
             assert run.italic is True
 
     def test_no_changes_still_succeeds(self, tmp_path):
-        from servers.docx_layout.engine import set_font
+        from docx_layout.engine import set_font
 
         path = _copy("contract_simple.docx", tmp_path)
         result = set_font(str(path), 0)
         assert result["success"] is True
 
     def test_creates_snapshot(self, tmp_path):
-        from servers.docx_layout.engine import set_font
+        from docx_layout.engine import set_font
 
         path = _copy("contract_simple.docx", tmp_path)
         result = set_font(str(path), 0, font_name="Times New Roman")
@@ -162,14 +157,14 @@ class TestSetFont:
         assert Path(result["backup"]).exists()
 
     def test_out_of_range_index(self, tmp_path):
-        from servers.docx_layout.engine import set_font
+        from docx_layout.engine import set_font
 
         path = _copy("contract_simple.docx", tmp_path)
         result = set_font(str(path), 99999, font_name="Arial")
         assert result["success"] is False
 
     def test_file_not_found(self, tmp_path):
-        from servers.docx_layout.engine import set_font
+        from docx_layout.engine import set_font
 
         result = set_font(str(tmp_path / "ghost.docx"), 0, font_name="Arial")
         assert result["success"] is False
@@ -182,7 +177,7 @@ class TestSetFont:
 
 class TestSetParagraphStyle:
     def test_applies_normal_style(self, tmp_path):
-        from servers.docx_layout.engine import set_paragraph_style
+        from docx_layout.engine import set_paragraph_style
 
         path = _copy("contract_simple.docx", tmp_path)
         result = set_paragraph_style(str(path), 0, "Normal")
@@ -191,8 +186,7 @@ class TestSetParagraphStyle:
 
     def test_style_persisted(self, tmp_path):
         from docx import Document
-
-        from servers.docx_layout.engine import set_paragraph_style
+        from docx_layout.engine import set_paragraph_style
 
         path = _copy("contract_simple.docx", tmp_path)
         set_paragraph_style(str(path), 0, "Normal")
@@ -200,7 +194,7 @@ class TestSetParagraphStyle:
         assert doc.paragraphs[0].style.name == "Normal"
 
     def test_invalid_style_returns_error(self, tmp_path):
-        from servers.docx_layout.engine import set_paragraph_style
+        from docx_layout.engine import set_paragraph_style
 
         path = _copy("contract_simple.docx", tmp_path)
         result = set_paragraph_style(str(path), 0, "XYZZY_INVALID_STYLE")
@@ -208,20 +202,20 @@ class TestSetParagraphStyle:
         assert "XYZZY_INVALID_STYLE" in result["error"]
 
     def test_out_of_range_index(self, tmp_path):
-        from servers.docx_layout.engine import set_paragraph_style
+        from docx_layout.engine import set_paragraph_style
 
         path = _copy("contract_simple.docx", tmp_path)
         result = set_paragraph_style(str(path), 9999, "Normal")
         assert result["success"] is False
 
     def test_file_not_found(self, tmp_path):
-        from servers.docx_layout.engine import set_paragraph_style
+        from docx_layout.engine import set_paragraph_style
 
         result = set_paragraph_style(str(tmp_path / "ghost.docx"), 0, "Normal")
         assert result["success"] is False
 
     def test_creates_snapshot(self, tmp_path):
-        from servers.docx_layout.engine import set_paragraph_style
+        from docx_layout.engine import set_paragraph_style
 
         path = _copy("contract_simple.docx", tmp_path)
         result = set_paragraph_style(str(path), 0, "Normal")
@@ -237,7 +231,7 @@ class TestSetParagraphStyle:
 
 class TestAddImage:
     def test_invalid_image_path_returns_error(self, tmp_path):
-        from servers.docx_layout.engine import add_image
+        from docx_layout.engine import add_image
 
         path = _copy("contract_simple.docx", tmp_path)
         result = add_image(str(path), 0, str(tmp_path / "nonexistent.png"))
@@ -245,7 +239,7 @@ class TestAddImage:
         assert "not found" in result["error"].lower()
 
     def test_unsupported_image_format(self, tmp_path):
-        from servers.docx_layout.engine import add_image
+        from docx_layout.engine import add_image
 
         path = _copy("contract_simple.docx", tmp_path)
         fake_img = tmp_path / "image.xyz"
@@ -255,7 +249,7 @@ class TestAddImage:
         assert "unsupported" in result["error"].lower()
 
     def test_file_not_found(self, tmp_path):
-        from servers.docx_layout.engine import add_image
+        from docx_layout.engine import add_image
 
         result = add_image(str(tmp_path / "ghost.docx"), 0, str(tmp_path / "img.png"))
         assert result["success"] is False
@@ -266,7 +260,7 @@ class TestAddImage:
         import struct
         import zlib
 
-        from servers.docx_layout.engine import add_image
+        from docx_layout.engine import add_image
 
         def _minimal_png() -> bytes:
             sig = b"\x89PNG\r\n\x1a\n"
@@ -304,8 +298,7 @@ class TestSetPageMargins:
     def test_sets_margins(self, tmp_path):
         from docx import Document
         from docx.shared import Cm
-
-        from servers.docx_layout.engine import set_page_margins
+        from docx_layout.engine import set_page_margins
 
         path = _copy("contract_simple.docx", tmp_path)
         result = set_page_margins(str(path), top=3.0, bottom=2.0, left=2.5, right=2.5)
@@ -317,7 +310,7 @@ class TestSetPageMargins:
         assert abs(doc.sections[0].bottom_margin - Cm(2.0)) < 500
 
     def test_default_margins(self, tmp_path):
-        from servers.docx_layout.engine import set_page_margins
+        from docx_layout.engine import set_page_margins
 
         path = _copy("contract_simple.docx", tmp_path)
         result = set_page_margins(str(path))
@@ -325,7 +318,7 @@ class TestSetPageMargins:
         assert result["top_cm"] == 2.54
 
     def test_creates_snapshot(self, tmp_path):
-        from servers.docx_layout.engine import set_page_margins
+        from docx_layout.engine import set_page_margins
 
         path = _copy("contract_simple.docx", tmp_path)
         result = set_page_margins(str(path), top=3.0)
@@ -334,7 +327,7 @@ class TestSetPageMargins:
         assert Path(result["backup"]).exists()
 
     def test_file_not_found(self, tmp_path):
-        from servers.docx_layout.engine import set_page_margins
+        from docx_layout.engine import set_page_margins
 
         result = set_page_margins(str(tmp_path / "ghost.docx"))
         assert result["success"] is False
@@ -348,8 +341,7 @@ class TestSetPageMargins:
 class TestAddHeaderFooter:
     def test_add_header_text(self, tmp_path):
         from docx import Document
-
-        from servers.docx_layout.engine import add_header_footer
+        from docx_layout.engine import add_header_footer
 
         path = _copy("contract_simple.docx", tmp_path)
         result = add_header_footer(str(path), "My Header", location="header")
@@ -360,8 +352,7 @@ class TestAddHeaderFooter:
 
     def test_add_footer_text(self, tmp_path):
         from docx import Document
-
-        from servers.docx_layout.engine import add_header_footer
+        from docx_layout.engine import add_header_footer
 
         path = _copy("contract_simple.docx", tmp_path)
         result = add_header_footer(str(path), "Page Footer", location="footer")
@@ -371,7 +362,7 @@ class TestAddHeaderFooter:
         assert doc.sections[0].footer.paragraphs[0].text == "Page Footer"
 
     def test_invalid_location_returns_error(self, tmp_path):
-        from servers.docx_layout.engine import add_header_footer
+        from docx_layout.engine import add_header_footer
 
         path = _copy("contract_simple.docx", tmp_path)
         result = add_header_footer(str(path), "text", location="sidebar")
@@ -379,7 +370,7 @@ class TestAddHeaderFooter:
         assert "header" in result["hint"].lower() or "footer" in result["hint"].lower()
 
     def test_creates_snapshot(self, tmp_path):
-        from servers.docx_layout.engine import add_header_footer
+        from docx_layout.engine import add_header_footer
 
         path = _copy("contract_simple.docx", tmp_path)
         result = add_header_footer(str(path), "Header text")
@@ -388,7 +379,7 @@ class TestAddHeaderFooter:
         assert Path(result["backup"]).exists()
 
     def test_file_not_found(self, tmp_path):
-        from servers.docx_layout.engine import add_header_footer
+        from docx_layout.engine import add_header_footer
 
         result = add_header_footer(str(tmp_path / "ghost.docx"), "text")
         assert result["success"] is False
@@ -404,12 +395,12 @@ class TestExportPdf:
         """When no PDF converter is available, return success=False with hint."""
         from unittest.mock import patch
 
-        from servers.docx_layout.engine import export_pdf
+        from docx_layout.engine import export_pdf
 
         path = _copy("contract_simple.docx", tmp_path)
 
         # Patch where the engine module looks up get_pdf_converter
-        with patch("servers.docx_layout.engine.get_pdf_converter", return_value=None):
+        with patch("docx_layout.engine.get_pdf_converter", return_value=None):
             result = export_pdf(str(path))
 
         assert result["success"] is False
@@ -417,13 +408,13 @@ class TestExportPdf:
         assert result["progress"]
 
     def test_file_not_found(self, tmp_path):
-        from servers.docx_layout.engine import export_pdf
+        from docx_layout.engine import export_pdf
 
         result = export_pdf(str(tmp_path / "ghost.docx"))
         assert result["success"] is False
 
     def test_wrong_file_type(self, tmp_path):
-        from servers.docx_layout.engine import export_pdf
+        from docx_layout.engine import export_pdf
 
         f = tmp_path / "test.xlsx"
         f.write_bytes(b"fake")
@@ -437,7 +428,7 @@ class TestExportPdf:
         if shutil.which("libreoffice") is None and shutil.which("soffice") is None:
             pytest.skip("LibreOffice not installed")
 
-        from servers.docx_layout.engine import export_pdf
+        from docx_layout.engine import export_pdf
 
         path = _copy("contract_simple.docx", tmp_path)
         out_pdf = tmp_path / "output.pdf"
@@ -457,7 +448,7 @@ class TestExportPdf:
 
 class TestAllWriteToolsCreateSnapshot:
     def test_set_heading_creates_snapshot(self, tmp_path):
-        from servers.docx_layout.engine import set_heading
+        from docx_layout.engine import set_heading
 
         path = _copy("contract_simple.docx", tmp_path)
         result = set_heading(str(path), 0, 1)
@@ -465,7 +456,7 @@ class TestAllWriteToolsCreateSnapshot:
         assert Path(result["backup"]).exists()
 
     def test_set_font_creates_snapshot(self, tmp_path):
-        from servers.docx_layout.engine import set_font
+        from docx_layout.engine import set_font
 
         path = _copy("contract_simple.docx", tmp_path)
         result = set_font(str(path), 0, font_name="Arial")
@@ -473,7 +464,7 @@ class TestAllWriteToolsCreateSnapshot:
         assert Path(result["backup"]).exists()
 
     def test_set_paragraph_style_creates_snapshot(self, tmp_path):
-        from servers.docx_layout.engine import set_paragraph_style
+        from docx_layout.engine import set_paragraph_style
 
         path = _copy("contract_simple.docx", tmp_path)
         result = set_paragraph_style(str(path), 0, "Normal")
@@ -481,7 +472,7 @@ class TestAllWriteToolsCreateSnapshot:
         assert Path(result["backup"]).exists()
 
     def test_set_page_margins_creates_snapshot(self, tmp_path):
-        from servers.docx_layout.engine import set_page_margins
+        from docx_layout.engine import set_page_margins
 
         path = _copy("contract_simple.docx", tmp_path)
         result = set_page_margins(str(path), top=3.0)
@@ -489,7 +480,7 @@ class TestAllWriteToolsCreateSnapshot:
         assert Path(result["backup"]).exists()
 
     def test_add_header_footer_creates_snapshot(self, tmp_path):
-        from servers.docx_layout.engine import add_header_footer
+        from docx_layout.engine import add_header_footer
 
         path = _copy("contract_simple.docx", tmp_path)
         result = add_header_footer(str(path), "Test header")
@@ -504,7 +495,7 @@ class TestAllWriteToolsCreateSnapshot:
 
 class TestProgressField:
     def test_set_heading_has_progress(self, tmp_path):
-        from servers.docx_layout.engine import set_heading
+        from docx_layout.engine import set_heading
 
         path = _copy("contract_simple.docx", tmp_path)
         result = set_heading(str(path), 0, 1)
@@ -512,7 +503,7 @@ class TestProgressField:
         assert isinstance(result["progress"], list)
 
     def test_error_response_has_progress(self, tmp_path):
-        from servers.docx_layout.engine import set_heading
+        from docx_layout.engine import set_heading
 
         result = set_heading(str(tmp_path / "ghost.docx"), 0, 1)
         assert "progress" in result

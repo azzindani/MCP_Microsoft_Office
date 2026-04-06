@@ -22,7 +22,7 @@ def _copy(name: str, tmp_path: Path) -> Path:
 
 class TestGetDocumentOutline:
     def test_returns_headings(self, tmp_path):
-        from servers.docx_basic.engine import get_document_outline
+        from docx_basic.engine import get_document_outline
 
         path = _copy("contract_simple.docx", tmp_path)
         result = get_document_outline(str(path))
@@ -31,7 +31,7 @@ class TestGetDocumentOutline:
         assert len(result["outline"]) > 0
 
     def test_outline_has_required_keys(self, tmp_path):
-        from servers.docx_basic.engine import get_document_outline
+        from docx_basic.engine import get_document_outline
 
         path = _copy("contract_simple.docx", tmp_path)
         result = get_document_outline(str(path))
@@ -41,14 +41,14 @@ class TestGetDocumentOutline:
             assert "text" in entry
 
     def test_file_not_found(self, tmp_path):
-        from servers.docx_basic.engine import get_document_outline
+        from docx_basic.engine import get_document_outline
 
         result = get_document_outline(str(tmp_path / "nonexistent.docx"))
         assert result["success"] is False
         assert "not found" in result["error"].lower()
 
     def test_wrong_file_type(self, tmp_path):
-        from servers.docx_basic.engine import get_document_outline
+        from docx_basic.engine import get_document_outline
 
         f = tmp_path / "test.xlsx"
         f.write_bytes(b"fake")
@@ -61,7 +61,7 @@ class TestGetDocumentOutline:
 
 class TestReadDocument:
     def test_returns_paragraphs(self, tmp_path):
-        from servers.docx_basic.engine import read_document
+        from docx_basic.engine import read_document
 
         path = _copy("contract_simple.docx", tmp_path)
         result = read_document(str(path))
@@ -70,7 +70,7 @@ class TestReadDocument:
         assert len(result["paragraphs"]) > 0
 
     def test_paragraphs_have_required_keys(self, tmp_path):
-        from servers.docx_basic.engine import read_document
+        from docx_basic.engine import read_document
 
         path = _copy("contract_simple.docx", tmp_path)
         result = read_document(str(path))
@@ -80,14 +80,14 @@ class TestReadDocument:
             assert "style" in p
 
     def test_file_not_found(self, tmp_path):
-        from servers.docx_basic.engine import read_document
+        from docx_basic.engine import read_document
 
         result = read_document(str(tmp_path / "missing.docx"))
         assert result["success"] is False
         assert "not found" in result["error"].lower()
 
     def test_wrong_type(self, tmp_path):
-        from servers.docx_basic.engine import read_document
+        from docx_basic.engine import read_document
 
         f = tmp_path / "x.xlsx"
         f.write_bytes(b"fake")
@@ -96,7 +96,7 @@ class TestReadDocument:
         assert ".xlsx" in result["error"]
 
     def test_has_token_estimate(self, tmp_path):
-        from servers.docx_basic.engine import read_document
+        from docx_basic.engine import read_document
 
         path = _copy("contract_simple.docx", tmp_path)
         result = read_document(str(path))
@@ -108,7 +108,7 @@ class TestReadDocument:
 
 class TestReadParagraph:
     def test_returns_single_paragraph(self, tmp_path):
-        from servers.docx_basic.engine import read_paragraph
+        from docx_basic.engine import read_paragraph
 
         path = _copy("contract_simple.docx", tmp_path)
         result = read_paragraph(str(path), 0)
@@ -117,7 +117,7 @@ class TestReadParagraph:
         assert "runs" in result
 
     def test_returns_run_details(self, tmp_path):
-        from servers.docx_basic.engine import read_paragraph
+        from docx_basic.engine import read_paragraph
 
         path = _copy("contract_complex.docx", tmp_path)
         result = read_paragraph(str(path), 0)
@@ -129,7 +129,7 @@ class TestReadParagraph:
             assert "italic" in run
 
     def test_index_out_of_range(self, tmp_path):
-        from servers.docx_basic.engine import read_paragraph
+        from docx_basic.engine import read_paragraph
 
         path = _copy("contract_simple.docx", tmp_path)
         result = read_paragraph(str(path), 9999)
@@ -143,7 +143,7 @@ class TestReadParagraph:
 
 class TestSearchParagraphs:
     def test_finds_matching_text(self, tmp_path):
-        from servers.docx_basic.engine import search_paragraphs
+        from docx_basic.engine import search_paragraphs
 
         path = _copy("contract_simple.docx", tmp_path)
         result = search_paragraphs(str(path), "Payment")
@@ -151,7 +151,7 @@ class TestSearchParagraphs:
         assert len(result["matches"]) > 0
 
     def test_empty_query_returns_error(self, tmp_path):
-        from servers.docx_basic.engine import search_paragraphs
+        from docx_basic.engine import search_paragraphs
 
         path = _copy("contract_simple.docx", tmp_path)
         result = search_paragraphs(str(path), "")
@@ -159,7 +159,7 @@ class TestSearchParagraphs:
         assert "empty" in result["error"].lower()
 
     def test_no_match_returns_empty_list(self, tmp_path):
-        from servers.docx_basic.engine import search_paragraphs
+        from docx_basic.engine import search_paragraphs
 
         path = _copy("contract_simple.docx", tmp_path)
         result = search_paragraphs(str(path), "XYZZY_NOT_IN_DOC_12345")
@@ -167,7 +167,7 @@ class TestSearchParagraphs:
         assert result["matches"] == []
 
     def test_respects_max_results(self, tmp_path):
-        from servers.docx_basic.engine import search_paragraphs
+        from docx_basic.engine import search_paragraphs
 
         path = _copy("contract_simple.docx", tmp_path)
         result = search_paragraphs(str(path), "the", max_results=2)
@@ -181,8 +181,7 @@ class TestSearchParagraphs:
 class TestReplaceText:
     def test_replaces_text(self, tmp_path):
         from docx import Document
-
-        from servers.docx_basic.engine import replace_text
+        from docx_basic.engine import replace_text
 
         path = _copy("contract_simple.docx", tmp_path)
         result = replace_text(str(path), "PARTY_A_NAME", "Acme Corp")
@@ -193,7 +192,7 @@ class TestReplaceText:
         assert "Acme Corp" in full_text
 
     def test_creates_snapshot(self, tmp_path):
-        from servers.docx_basic.engine import replace_text
+        from docx_basic.engine import replace_text
 
         path = _copy("contract_simple.docx", tmp_path)
         result = replace_text(str(path), "PARTY_A_NAME", "Acme Corp")
@@ -204,8 +203,7 @@ class TestReplaceText:
     def test_preserves_bold_formatting(self, tmp_path):
         """Replace text without destroying bold runs in complex doc."""
         from docx import Document
-
-        from servers.docx_basic.engine import replace_text
+        from docx_basic.engine import replace_text
 
         path = _copy("contract_complex.docx", tmp_path)
 
@@ -219,7 +217,7 @@ class TestReplaceText:
         assert has_bold, "Bold formatting was destroyed by replace_text"
 
     def test_match_not_found(self, tmp_path):
-        from servers.docx_basic.engine import replace_text
+        from docx_basic.engine import replace_text
 
         path = _copy("contract_simple.docx", tmp_path)
         result = replace_text(str(path), "XYZZY_NOT_HERE", "something")
@@ -228,15 +226,14 @@ class TestReplaceText:
         assert "hint" in result
 
     def test_file_not_found(self, tmp_path):
-        from servers.docx_basic.engine import replace_text
+        from docx_basic.engine import replace_text
 
         result = replace_text(str(tmp_path / "gone.docx"), "x", "y")
         assert result["success"] is False
 
     def test_dry_run_makes_no_changes(self, tmp_path):
         from docx import Document
-
-        from servers.docx_basic.engine import replace_text
+        from docx_basic.engine import replace_text
 
         path = _copy("contract_simple.docx", tmp_path)
         original_text = Document(str(path)).paragraphs[0].text
@@ -250,7 +247,7 @@ class TestReplaceText:
         assert doc.paragraphs[0].text == original_text
 
     def test_backup_key_in_result(self, tmp_path):
-        from servers.docx_basic.engine import replace_text
+        from docx_basic.engine import replace_text
 
         path = _copy("contract_simple.docx", tmp_path)
         result = replace_text(str(path), "PARTY_A_NAME", "Acme Corp")
@@ -263,8 +260,7 @@ class TestReplaceText:
 class TestInsertParagraph:
     def test_inserts_paragraph(self, tmp_path):
         from docx import Document
-
-        from servers.docx_basic.engine import insert_paragraph
+        from docx_basic.engine import insert_paragraph
 
         path = _copy("contract_simple.docx", tmp_path)
         original_count = len(Document(str(path)).paragraphs)
@@ -276,7 +272,7 @@ class TestInsertParagraph:
         assert new_count == original_count + 1
 
     def test_creates_snapshot(self, tmp_path):
-        from servers.docx_basic.engine import insert_paragraph
+        from docx_basic.engine import insert_paragraph
 
         path = _copy("contract_simple.docx", tmp_path)
         result = insert_paragraph(str(path), 0, "New text")
@@ -284,7 +280,7 @@ class TestInsertParagraph:
         assert Path(result["backup"]).exists()
 
     def test_index_out_of_range(self, tmp_path):
-        from servers.docx_basic.engine import insert_paragraph
+        from docx_basic.engine import insert_paragraph
 
         path = _copy("contract_simple.docx", tmp_path)
         result = insert_paragraph(str(path), 9999, "text")
@@ -297,8 +293,7 @@ class TestInsertParagraph:
 class TestDeleteParagraph:
     def test_deletes_by_index(self, tmp_path):
         from docx import Document
-
-        from servers.docx_basic.engine import delete_paragraph
+        from docx_basic.engine import delete_paragraph
 
         path = _copy("contract_simple.docx", tmp_path)
         original_count = len(Document(str(path)).paragraphs)
@@ -310,7 +305,7 @@ class TestDeleteParagraph:
         assert new_count == original_count - 1
 
     def test_creates_snapshot(self, tmp_path):
-        from servers.docx_basic.engine import delete_paragraph
+        from docx_basic.engine import delete_paragraph
 
         path = _copy("contract_simple.docx", tmp_path)
         result = delete_paragraph(str(path), paragraph_index=0)
@@ -318,7 +313,7 @@ class TestDeleteParagraph:
         assert Path(result["backup"]).exists()
 
     def test_deletes_by_match_text(self, tmp_path):
-        from servers.docx_basic.engine import delete_paragraph
+        from docx_basic.engine import delete_paragraph
 
         path = _copy("contract_simple.docx", tmp_path)
         result = delete_paragraph(str(path), match_text="Service Agreement")
@@ -326,7 +321,7 @@ class TestDeleteParagraph:
         assert "success" in result
 
     def test_match_not_found(self, tmp_path):
-        from servers.docx_basic.engine import delete_paragraph
+        from docx_basic.engine import delete_paragraph
 
         path = _copy("contract_simple.docx", tmp_path)
         result = delete_paragraph(str(path), match_text="XYZZY_NOT_HERE_99999")
@@ -339,8 +334,7 @@ class TestDeleteParagraph:
 class TestAppendText:
     def test_appends_paragraph(self, tmp_path):
         from docx import Document
-
-        from servers.docx_basic.engine import append_text
+        from docx_basic.engine import append_text
 
         path = _copy("contract_simple.docx", tmp_path)
         original_count = len(Document(str(path)).paragraphs)
@@ -352,7 +346,7 @@ class TestAppendText:
         assert new_count == original_count + 1
 
     def test_creates_snapshot(self, tmp_path):
-        from servers.docx_basic.engine import append_text
+        from docx_basic.engine import append_text
 
         path = _copy("contract_simple.docx", tmp_path)
         result = append_text(str(path), "Some text")
@@ -365,7 +359,7 @@ class TestAppendText:
 
 class TestVersionControl:
     def test_get_history_returns_entries(self, tmp_path):
-        from servers.docx_basic.engine import get_history_tool, replace_text
+        from docx_basic.engine import get_history_tool, replace_text
 
         path = _copy("contract_simple.docx", tmp_path)
         replace_text(str(path), "PARTY_A_NAME", "Acme Corp")
@@ -377,8 +371,7 @@ class TestVersionControl:
 
     def test_restore_version_reverts_content(self, tmp_path):
         from docx import Document
-
-        from servers.docx_basic.engine import get_history_tool, replace_text, restore_version
+        from docx_basic.engine import get_history_tool, replace_text, restore_version
 
         path = _copy("contract_simple.docx", tmp_path)
         original_text = Document(str(path)).paragraphs[0].text
@@ -394,7 +387,7 @@ class TestVersionControl:
         assert restored_text == original_text
 
     def test_restore_nonexistent_snapshot(self, tmp_path):
-        from servers.docx_basic.engine import restore_version
+        from docx_basic.engine import restore_version
 
         path = _copy("contract_simple.docx", tmp_path)
         result = restore_version(str(path), "2099-01-01T00-00-00Z")
@@ -407,7 +400,7 @@ class TestVersionControl:
 
 class TestDiffVersions:
     def test_diff_detects_change(self, tmp_path):
-        from servers.docx_basic.engine import diff_versions, get_history_tool, replace_text
+        from docx_basic.engine import diff_versions, get_history_tool, replace_text
 
         path = _copy("contract_simple.docx", tmp_path)
 
@@ -421,7 +414,7 @@ class TestDiffVersions:
         assert "summary" in result
 
     def test_diff_returns_summary(self, tmp_path):
-        from servers.docx_basic.engine import diff_versions, get_history_tool, replace_text
+        from docx_basic.engine import diff_versions, get_history_tool, replace_text
 
         path = _copy("contract_simple.docx", tmp_path)
         replace_text(str(path), "PARTY_B_NAME", "Widget Ltd")
@@ -438,7 +431,7 @@ class TestDiffVersions:
 
 class TestReadParagraphRange:
     def test_returns_range(self, tmp_path):
-        from servers.docx_basic.engine import read_paragraph_range
+        from docx_basic.engine import read_paragraph_range
 
         path = _copy("contract_simple.docx", tmp_path)
         result = read_paragraph_range(str(path), 0, 3)
@@ -446,7 +439,7 @@ class TestReadParagraphRange:
         assert len(result["paragraphs"]) <= 4
 
     def test_range_too_large_returns_error(self, tmp_path):
-        from servers.docx_basic.engine import read_paragraph_range
+        from docx_basic.engine import read_paragraph_range
 
         path = _copy("contract_simple.docx", tmp_path)
         result = read_paragraph_range(str(path), 0, 200)
@@ -461,7 +454,7 @@ class TestProgressField:
     """Every tool response must include a 'progress' array."""
 
     def test_read_document_has_progress(self, tmp_path):
-        from servers.docx_basic.engine import read_document
+        from docx_basic.engine import read_document
 
         path = _copy("contract_simple.docx", tmp_path)
         result = read_document(str(path))
@@ -469,14 +462,14 @@ class TestProgressField:
         assert isinstance(result["progress"], list)
 
     def test_replace_text_has_progress(self, tmp_path):
-        from servers.docx_basic.engine import replace_text
+        from docx_basic.engine import replace_text
 
         path = _copy("contract_simple.docx", tmp_path)
         result = replace_text(str(path), "PARTY_A_NAME", "Acme")
         assert "progress" in result
 
     def test_error_response_has_progress(self, tmp_path):
-        from servers.docx_basic.engine import read_document
+        from docx_basic.engine import read_document
 
         result = read_document("/nonexistent/path/file.docx")
         assert "progress" in result

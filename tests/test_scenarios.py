@@ -40,7 +40,7 @@ class TestContractFillingScenario:
     """
 
     def test_fill_all_placeholders(self, tmp_path):
-        from servers.docx_basic.engine import replace_text, search_paragraphs
+        from docx_basic.engine import replace_text, search_paragraphs
 
         path = _copy("contract_simple.docx", tmp_path)
 
@@ -71,7 +71,8 @@ class TestContractFillingScenario:
             assert len(found["matches"]) > 0, f"Value not found after fill: {value}"
 
     def test_snapshot_created_per_replacement(self, tmp_path):
-        from servers.docx_basic.engine import replace_text
+        from docx_basic.engine import replace_text
+
         from shared.version_control import get_history
 
         path = _copy("contract_simple.docx", tmp_path)
@@ -91,7 +92,8 @@ class TestContractFillingScenario:
     def test_rollback_after_wrong_replacement(self, tmp_path):
         import time
 
-        from servers.docx_basic.engine import replace_text, restore_version, search_paragraphs
+        from docx_basic.engine import replace_text, restore_version, search_paragraphs
+
         from shared.version_control import get_history
 
         path = _copy("contract_simple.docx", tmp_path)
@@ -119,7 +121,7 @@ class TestContractFillingScenario:
         assert after["matches"] == []
 
     def test_document_outline_preserved_after_fill(self, tmp_path):
-        from servers.docx_basic.engine import get_document_outline, replace_text
+        from docx_basic.engine import get_document_outline, replace_text
 
         path = _copy("contract_simple.docx", tmp_path)
         original_outline = get_document_outline(str(path))
@@ -146,7 +148,7 @@ class TestBudgetSpreadsheetScenario:
     SHEET = "Q3 Revenue"  # actual sheet name in budget_simple.xlsx
 
     def test_update_quarterly_figures(self, tmp_path):
-        from servers.xlsx_basic.engine import read_cell, set_cell
+        from xlsx_basic.engine import read_cell, set_cell
 
         path = _copy("budget_simple.xlsx", tmp_path)
 
@@ -166,8 +168,8 @@ class TestBudgetSpreadsheetScenario:
             assert read["value"] == value
 
     def test_add_sum_formula_after_data_entry(self, tmp_path):
-        from servers.xlsx_basic.engine import set_cell
-        from servers.xlsx_formulas.engine import set_formula
+        from xlsx_basic.engine import set_cell
+        from xlsx_formulas.engine import set_formula
 
         path = _copy("budget_simple.xlsx", tmp_path)
 
@@ -179,7 +181,7 @@ class TestBudgetSpreadsheetScenario:
         assert result["formula"] == "=SUM(B2:B5)"
 
     def test_conditional_format_overbudget_cells(self, tmp_path):
-        from servers.xlsx_formulas.engine import set_conditional_format
+        from xlsx_formulas.engine import set_conditional_format
 
         path = _copy("budget_simple.xlsx", tmp_path)
 
@@ -194,15 +196,15 @@ class TestBudgetSpreadsheetScenario:
         assert result["success"] is True
 
     def test_freeze_header_row(self, tmp_path):
-        from servers.xlsx_formulas.engine import freeze_panes
+        from xlsx_formulas.engine import freeze_panes
 
         path = _copy("budget_simple.xlsx", tmp_path)
         result = freeze_panes(str(path), self.SHEET, "A2")
         assert result["success"] is True
 
     def test_full_budget_pipeline(self, tmp_path):
-        from servers.xlsx_basic.engine import read_cell, set_cell
-        from servers.xlsx_formulas.engine import (
+        from xlsx_basic.engine import read_cell, set_cell
+        from xlsx_formulas.engine import (
             freeze_panes,
             set_conditional_format,
             set_formula,
@@ -235,7 +237,7 @@ class TestSalesProposalScenario:
     """
 
     def test_customise_proposal_text(self, tmp_path):
-        from servers.docx_basic.engine import replace_text, search_paragraphs
+        from docx_basic.engine import replace_text, search_paragraphs
 
         path = _copy("contract_simple.docx", tmp_path)
 
@@ -246,7 +248,7 @@ class TestSalesProposalScenario:
         assert len(found["matches"]) > 0
 
     def test_add_custom_scope_paragraph(self, tmp_path):
-        from servers.docx_basic.engine import (
+        from docx_basic.engine import (
             get_document_outline,
             insert_paragraph,
             search_paragraphs,
@@ -268,8 +270,8 @@ class TestSalesProposalScenario:
         assert len(found["matches"]) > 0
 
     def test_add_pricing_table(self, tmp_path):
-        from servers.docx_basic.engine import get_document_outline
-        from servers.docx_tables.engine import add_table, list_tables
+        from docx_basic.engine import get_document_outline
+        from docx_tables.engine import add_table, list_tables
 
         path = _copy("contract_simple.docx", tmp_path)
 
@@ -295,8 +297,8 @@ class TestSalesProposalScenario:
         assert tables["table_count"] >= 1
 
     def test_set_heading_styles(self, tmp_path):
-        from servers.docx_basic.engine import get_document_outline
-        from servers.docx_layout.engine import set_heading
+        from docx_basic.engine import get_document_outline
+        from docx_layout.engine import set_heading
 
         path = _copy("contract_simple.docx", tmp_path)
 
@@ -319,7 +321,7 @@ class TestPresentationBuildingScenario:
     """
 
     def test_update_presentation_title(self, tmp_path):
-        from servers.pptx_basic.engine import read_presentation, set_text
+        from pptx_basic.engine import read_presentation, set_text
 
         path = _copy("deck_simple.pptx", tmp_path)
 
@@ -331,7 +333,7 @@ class TestPresentationBuildingScenario:
         assert result["success"] is True
 
     def test_add_summary_slide_at_end(self, tmp_path):
-        from servers.pptx_basic.engine import add_slide, read_presentation
+        from pptx_basic.engine import add_slide, read_presentation
 
         path = _copy("deck_simple.pptx", tmp_path)
 
@@ -351,7 +353,7 @@ class TestPresentationBuildingScenario:
         assert after["slide_count"] == original_count + 1
 
     def test_reorder_slides(self, tmp_path):
-        from servers.pptx_basic.engine import read_presentation, reorder_slide
+        from pptx_basic.engine import read_presentation, reorder_slide
 
         path = _copy("deck_simple.pptx", tmp_path)
 
@@ -363,7 +365,7 @@ class TestPresentationBuildingScenario:
         assert result["success"] is True
 
     def test_full_deck_update_pipeline(self, tmp_path):
-        from servers.pptx_basic.engine import (
+        from pptx_basic.engine import (
             add_slide,
             read_presentation,
             read_slide,
@@ -407,7 +409,7 @@ class TestInvoiceGenerationScenario:
     """
 
     def test_create_invoice_with_line_items(self, tmp_path):
-        from servers.xlsx_new.engine import create_invoice
+        from xlsx_new.engine import create_invoice
 
         out = tmp_path / "invoice_001.xlsx"
         result = create_invoice(
@@ -427,8 +429,8 @@ class TestInvoiceGenerationScenario:
         assert out.exists()
 
     def test_invoice_file_is_readable(self, tmp_path):
-        from servers.xlsx_basic.engine import list_sheets, read_cell
-        from servers.xlsx_new.engine import create_invoice
+        from xlsx_basic.engine import list_sheets, read_cell
+        from xlsx_new.engine import create_invoice
 
         out = tmp_path / "invoice.xlsx"
         create_invoice(
@@ -483,8 +485,8 @@ class TestBatchLetterGenerationScenario:
         return template_path
 
     def test_batch_generate_offer_letters(self, tmp_path):
-        from servers.docx_basic.engine import search_paragraphs
-        from servers.docx_new.engine import batch_create_from_template
+        from docx_basic.engine import search_paragraphs
+        from docx_new.engine import batch_create_from_template
 
         template_path = self._make_template(tmp_path)
         output_dir = tmp_path / "offers"
@@ -536,8 +538,7 @@ class TestBatchLetterGenerationScenario:
 
     def test_batch_creates_correct_count(self, tmp_path):
         from docx import Document
-
-        from servers.docx_new.engine import batch_create_from_template
+        from docx_new.engine import batch_create_from_template
 
         template_path = tmp_path / "tmpl.docx"
         doc = Document()
@@ -577,7 +578,7 @@ class TestTableEditingScenario:
     """
 
     def test_find_and_update_table_cell(self, tmp_path):
-        from servers.docx_tables.engine import list_tables, set_cell
+        from docx_tables.engine import list_tables, set_cell
 
         path = _copy("report_tables.docx", tmp_path)
 
@@ -589,7 +590,7 @@ class TestTableEditingScenario:
         assert result["success"] is True
 
     def test_add_totals_row(self, tmp_path):
-        from servers.docx_tables.engine import add_row, list_tables, read_table
+        from docx_tables.engine import add_row, list_tables, read_table
 
         path = _copy("report_tables.docx", tmp_path)
 
@@ -619,7 +620,7 @@ class TestAgendaPresentationScenario:
     """
 
     def test_create_team_meeting_agenda(self, tmp_path):
-        from servers.pptx_new.engine import create_agenda
+        from pptx_new.engine import create_agenda
 
         out = tmp_path / "team_meeting_q2.pptx"
         result = create_agenda(
@@ -640,8 +641,8 @@ class TestAgendaPresentationScenario:
         assert out.exists()
 
     def test_agenda_slide_content(self, tmp_path):
-        from servers.pptx_basic.engine import read_presentation, read_slide
-        from servers.pptx_new.engine import create_agenda
+        from pptx_basic.engine import read_presentation, read_slide
+        from pptx_new.engine import create_agenda
 
         out = tmp_path / "agenda.pptx"
         create_agenda(
@@ -679,7 +680,7 @@ class TestCsvToExcelScenario:
     def test_import_csv_data(self, tmp_path):
         import csv
 
-        from servers.xlsx_new.engine import create_from_csv
+        from xlsx_new.engine import create_from_csv
 
         csv_path = tmp_path / "sales_data.csv"
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
@@ -698,8 +699,8 @@ class TestCsvToExcelScenario:
     def test_csv_data_readable_after_import(self, tmp_path):
         import csv
 
-        from servers.xlsx_basic.engine import read_cell
-        from servers.xlsx_new.engine import create_from_csv
+        from xlsx_basic.engine import read_cell
+        from xlsx_new.engine import create_from_csv
 
         csv_path = tmp_path / "data.csv"
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
