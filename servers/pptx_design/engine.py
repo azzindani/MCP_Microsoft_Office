@@ -14,7 +14,7 @@ from pptx.util import Inches, Pt
 from shared.file_utils import resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_pdf_converter
-from shared.progress import fail, info, ok, warn
+from shared.progress import fail, ok
 from shared.version_control import snapshot
 
 # ---------------------------------------------------------------------------
@@ -57,14 +57,15 @@ def _open_prs(path: Path, progress: list[dict[str, Any]]) -> tuple[Any, dict[str
     return prs, None
 
 
-def _check_slide(prs: Any, slide_index: int, progress: list[dict[str, Any]], backup: str | None) -> tuple[Any, dict[str, Any] | None]:
+def _check_slide(
+    prs: Any, slide_index: int, progress: list[dict[str, Any]], backup: str | None
+) -> tuple[Any, dict[str, Any] | None]:
     """Return (slide, None) or (None, error_dict) if index out of range."""
     count = len(prs.slides)
     if slide_index < 0 or slide_index >= count:
-        progress.append(fail(
-            f"Slide index {slide_index} out of range",
-            f"Presentation has {count} slide(s)"
-        ))
+        progress.append(
+            fail(f"Slide index {slide_index} out of range", f"Presentation has {count} slide(s)")
+        )
         return None, {
             "success": False,
             "error": f"slide_index {slide_index} out of range (0-{count - 1})",
@@ -76,7 +77,9 @@ def _check_slide(prs: Any, slide_index: int, progress: list[dict[str, Any]], bac
     return prs.slides[slide_index], None
 
 
-def _find_shape(slide: Any, shape_name: str, progress: list[dict[str, Any]], backup: str | None) -> tuple[Any, dict[str, Any] | None]:
+def _find_shape(
+    slide: Any, shape_name: str, progress: list[dict[str, Any]], backup: str | None
+) -> tuple[Any, dict[str, Any] | None]:
     """Return (shape, None) or (None, error_dict) if shape not found."""
     for shape in slide.shapes:
         if shape.name == shape_name:
@@ -158,15 +161,13 @@ def set_background(
                 }
             slide_width = prs.slide_width
             slide_height = prs.slide_height
-            slide.shapes.add_picture(
-                str(img_path), 0, 0, slide_width, slide_height
-            )
+            slide.shapes.add_picture(str(img_path), 0, 0, slide_width, slide_height)
             # Move image to back (index 0 in spTree after two required elements)
             sp_tree = slide.shapes._spTree
             pic_el = sp_tree[-1]
             sp_tree.remove(pic_el)
             sp_tree.insert(2, pic_el)
-            progress.append(ok(f"Set background image", img_path.name))
+            progress.append(ok("Set background image", img_path.name))
 
         prs.save(str(path))
         progress.append(notify_reload(str(path), "pptx"))
@@ -331,9 +332,12 @@ def add_table(
             return err
 
         table_shape = slide.shapes.add_table(
-            rows, cols,
-            Inches(left), Inches(top),
-            Inches(width), Inches(height),
+            rows,
+            cols,
+            Inches(left),
+            Inches(top),
+            Inches(width),
+            Inches(height),
         )
         table = table_shape.table
 
@@ -422,8 +426,10 @@ def add_chart(
         xl_chart_type = CHART_TYPE_MAP[chart_type]
         chart_shape = slide.shapes.add_chart(
             xl_chart_type,
-            Inches(left), Inches(top),
-            Inches(width), Inches(height),
+            Inches(left),
+            Inches(top),
+            Inches(width),
+            Inches(height),
             chart_data,
         )
 
@@ -507,8 +513,12 @@ def duplicate_slide(
 
         prs.save(str(path))
         progress.append(notify_reload(str(path), "pptx"))
-        progress.append(ok(f"Duplicated slide {slide_index} → position {new_idx}",
-                           f"{len(prs.slides)} slides total"))
+        progress.append(
+            ok(
+                f"Duplicated slide {slide_index} → position {new_idx}",
+                f"{len(prs.slides)} slides total",
+            )
+        )
 
         result: dict[str, Any] = {
             "success": True,
@@ -583,9 +593,12 @@ def export_pdf(
         if converter == "libreoffice":
             result_proc = subprocess.run(
                 [
-                    "libreoffice", "--headless",
-                    "--convert-to", "pdf",
-                    "--outdir", str(out.parent),
+                    "libreoffice",
+                    "--headless",
+                    "--convert-to",
+                    "pdf",
+                    "--outdir",
+                    str(out.parent),
                     str(path),
                 ],
                 capture_output=True,
@@ -597,7 +610,9 @@ def export_pdf(
                 return {
                     "success": False,
                     "error": "LibreOffice PDF conversion failed",
-                    "hint": result_proc.stderr[:200] if result_proc.stderr else "Check LibreOffice installation.",
+                    "hint": result_proc.stderr[:200]
+                    if result_proc.stderr
+                    else "Check LibreOffice installation.",
                     "progress": progress,
                     "token_estimate": 15,
                 }
@@ -609,6 +624,7 @@ def export_pdf(
         elif converter == "word":
             try:
                 import docx2pdf  # type: ignore[import-untyped]
+
                 docx2pdf.convert(str(path), str(out))
             except Exception as conv_err:
                 progress.append(fail("PowerPoint conversion failed", str(conv_err)[:200]))
@@ -620,10 +636,11 @@ def export_pdf(
                     "token_estimate": 15,
                 }
 
-        progress.append(ok(f"Exported to PDF", out.name))
+        progress.append(ok("Exported to PDF", out.name))
 
         if open_after:
             from shared.platform_utils import open_file
+
             open_file(out)
             progress.append(ok("Opened PDF in default viewer"))
 
@@ -781,10 +798,12 @@ def set_font_all_slides(
 
         prs.save(str(path))
         progress.append(notify_reload(str(path), "pptx"))
-        progress.append(ok(
-            f"Updated font on {slides_modified} slides",
-            f"{shapes_modified} shapes modified",
-        ))
+        progress.append(
+            ok(
+                f"Updated font on {slides_modified} slides",
+                f"{shapes_modified} shapes modified",
+            )
+        )
 
         result: dict[str, Any] = {
             "success": True,

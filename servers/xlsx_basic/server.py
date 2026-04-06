@@ -26,33 +26,25 @@ def read_cell(file_path: str, sheet_name: str, cell_address: str) -> dict:
 
 
 @mcp.tool()
-def read_cell_range(
-    file_path: str, sheet_name: str, range_address: str
-) -> dict:
+def read_cell_range(file_path: str, sheet_name: str, range_address: str) -> dict:
     """Return 2D cell array for range. Max 200 cells."""
     return engine.read_cell_range(file_path, sheet_name, range_address)
 
 
 @mcp.tool()
-def search_cells(
-    file_path: str, sheet_name: str, query: str, max_results: int = 20
-) -> dict:
+def search_cells(file_path: str, sheet_name: str, query: str, max_results: int = 20) -> dict:
     """Scan cells for text matching query. Returns matching addresses."""
     return engine.search_cells(file_path, sheet_name, query, max_results)
 
 
 @mcp.tool()
-def set_cell(
-    file_path: str, sheet_name: str, cell_address: str, value: str
-) -> dict:
+def set_cell(file_path: str, sheet_name: str, cell_address: str, value: str) -> dict:
     """Write a value to a single cell by address."""
     return engine.set_cell(file_path, sheet_name, cell_address, value)
 
 
 @mcp.tool()
-def set_range(
-    file_path: str, sheet_name: str, start_cell: str, data: list[list]
-) -> dict:
+def set_range(file_path: str, sheet_name: str, start_cell: str, data: list[list]) -> dict:
     """Write a 2D list of values starting at start_cell."""
     return engine.set_range(file_path, sheet_name, start_cell, data)
 

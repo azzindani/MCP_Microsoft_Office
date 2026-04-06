@@ -7,16 +7,15 @@ from shared.address_resolver import build_pptx_index
 from shared.doc_diff import diff_pptx
 from shared.file_utils import resolve_path
 from shared.live_edit import notify_reload
-from shared.progress import fail, info, ok, undo, warn
+from shared.progress import fail, info, ok
 from shared.receipt import append_receipt
-from shared.version_control import get_history, restore, snapshot
-
+from shared.version_control import get_history, snapshot
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 
 def _not_found(path: Path, progress: list[dict[str, Any]]) -> dict[str, Any]:
-    progress.append(fail(f"File not found", str(path)))
+    progress.append(fail("File not found", str(path)))
     return {
         "success": False,
         "progress": progress,
@@ -26,9 +25,7 @@ def _not_found(path: Path, progress: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _wrong_type(
-    path: Path, expected: str, progress: list[dict[str, Any]]
-) -> dict[str, Any]:
+def _wrong_type(path: Path, expected: str, progress: list[dict[str, Any]]) -> dict[str, Any]:
     progress.append(fail(f"Wrong file type: {path.suffix}", f"Expected {expected}"))
     return {
         "success": False,
@@ -295,9 +292,7 @@ def read_slide_text(file_path: str, slide_index: int) -> dict[str, Any]:
         return _error(str(e), "Check slide_index is valid.", progress)
 
 
-def set_text(
-    file_path: str, slide_index: int, shape_name: str, new_text: str
-) -> dict[str, Any]:
+def set_text(file_path: str, slide_index: int, shape_name: str, new_text: str) -> dict[str, Any]:
     """Replace text in a shape using run-level editing."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -402,9 +397,7 @@ def set_text(
         )
 
 
-def add_slide(
-    file_path: str, layout_name: str, title: str = "", body: str = ""
-) -> dict[str, Any]:
+def add_slide(file_path: str, layout_name: str, title: str = "", body: str = "") -> dict[str, Any]:
     """Append a new slide with layout, title, and body text."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -708,9 +701,7 @@ def add_text_box(
         progress.append(ok("Snapshot saved", Path(backup).name))
 
         slide = prs.slides[slide_index]
-        txBox = slide.shapes.add_textbox(
-            Inches(left), Inches(top), Inches(width), Inches(height)
-        )
+        txBox = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
         tf = txBox.text_frame
         tf.text = text
 
@@ -763,9 +754,7 @@ def add_text_box(
         )
 
 
-def diff_versions(
-    file_path: str, timestamp_a: str, timestamp_b: str = "current"
-) -> dict[str, Any]:
+def diff_versions(file_path: str, timestamp_a: str, timestamp_b: str = "current") -> dict[str, Any]:
     """Compare two presentation versions by snapshot timestamp."""
     progress: list[dict[str, Any]] = []
     try:
@@ -815,7 +804,7 @@ def diff_versions(
 
         progress.append(
             ok(
-                f"Compared versions",
+                "Compared versions",
                 f"{result['change_count']} change{'s' if result['change_count'] != 1 else ''}",
             )
         )

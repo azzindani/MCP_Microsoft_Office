@@ -1,4 +1,5 @@
 """DOCX New engine — create Word documents from scratch, no MCP imports."""
+
 from __future__ import annotations
 
 import logging
@@ -11,8 +12,8 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from shared.platform_utils import open_file
-from shared.progress import fail, info, ok, warn
+from shared.platform_utils import open_file  # noqa: E402
+from shared.progress import fail, info, ok, warn  # noqa: E402
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _token_estimate(obj: Any) -> int:
     return len(str(obj)) // 4
@@ -51,6 +53,7 @@ def _err(progress: list[dict[str, Any]], error: str, hint: str) -> dict[str, Any
 # Public engine functions
 # ---------------------------------------------------------------------------
 
+
 def create_document(output_path: str, open_after: bool = True) -> dict[str, Any]:
     """Create a blank Word document and save to output_path."""
     progress: list[dict[str, Any]] = []
@@ -59,7 +62,7 @@ def create_document(output_path: str, open_after: bool = True) -> dict[str, Any]
 
         path = Path(output_path).resolve()
         _ensure_parent(path)
-        progress.append(info(f"Creating blank document", path.name))
+        progress.append(info("Creating blank document", path.name))
 
         doc = Document()
         doc.save(str(path))
@@ -168,7 +171,7 @@ def create_from_sections(
 
         path = Path(output_path).resolve()
         _ensure_parent(path)
-        progress.append(info(f"Creating structured document", path.name))
+        progress.append(info("Creating structured document", path.name))
 
         doc = Document()
 
@@ -226,14 +229,14 @@ def create_from_template(
 
         tpl_path = Path(template_path).resolve()
         if not tpl_path.exists():
-            progress.append(fail(f"Template not found", str(tpl_path)))
+            progress.append(fail("Template not found", str(tpl_path)))
             return _err(
                 progress,
                 f"File not found: {template_path}",
                 "Check that template_path is an absolute path to an existing .docx file.",
             )
         if tpl_path.suffix.lower() != ".docx":
-            progress.append(fail(f"Template is not a .docx file", tpl_path.suffix))
+            progress.append(fail("Template is not a .docx file", tpl_path.suffix))
             return _err(
                 progress,
                 f"Expected .docx file, got {tpl_path.suffix}",
@@ -267,7 +270,10 @@ def create_from_template(
             count = docxedit.replace_string(doc, old_s, new_s)
             if count:
                 progress.append(
-                    ok(f"Replaced '{old_s}' → '{new_s}'", f"{count} occurrence{'s' if count != 1 else ''}")
+                    ok(
+                        f"Replaced '{old_s}' → '{new_s}'",
+                        f"{count} occurrence{'s' if count != 1 else ''}",
+                    )
                 )
                 applied += count
             else:
@@ -309,11 +315,10 @@ def create_letter(
     progress: list[dict[str, Any]] = []
     try:
         from docx import Document  # type: ignore[import-untyped]
-        from docx.shared import Pt  # type: ignore[import-untyped]
 
         path = Path(output_path).resolve()
         _ensure_parent(path)
-        progress.append(info(f"Creating business letter", path.name))
+        progress.append(info("Creating business letter", path.name))
 
         doc = Document()
 
@@ -406,7 +411,7 @@ def merge_documents(
 
         out_path = Path(output_path).resolve()
         if out_path.suffix.lower() != ".docx":
-            progress.append(fail(f"output_path must end in .docx", out_path.suffix))
+            progress.append(fail("output_path must end in .docx", out_path.suffix))
             return _err(
                 progress,
                 f"Expected .docx output_path, got {out_path.suffix}",
@@ -418,14 +423,14 @@ def merge_documents(
         for fp in file_paths:
             p = Path(str(fp)).resolve()
             if not p.exists():
-                progress.append(fail(f"File not found", str(p)))
+                progress.append(fail("File not found", str(p)))
                 return _err(
                     progress,
                     f"File not found: {fp}",
                     "Check that all file_paths exist and are accessible.",
                 )
             if p.suffix.lower() != ".docx":
-                progress.append(fail(f"Not a .docx file", p.suffix))
+                progress.append(fail("Not a .docx file", p.suffix))
                 return _err(
                     progress,
                     f"Expected .docx file, got {p.suffix}",
@@ -557,9 +562,7 @@ def batch_create_from_template(
             if open_after:
                 open_file(out_file)
 
-        progress.append(
-            ok(f"Batch complete", f"{len(created_files)} of {len(data_list)} created")
-        )
+        progress.append(ok("Batch complete", f"{len(created_files)} of {len(data_list)} created"))
 
         return {
             "success": True,

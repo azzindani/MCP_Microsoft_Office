@@ -12,7 +12,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 
 from shared.file_utils import resolve_path
 from shared.live_edit import notify_reload
-from shared.progress import fail, ok, warn
+from shared.progress import fail, ok
 from shared.version_control import snapshot
 
 # ---------------------------------------------------------------------------
@@ -65,7 +65,9 @@ def _open_wb(path: Path, progress: list[dict[str, Any]]) -> tuple[Any, dict[str,
     return wb, None
 
 
-def _check_sheet(wb: Any, sheet_name: str, progress: list[dict[str, Any]], backup: str | None) -> tuple[Any, dict[str, Any] | None]:
+def _check_sheet(
+    wb: Any, sheet_name: str, progress: list[dict[str, Any]], backup: str | None
+) -> tuple[Any, dict[str, Any] | None]:
     """Return (ws, None) or (None, error_dict) if sheet missing."""
     if sheet_name not in wb.sheetnames:
         progress.append(fail(f"Sheet '{sheet_name}' not found"))
@@ -606,10 +608,12 @@ def fill_formula_down(
         wb.save(str(path))
         wb.close()
 
-        progress.append(ok(
-            f"Filled formula down {col_letters}{start_row}:{col_letters}{end_row}",
-            f"{cells_filled} cells",
-        ))
+        progress.append(
+            ok(
+                f"Filled formula down {col_letters}{start_row}:{col_letters}{end_row}",
+                f"{cells_filled} cells",
+            )
+        )
         progress.append(notify_reload(str(path), "xlsx"))
         result: dict[str, Any] = {
             "success": True,
@@ -785,10 +789,12 @@ def convert_to_values(
         wb.save(str(path))
         wb.close()
 
-        progress.append(ok(
-            f"Converted formulas to values in {range_address}",
-            f"{converted} formula{'s' if converted != 1 else ''} replaced",
-        ))
+        progress.append(
+            ok(
+                f"Converted formulas to values in {range_address}",
+                f"{converted} formula{'s' if converted != 1 else ''} replaced",
+            )
+        )
         progress.append(notify_reload(str(path), "xlsx"))
         result: dict[str, Any] = {
             "success": True,

@@ -27,9 +27,7 @@ def set_font(
 
 
 @mcp.tool()
-def set_paragraph_style(
-    file_path: str, paragraph_index: int, style_name: str
-) -> dict:
+def set_paragraph_style(file_path: str, paragraph_index: int, style_name: str) -> dict:
     """Apply named style from document gallery to paragraph N."""
     return engine.set_paragraph_style(file_path, paragraph_index, style_name)
 

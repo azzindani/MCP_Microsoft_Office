@@ -5,14 +5,13 @@ from pathlib import Path
 from typing import Any
 
 import openpyxl
-from openpyxl.chart import AreaChart, BarChart, LineChart, PieChart, ScatterChart
-from openpyxl.chart import Reference
+from openpyxl.chart import AreaChart, BarChart, LineChart, PieChart, Reference, ScatterChart
 from openpyxl.styles import Font, PatternFill
-from openpyxl.utils import get_column_letter, column_index_from_string
+from openpyxl.utils import column_index_from_string
 
 from shared.file_utils import resolve_path
 from shared.live_edit import notify_reload
-from shared.progress import fail, info, ok, warn
+from shared.progress import fail, ok
 from shared.version_control import snapshot
 
 # ---------------------------------------------------------------------------
@@ -58,7 +57,9 @@ def _open_wb(path: Path, progress: list[dict[str, Any]]) -> tuple[Any, dict[str,
     return wb, None
 
 
-def _check_sheet(wb: Any, sheet_name: str, progress: list[dict[str, Any]], backup: str | None) -> tuple[Any, dict[str, Any] | None]:
+def _check_sheet(
+    wb: Any, sheet_name: str, progress: list[dict[str, Any]], backup: str | None
+) -> tuple[Any, dict[str, Any] | None]:
     """Return (ws, None) or (None, error_dict) if sheet missing."""
     if sheet_name not in wb.sheetnames:
         progress.append(fail(f"Sheet '{sheet_name}' not found"))
@@ -209,10 +210,9 @@ def delete_chart(
 
         charts = ws._charts  # type: ignore[attr-defined]
         if chart_index < 0 or chart_index >= len(charts):
-            progress.append(fail(
-                f"Chart index {chart_index} out of range",
-                f"Sheet has {len(charts)} chart(s)"
-            ))
+            progress.append(
+                fail(f"Chart index {chart_index} out of range", f"Sheet has {len(charts)} chart(s)")
+            )
             return {
                 "success": False,
                 "error": f"chart_index {chart_index} out of range (0-{len(charts) - 1})",
@@ -279,10 +279,9 @@ def update_chart(
 
         charts = ws._charts  # type: ignore[attr-defined]
         if chart_index < 0 or chart_index >= len(charts):
-            progress.append(fail(
-                f"Chart index {chart_index} out of range",
-                f"Sheet has {len(charts)} chart(s)"
-            ))
+            progress.append(
+                fail(f"Chart index {chart_index} out of range", f"Sheet has {len(charts)} chart(s)")
+            )
             return {
                 "success": False,
                 "error": f"chart_index {chart_index} out of range (0-{len(charts) - 1})",
@@ -302,7 +301,7 @@ def update_chart(
             data_ref = _parse_range_ref(ws, data_range)
             chart.series.clear()
             chart.add_data(data_ref, titles_from_data=True)
-            progress.append(ok(f"Updated chart data range", data_range))
+            progress.append(ok("Updated chart data range", data_range))
 
         wb.save(str(path))
         wb.close()
@@ -438,15 +437,19 @@ def add_pivot_table(
         for ri, (rk, col_data) in enumerate(aggregated.items()):
             ws.cell(row=dest_row + 1 + ri, column=dest_col).value = rk
             for ci, ck in enumerate(col_keys):
-                ws.cell(row=dest_row + 1 + ri, column=dest_col + 1 + ci).value = col_data.get(ck, 0.0)
+                ws.cell(row=dest_row + 1 + ri, column=dest_col + 1 + ci).value = col_data.get(
+                    ck, 0.0
+                )
 
         wb.save(str(path))
         wb.close()
 
-        progress.append(ok(
-            f"Created pivot summary at {dest_cell}",
-            f"{len(aggregated)} row groups × {len(col_keys)} column groups"
-        ))
+        progress.append(
+            ok(
+                f"Created pivot summary at {dest_cell}",
+                f"{len(aggregated)} row groups × {len(col_keys)} column groups",
+            )
+        )
         result: dict[str, Any] = {
             "success": True,
             "op": "add_pivot_table",

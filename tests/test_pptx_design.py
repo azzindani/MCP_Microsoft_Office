@@ -73,10 +73,12 @@ def test_set_background_image(deck: Path, tmp_path: Path) -> None:
         ihdr_data = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
         ihdr_crc = zlib.crc32(b"IHDR" + ihdr_data) & 0xFFFFFFFF
         ihdr = struct.pack(">I", 13) + b"IHDR" + ihdr_data + struct.pack(">I", ihdr_crc)
-        raw = b"\x00\xFF\x00\x00"  # filter byte + RGB
+        raw = b"\x00\xff\x00\x00"  # filter byte + RGB
         compressed = zlib.compress(raw)
         idat_crc = zlib.crc32(b"IDAT" + compressed) & 0xFFFFFFFF
-        idat = struct.pack(">I", len(compressed)) + b"IDAT" + compressed + struct.pack(">I", idat_crc)
+        idat = (
+            struct.pack(">I", len(compressed)) + b"IDAT" + compressed + struct.pack(">I", idat_crc)
+        )
         iend_crc = zlib.crc32(b"IEND") & 0xFFFFFFFF
         iend = struct.pack(">I", 0) + b"IEND" + struct.pack(">I", iend_crc)
         return sig + ihdr + idat + iend
@@ -115,10 +117,7 @@ def test_set_font_style(deck: Path) -> None:
     shape_name = text_shapes[0].name
     prs.save(str(deck))  # close without changes
 
-    result = set_font_style(
-        str(deck), 0, shape_name,
-        font_name="Arial", font_size=18, bold=True
-    )
+    result = set_font_style(str(deck), 0, shape_name, font_name="Arial", font_size=18, bold=True)
     assert result["success"] is True
     assert result["shape_name"] == shape_name
     assert "backup" in result
@@ -305,9 +304,11 @@ def test_duplicate_slide_creates_snapshot(deck: Path) -> None:
 def test_export_pdf_no_converter(deck: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """When no PDF converter is available, return a clear error."""
     from shared import platform_utils
+
     monkeypatch.setattr(platform_utils, "get_pdf_converter", lambda: None)
     # Re-import engine to pick up monkeypatched value
     from servers.pptx_design import engine as pptx_engine
+
     monkeypatch.setattr(pptx_engine, "get_pdf_converter", lambda: None)
 
     result = pptx_engine.export_pdf(str(deck))

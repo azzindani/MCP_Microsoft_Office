@@ -1,4 +1,5 @@
 """PPTX New engine — create PowerPoint presentations from scratch."""
+
 from __future__ import annotations
 
 import logging
@@ -12,11 +13,11 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from pptx import Presentation
-from pptx.util import Inches, Pt  # noqa: F401 — available for callers/future use
+from pptx import Presentation  # noqa: E402
+from pptx.util import Inches, Pt  # noqa: E402,F401
 
-from shared.platform_utils import open_file
-from shared.progress import fail, info, ok, warn
+from shared.platform_utils import open_file  # noqa: E402
+from shared.progress import fail, info, ok  # noqa: E402
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -398,7 +399,9 @@ def create_agenda(
 
     except Exception as exc:
         logger.exception("create_agenda failed")
-        return _error(str(exc), "Check output_path is writable and items is a valid list.", progress)
+        return _error(
+            str(exc), "Check output_path is writable and items is a valid list.", progress
+        )
 
 
 def create_from_docx(
@@ -439,9 +442,7 @@ def create_from_docx(
         # Extract slide structure from headings
         slides_data: list[dict[str, Any]] = []
         current_slide: dict[str, Any] | None = None
-        has_headings = any(
-            p.style.name.startswith("Heading") for p in paragraphs
-        )
+        has_headings = any(p.style.name.startswith("Heading") for p in paragraphs)
 
         if has_headings:
             for para in paragraphs:
@@ -467,12 +468,14 @@ def create_from_docx(
             bullets: list[str] = [p.text.strip() for p in paragraphs if p.text.strip()]
             group_size = 5
             for i in range(0, len(bullets), group_size):
-                group = bullets[i:i + group_size]
+                group = bullets[i : i + group_size]
                 title = group[0] if group else f"Slide {len(slides_data) + 1}"
-                slides_data.append({
-                    "title": title,
-                    "content_lines": group[1:],
-                })
+                slides_data.append(
+                    {
+                        "title": title,
+                        "content_lines": group[1:],
+                    }
+                )
 
         # Cap at max_slides
         slides_data = slides_data[:max_slides]

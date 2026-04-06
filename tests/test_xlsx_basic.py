@@ -99,9 +99,7 @@ def test_get_sheet_summary_zero_cell_values():
 
 def test_get_sheet_summary_first_col_sample():
     result = get_sheet_summary(str(BUDGET_SIMPLE), "Q3 Revenue")
-    sample_values = [
-        x["value"] for x in result["first_col_sample"] if isinstance(x, dict)
-    ]
+    sample_values = [x["value"] for x in result["first_col_sample"] if isinstance(x, dict)]
     assert "North" in sample_values
 
 

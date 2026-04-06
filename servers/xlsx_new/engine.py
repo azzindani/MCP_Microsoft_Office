@@ -1,4 +1,5 @@
 """XLSX New engine — create Excel workbooks from scratch. Zero MCP imports."""
+
 from __future__ import annotations
 
 import logging
@@ -13,12 +14,11 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-import openpyxl
-from openpyxl.styles import Font
-from openpyxl.utils import get_column_letter
+import openpyxl  # noqa: E402
+from openpyxl.styles import Font  # noqa: E402
 
-from shared.platform_utils import open_file
-from shared.progress import fail, info, ok, warn
+from shared.platform_utils import open_file  # noqa: E402
+from shared.progress import fail, info, ok, warn  # noqa: E402
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -136,7 +136,7 @@ def create_from_data(
         progress.append(
             ok(
                 f"Wrote {row_count} data rows",
-                f"headers in row 1, bold",
+                "headers in row 1, bold",
             )
         )
 
@@ -264,7 +264,7 @@ def create_from_template(
     try:
         src = Path(template_path).resolve()
         if not src.exists():
-            progress.append(fail(f"Template not found", str(src)))
+            progress.append(fail("Template not found", str(src)))
             return {
                 "success": False,
                 "error": f"File not found: {src}",
@@ -285,7 +285,7 @@ def create_from_template(
         dst = Path(output_path).resolve()
         _ensure_parent(dst)
 
-        progress.append(info(f"Loading template", src.name))
+        progress.append(info("Loading template", src.name))
         wb = openpyxl.load_workbook(str(src))
 
         replaced_count = 0
@@ -362,7 +362,7 @@ def create_from_csv(
 
         out_path = Path(output_path).resolve()
         _ensure_parent(out_path)
-        progress.append(info(f"Reading CSV", src.name))
+        progress.append(info("Reading CSV", src.name))
 
         all_rows: list[list[Any]] = []
         with open(str(src), newline="", encoding="utf-8-sig") as fh:
@@ -467,9 +467,7 @@ def create_invoice(
         ws["A4"] = f"Client: {client_name}"
 
         # Column headers in row 6
-        header_fill = PatternFill(
-            start_color="E2EFDA", end_color="E2EFDA", fill_type="solid"
-        )
+        header_fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
         col_headers = ["Description", "Quantity", "Unit Price", "Total"]
         for c_idx, label in enumerate(col_headers, start=1):
             cell = ws.cell(row=6, column=c_idx, value=label)

@@ -11,8 +11,6 @@ FIXTURES.mkdir(exist_ok=True)
 
 def create_docx_fixtures() -> None:
     from docx import Document
-    from docx.shared import Pt
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
 
     # contract_simple.docx — plain paragraphs, no tables
     doc = Document()
@@ -25,7 +23,7 @@ def create_docx_fixtures() -> None:
 
     doc.add_heading("1. Parties", level=2)
     doc.add_paragraph(
-        "PARTY_A_NAME (\"Client\") and PARTY_B_NAME (\"Service Provider\") "
+        'PARTY_A_NAME ("Client") and PARTY_B_NAME ("Service Provider") '
         "agree to the following terms."
     )
 
@@ -49,12 +47,8 @@ def create_docx_fixtures() -> None:
     )
 
     doc.add_heading("4. Termination", level=2)
-    doc.add_paragraph(
-        "Either party may terminate this Agreement with 30 days written notice."
-    )
-    doc.add_paragraph(
-        "Upon termination, all outstanding invoices become immediately due."
-    )
+    doc.add_paragraph("Either party may terminate this Agreement with 30 days written notice.")
+    doc.add_paragraph("Upon termination, all outstanding invoices become immediately due.")
 
     doc.save(str(FIXTURES / "contract_simple.docx"))
     print("Created contract_simple.docx")
@@ -71,17 +65,19 @@ def create_docx_fixtures() -> None:
     p.add_run("This Master Services Agreement is between ")
     run_a = p.add_run("PARTY_A_NAME")
     run_a.bold = True
-    p.add_run(" (\"Client\") and ")
+    p.add_run(' ("Client") and ')
     run_b = p.add_run("PARTY_B_NAME")
     run_b.bold = True
-    p.add_run(" (\"Vendor\"), effective ")
+    p.add_run(' ("Vendor"), effective ')
     run_d = p.add_run("EFFECTIVE_DATE")
     run_d.italic = True
     p.add_run(".")
 
     doc2.add_heading("1. Services", level=2)
     for i in range(1, 6):
-        doc2.add_paragraph(f"Section 1.{i}: Lorem ipsum dolor sit amet, clause {i}.", style="Body Text")
+        doc2.add_paragraph(
+            f"Section 1.{i}: Lorem ipsum dolor sit amet, clause {i}.", style="Body Text"
+        )
 
     doc2.add_heading("2. Fees and Payment", level=2)
     p3 = doc2.add_paragraph()
@@ -137,7 +133,6 @@ def create_docx_fixtures() -> None:
 
 
 def create_xlsx_fixtures() -> None:
-    import openpyxl
     from openpyxl import Workbook
 
     # budget_simple.xlsx — flat data, no formulas
@@ -180,7 +175,7 @@ def create_xlsx_fixtures() -> None:
         ws3[f"C{i}"] = feb
         ws3[f"D{i}"] = mar
         ws3[f"E{i}"] = f"=SUM(B{i}:D{i})"
-        ws3[f"F{i}"] = f"=IF(E{i}>300000,\"High\",\"Normal\")"
+        ws3[f"F{i}"] = f'=IF(E{i}>300000,"High","Normal")'
 
     ws3["A7"] = "Total"
     ws3["B7"] = "=SUM(B2:B5)"
@@ -218,13 +213,10 @@ def create_xlsx_fixtures() -> None:
 
 def create_pptx_fixtures() -> None:
     from pptx import Presentation
-    from pptx.util import Inches, Pt
-    from pptx.dml.color import RGBColor
 
     # deck_simple.pptx — title + content slides
     prs = Presentation()
-    layouts = {l.name: l for l in prs.slide_layouts}
-    title_layout = prs.slide_layouts[0]   # Title Slide
+    title_layout = prs.slide_layouts[0]  # Title Slide
     content_layout = prs.slide_layouts[1]  # Title and Content
 
     slide0 = prs.slides.add_slide(title_layout)
@@ -247,7 +239,6 @@ def create_pptx_fixtures() -> None:
 
     # deck_images.pptx — slides with text (images need actual image files)
     prs2 = Presentation()
-    blank_layout = prs2.slide_layouts[6]   # Blank
     content_layout2 = prs2.slide_layouts[1]
 
     slide_t = prs2.slides.add_slide(prs2.slide_layouts[0])

@@ -1,4 +1,5 @@
 """XLSX New MCP server — create Excel workbooks from scratch."""
+
 from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
@@ -49,9 +50,7 @@ def create_from_template(
     open_after: bool = True,
 ) -> dict:
     """Copy .xlsx template, replace cell values, save to output_path."""
-    return engine.create_from_template(
-        template_path, output_path, replacements, open_after
-    )
+    return engine.create_from_template(template_path, output_path, replacements, open_after)
 
 
 @mcp.tool()
@@ -64,7 +63,9 @@ def create_from_csv(
     open_after: bool = True,
 ) -> dict:
     """Import a CSV file into a new Excel workbook."""
-    return engine.create_from_csv(csv_path, output_path, sheet_name, delimiter, has_header, open_after)
+    return engine.create_from_csv(
+        csv_path, output_path, sheet_name, delimiter, has_header, open_after
+    )
 
 
 @mcp.tool()
@@ -80,7 +81,14 @@ def create_invoice(
 ) -> dict:
     """Create a formatted invoice .xlsx with items, totals, and tax formula."""
     return engine.create_invoice(
-        output_path, company_name, client_name, invoice_number, items, tax_rate, currency, open_after
+        output_path,
+        company_name,
+        client_name,
+        invoice_number,
+        items,
+        tax_rate,
+        currency,
+        open_after,
     )
 
 

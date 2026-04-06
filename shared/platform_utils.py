@@ -1,4 +1,5 @@
 """Platform detection and path utilities for office-mcp."""
+
 from __future__ import annotations
 
 import os
@@ -66,9 +67,7 @@ def get_cline_config_path() -> Path:
         base = Path(os.environ.get("APPDATA", "~")).expanduser()
         return base / "Code" / "User" / "settings.json"
     elif is_macos():
-        return (
-            Path.home() / "Library" / "Application Support" / "Code" / "User" / "settings.json"
-        )
+        return Path.home() / "Library" / "Application Support" / "Code" / "User" / "settings.json"
     else:
         return Path.home() / ".config" / "Code" / "User" / "settings.json"
 

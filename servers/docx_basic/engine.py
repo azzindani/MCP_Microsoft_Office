@@ -1,6 +1,5 @@
 """DOCX Basic engine — pure python-docx logic, no MCP imports."""
 
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -43,13 +42,11 @@ def get_document_outline(file_path: str) -> dict[str, Any]:
                 try:
                     level = int(name.split()[-1])
                     if 1 <= level <= 6:
-                        outline.append(
-                            {"index": i, "level": level, "text": p.text}
-                        )
+                        outline.append({"index": i, "level": level, "text": p.text})
                 except (ValueError, IndexError):
                     pass
 
-        progress.append(ok(f"Built outline", f"{len(outline)} headings"))
+        progress.append(ok("Built outline", f"{len(outline)} headings"))
 
         return {
             "success": True,
@@ -155,8 +152,7 @@ def read_document(file_path: str) -> dict[str, Any]:
         para_list = all_paras[:max_p]
 
         paragraphs = [
-            {"index": i, "text": p.text, "style": p.style.name}
-            for i, p in enumerate(para_list)
+            {"index": i, "text": p.text, "style": p.style.name} for i, p in enumerate(para_list)
         ]
 
         result: dict[str, Any] = {
@@ -172,8 +168,7 @@ def read_document(file_path: str) -> dict[str, Any]:
             result["truncated"] = True
             result["truncated_at"] = max_p
             result["warning"] = (
-                "Large document. Use get_document_index + fetch_section "
-                "for targeted access."
+                "Large document. Use get_document_index + fetch_section for targeted access."
             )
             progress.append(
                 warn(
@@ -240,9 +235,7 @@ def read_paragraph(file_path: str, index: int) -> dict[str, Any]:
         return _error(str(e), "Check file_path and index.", progress)
 
 
-def read_paragraph_range(
-    file_path: str, start_index: int, end_index: int
-) -> dict[str, Any]:
+def read_paragraph_range(file_path: str, start_index: int, end_index: int) -> dict[str, Any]:
     """Return a bounded range of paragraphs. Max 50 (20 in 8GB mode)."""
     progress: list[dict[str, Any]] = []
     try:
@@ -273,9 +266,7 @@ def read_paragraph_range(
             {"index": i, "text": paras[i].text, "style": paras[i].style.name}
             for i in range(start, end + 1)
         ]
-        progress.append(
-            ok(f"Read paragraphs {start}-{end}", f"{len(result_paras)} paragraphs")
-        )
+        progress.append(ok(f"Read paragraphs {start}-{end}", f"{len(result_paras)} paragraphs"))
 
         return {
             "success": True,
@@ -291,9 +282,7 @@ def read_paragraph_range(
         return _error(str(e), "Check file_path and indices.", progress)
 
 
-def search_paragraphs(
-    file_path: str, query: str, max_results: int = 10
-) -> dict[str, Any]:
+def search_paragraphs(file_path: str, query: str, max_results: int = 10) -> dict[str, Any]:
     """Scan paragraphs for matching text. Returns only matches."""
     progress: list[dict[str, Any]] = []
     if not query:
@@ -321,9 +310,7 @@ def search_paragraphs(
         q_lower = query.lower()
         for i, p in enumerate(paras):
             if q_lower in p.text.lower():
-                matches.append(
-                    {"index": i, "text": p.text, "style": p.style.name}
-                )
+                matches.append({"index": i, "text": p.text, "style": p.style.name})
                 if len(matches) >= max_results:
                     break
 
@@ -391,9 +378,7 @@ def replace_text(
             return {
                 "success": False,
                 "error": "match_text not found in document",
-                "hint": (
-                    "Use search_paragraphs to verify the exact text before replacing."
-                ),
+                "hint": ("Use search_paragraphs to verify the exact text before replacing."),
                 "progress": progress,
                 "token_estimate": 20,
             }
@@ -471,14 +456,11 @@ def replace_text(
         }
 
 
-def replace_at(
-    file_path: str, address: str, new_text: str
-) -> dict[str, Any]:
+def replace_at(file_path: str, address: str, new_text: str) -> dict[str, Any]:
     """Replace content at exact address. Preserves all run formatting."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
     try:
-        import docxedit  # type: ignore[import-untyped]
         from docx import Document  # type: ignore[import-untyped]
 
         path = resolve_path(file_path)
@@ -550,7 +532,6 @@ def insert_paragraph(
     backup: str | None = None
     try:
         from docx import Document  # type: ignore[import-untyped]
-        from docx.oxml.ns import qn  # type: ignore[import-untyped]
 
         path = resolve_path(file_path)
         if not path.exists():
@@ -604,9 +585,7 @@ def insert_paragraph(
                 pass  # Style doesn't exist — use default
             doc2.save(str(path))
 
-        progress.append(
-            ok(f"Inserted paragraph at index {after_index + 1}", style)
-        )
+        progress.append(ok(f"Inserted paragraph at index {after_index + 1}", style))
         progress.append(notify_reload(str(path), "docx"))
 
         _log_receipt(
@@ -852,9 +831,7 @@ def delete_at(file_path: str, address: str) -> dict[str, Any]:
         }
 
 
-def append_text(
-    file_path: str, text: str, style: str = "Body Text"
-) -> dict[str, Any]:
+def append_text(file_path: str, text: str, style: str = "Body Text") -> dict[str, Any]:
     """Append a new paragraph at document end."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -881,9 +858,7 @@ def append_text(
             pass  # Default style
 
         doc.save(str(path))
-        progress.append(
-            ok(f"Appended paragraph at index {para_count}", style)
-        )
+        progress.append(ok(f"Appended paragraph at index {para_count}", style))
         progress.append(notify_reload(str(path), "docx"))
 
         return {
@@ -927,9 +902,7 @@ def get_history_tool(file_path: str) -> dict[str, Any]:
         return _error(str(e), "Check that file_path is correct.", progress)
 
 
-def restore_version(
-    file_path: str, timestamp: str, create_branch: str = ""
-) -> dict[str, Any]:
+def restore_version(file_path: str, timestamp: str, create_branch: str = "") -> dict[str, Any]:
     """Restore a document to a previous snapshot version."""
     progress: list[dict[str, Any]] = []
     try:
@@ -937,6 +910,7 @@ def restore_version(
 
         if create_branch:
             from shared import gitops
+
             repo_dir = str(path.parent)
             if gitops.is_git_repo(str(path)):
                 success = gitops.create_branch(repo_dir, create_branch)
@@ -956,7 +930,7 @@ def restore_version(
                 "token_estimate": 15,
             }
 
-        progress.append(undo(f"Restored from snapshot", timestamp))
+        progress.append(undo("Restored from snapshot", timestamp))
         progress.append(notify_reload(str(path), "docx"))
 
         return {
@@ -972,9 +946,7 @@ def restore_version(
         return _error(str(e), "Check file_path and timestamp.", progress)
 
 
-def diff_versions(
-    file_path: str, timestamp_a: str, timestamp_b: str = "current"
-) -> dict[str, Any]:
+def diff_versions(file_path: str, timestamp_a: str, timestamp_b: str = "current") -> dict[str, Any]:
     """Compare two versions of a document."""
     progress: list[dict[str, Any]] = []
     try:
@@ -1003,12 +975,10 @@ def diff_versions(
                 "token_estimate": 15,
             }
 
-        progress.append(ok(f"Comparing versions"))
+        progress.append(ok("Comparing versions"))
         result = diff_docx(path_a, path_b)
         if result.get("success"):
-            progress.append(
-                ok(f"Diff complete", f"{result.get('change_count', 0)} changes")
-            )
+            progress.append(ok("Diff complete", f"{result.get('change_count', 0)} changes"))
 
         result["progress"] = progress
         result["token_estimate"] = len(str(result)) // 4
@@ -1022,13 +992,12 @@ def diff_versions(
 def read_receipt_tool(file_path: str, last_n: int = 10) -> dict[str, Any]:
     """Show recent tool operations on this file."""
     from shared.receipt import read_receipt_log
+
     progress: list[dict[str, Any]] = []
     try:
         path = resolve_path(file_path)
         entries = read_receipt_log(str(path), last_n)
-        progress.append(
-            ok(f"Read receipt log for {path.name}", f"{len(entries)} entries")
-        )
+        progress.append(ok(f"Read receipt log for {path.name}", f"{len(entries)} entries"))
         return {
             "success": True,
             "file": path.name,
@@ -1045,7 +1014,7 @@ def read_receipt_tool(file_path: str, last_n: int = 10) -> dict[str, Any]:
 
 
 def _not_found(path: Path, progress: list) -> dict[str, Any]:
-    progress.append(fail(f"File not found", str(path.name)))
+    progress.append(fail("File not found", str(path.name)))
     return {
         "success": False,
         "error": f"File not found: {path}",

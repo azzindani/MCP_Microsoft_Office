@@ -63,7 +63,9 @@ def add_chart(
     height: float = 4.5,
 ) -> dict:
     """Add chart to slide. type: bar, line, pie. data: {categories, series}."""
-    return engine.add_chart(file_path, slide_index, chart_type, data, title, left, top, width, height)
+    return engine.add_chart(
+        file_path, slide_index, chart_type, data, title, left, top, width, height
+    )
 
 
 @mcp.tool()

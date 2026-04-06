@@ -461,10 +461,8 @@ def test_all_responses_have_progress_field(deck_path: Path, tmp_deck: Path) -> N
         add_text_box(str(tmp_deck), 0, "test"),
         # diff_versions requires a snapshot — skipped here for simplicity
         read_presentation("/nonexistent/path.pptx"),  # error case
-        search_slides(str(deck_path), ""),             # error case
+        search_slides(str(deck_path), ""),  # error case
     ]
 
     for i, resp in enumerate(responses):
-        assert "progress" in resp, (
-            f"Response {i} missing 'progress' key: {resp}"
-        )
+        assert "progress" in resp, f"Response {i} missing 'progress' key: {resp}"

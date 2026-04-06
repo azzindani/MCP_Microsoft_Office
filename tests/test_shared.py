@@ -1,12 +1,10 @@
 """Tests for the shared module."""
 
 import json
-import os
 import shutil
 from pathlib import Path
 
 import pytest
-
 
 # ─── file_utils ───────────────────────────────────────────────────────────────
 
@@ -159,6 +157,7 @@ class TestVersionControl:
 
     def test_get_history_returns_newest_first(self, tmp_path):
         import time
+
         from shared.version_control import get_history, snapshot
 
         doc = tmp_path / "test.docx"
@@ -290,14 +289,18 @@ class TestPlatformUtils:
         monkeypatch.setenv("OFFICE_MCP_8GB_MODE", "1")
         # Re-import to pick up new env
         import importlib
+
         import shared.platform_utils as pu
+
         importlib.reload(pu)
         assert pu.is_8gb_mode() is True
 
     def test_8gb_mode_reduces_limits(self, monkeypatch):
         monkeypatch.setenv("OFFICE_MCP_8GB_MODE", "1")
         import importlib
+
         import shared.platform_utils as pu
+
         importlib.reload(pu)
         assert pu.get_max_paragraphs() < 50
         assert pu.get_max_cells() < 200
@@ -348,7 +351,9 @@ class TestGitops:
     def test_git_integration_disabled_by_env(self, monkeypatch):
         monkeypatch.setenv("GIT_INTEGRATION", "false")
         import importlib
+
         import shared.gitops as go
+
         importlib.reload(go)
 
         assert go.is_git_repo("/any/path") is False
@@ -363,8 +368,8 @@ class TestDocDiff:
     def test_diff_docx_identical_files(self, tmp_path):
         """Identical files produce no changes."""
         pytest.importorskip("docx")
-        from tests.create_fixtures import create_docx_fixtures
         import sys
+
         sys.path.insert(0, str(Path(__file__).parent.parent))
 
         fixtures = Path(__file__).parent / "fixtures"
@@ -403,6 +408,7 @@ class TestDocDiff:
 
         # Modify b.docx
         from docx import Document
+
         doc = Document(str(tmp_path / "b.docx"))
         if doc.paragraphs:
             # Change first non-empty paragraph

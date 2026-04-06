@@ -156,9 +156,7 @@ def test_delete_chart_works(workbook: Path) -> None:
     """Add a chart then delete it — verifies deletion path executes."""
     sheet_name = _first_sheet(workbook)
     # First add a chart
-    add_result = add_chart(
-        str(workbook), sheet_name, "bar", "A1:B5", "ToDelete", "F2"
-    )
+    add_result = add_chart(str(workbook), sheet_name, "bar", "A1:B5", "ToDelete", "F2")
     assert add_result["success"] is True
 
     # Now delete it (it should be at index 0 if the sheet had no charts, else last)

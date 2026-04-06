@@ -1,7 +1,6 @@
 """Document diff engine — paragraph, cell, and shape-level comparison."""
 
 import difflib
-from pathlib import Path
 from typing import Any
 
 MAX_CHANGED_CELLS = 500
@@ -67,9 +66,7 @@ def diff_docx(path_a: str, path_b: str) -> dict[str, Any]:
         }
 
 
-def diff_xlsx(
-    path_a: str, path_b: str, sheet_name: str | None = None
-) -> dict[str, Any]:
+def diff_xlsx(path_a: str, path_b: str, sheet_name: str | None = None) -> dict[str, Any]:
     """
     Compare two .xlsx files at cell level.
 
@@ -117,9 +114,7 @@ def diff_xlsx(
                 val_a = ws_a[coord].value if coord in ws_a else None
                 val_b = ws_b[coord].value if coord in ws_b else None
                 if val_a != val_b:
-                    changed_cells.append(
-                        {"cell": coord, "old": val_a, "new": val_b}
-                    )
+                    changed_cells.append({"cell": coord, "old": val_a, "new": val_b})
                     total_changes += 1
                     if total_changes >= MAX_CHANGED_CELLS:
                         truncated = True
@@ -164,19 +159,9 @@ def diff_pptx(path_a: str, path_b: str) -> dict[str, Any]:
         count_b = len(prs_b.slides)
 
         changes: list[dict[str, Any]] = []
-        for i, (slide_a, slide_b) in enumerate(
-            zip(prs_a.slides, prs_b.slides)
-        ):
-            shapes_a = {
-                s.name: s.text_frame.text
-                for s in slide_a.shapes
-                if s.has_text_frame
-            }
-            shapes_b = {
-                s.name: s.text_frame.text
-                for s in slide_b.shapes
-                if s.has_text_frame
-            }
+        for i, (slide_a, slide_b) in enumerate(zip(prs_a.slides, prs_b.slides)):
+            shapes_a = {s.name: s.text_frame.text for s in slide_a.shapes if s.has_text_frame}
+            shapes_b = {s.name: s.text_frame.text for s in slide_b.shapes if s.has_text_frame}
 
             all_names = set(shapes_a) | set(shapes_b)
             for name in sorted(all_names):
@@ -226,7 +211,6 @@ def format_diff_as_text(diff: dict[str, Any]) -> str:
     # DOCX diff
     if "paragraph_count_a" in diff:
         for change in diff.get("changes", []):
-            tag = change["type"]
             for text in change.get("a_text", []):
                 lines.append(f"- {text[:120]}")
             for text in change.get("b_text", []):
@@ -242,9 +226,7 @@ def format_diff_as_text(diff: dict[str, Any]) -> str:
     # PPTX diff
     if "text_changes" in diff:
         for change in diff["text_changes"]:
-            lines.append(
-                f"Slide {change['slide_index']} / {change['shape_name']}:"
-            )
+            lines.append(f"Slide {change['slide_index']} / {change['shape_name']}:")
             old = (change["old_text"] or "")[:80]
             new = (change["new_text"] or "")[:80]
             lines.append(f"  - {old}")
@@ -253,9 +235,7 @@ def format_diff_as_text(diff: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _summarise_docx_diff(
-    changes: list[dict[str, Any]], count_a: int, count_b: int
-) -> str:
+def _summarise_docx_diff(changes: list[dict[str, Any]], count_a: int, count_b: int) -> str:
     if not changes:
         return "No changes detected."
     n_changed = sum(1 for c in changes if c["type"] == "replace")
@@ -288,9 +268,7 @@ def _summarise_xlsx_diff(result: dict[str, Any]) -> str:
     return ". ".join(parts) + "." if parts else "No changes detected."
 
 
-def _summarise_pptx_diff(
-    changes: list[dict[str, Any]], count_a: int, count_b: int
-) -> str:
+def _summarise_pptx_diff(changes: list[dict[str, Any]], count_a: int, count_b: int) -> str:
     if not changes and count_a == count_b:
         return "No changes detected."
     parts = []

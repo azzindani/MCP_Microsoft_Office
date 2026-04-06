@@ -1,4 +1,5 @@
 """DOCX New MCP server — create Word documents from scratch."""
+
 from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
@@ -43,9 +44,7 @@ def create_from_template(
     open_after: bool = True,
 ) -> dict:
     """Copy template .docx, fill {key: value} substitutions, save."""
-    return engine.create_from_template(
-        template_path, output_path, substitutions, open_after
-    )
+    return engine.create_from_template(template_path, output_path, substitutions, open_after)
 
 
 @mcp.tool()
@@ -58,9 +57,7 @@ def create_letter(
     open_after: bool = True,
 ) -> dict:
     """Create a formatted business letter .docx."""
-    return engine.create_letter(
-        output_path, from_name, to_name, subject, body, open_after
-    )
+    return engine.create_letter(output_path, from_name, to_name, subject, body, open_after)
 
 
 @mcp.tool()

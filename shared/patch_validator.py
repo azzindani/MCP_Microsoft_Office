@@ -22,24 +22,16 @@ _OP_REQUIRED_FIELDS: dict[str, list[str]] = {
 }
 
 # Regex for DOCX section addresses: §1, §1.2, §1.p4, §1.t0, §1.t0.r3.c1, p47
-_DOCX_ADDRESS_RE = re.compile(
-    r"^(§\d+(\.\d+)*(\.p\d+|\.t\d+(\.\w+)*)?|p\d+)$"
-)
+_DOCX_ADDRESS_RE = re.compile(r"^(§\d+(\.\d+)*(\.p\d+|\.t\d+(\.\w+)*)?|p\d+)$")
 
 # Regex for Excel cell notation: A1, B5, Z100, AA1
-_XLSX_ADDRESS_RE = re.compile(
-    r"^[A-Z]{1,3}\d+$"
-)
+_XLSX_ADDRESS_RE = re.compile(r"^[A-Z]{1,3}\d+$")
 
 # Regex for PPTX addresses: slide[N]/shape[name] or slide[N]/shape[name]/pN
-_PPTX_ADDRESS_RE = re.compile(
-    r"^slide\[\d+\]/shape\[.+\](/p\d+)?$"
-)
+_PPTX_ADDRESS_RE = re.compile(r"^slide\[\d+\]/shape\[.+\](/p\d+)?$")
 
 
-def validate_ops(
-    ops: Any, allowed_ops: list[str]
-) -> tuple[bool, str]:
+def validate_ops(ops: Any, allowed_ops: list[str]) -> tuple[bool, str]:
     """
     Validate a patch op array before applying.
 

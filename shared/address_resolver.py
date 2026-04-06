@@ -15,8 +15,8 @@ class AddressError(Exception):
 @dataclass
 class DocxNode:
     paragraph: Any = None  # docx.text.paragraph.Paragraph
-    table: Any = None       # docx.table.Table
-    cell: Any = None        # docx.table._Cell
+    table: Any = None  # docx.table.Table
+    cell: Any = None  # docx.table._Cell
     para_index: int = -1
     table_index: int = -1
     row_index: int = -1
@@ -67,9 +67,6 @@ def build_docx_index(doc: Any) -> dict[str, Any]:
     sections: list[dict[str, Any]] = []
     section_num = 0
 
-    # Build para ranges
-    heading_indices = [h[0] for h in headings]
-
     for h_idx, (para_idx, level, text) in enumerate(headings):
         if level != 1:
             continue
@@ -81,12 +78,6 @@ def build_docx_index(doc: Any) -> dict[str, Any]:
             if future_level == 1:
                 end_idx = future_para_idx - 1
                 break
-
-        # Count tables in range
-        table_count = 0
-        for i in range(para_idx, end_idx + 1):
-            # Tables are not paragraphs in python-docx, count via body elements
-            pass  # Simplified — actual table counting done separately
 
         sections.append(
             {
@@ -124,9 +115,7 @@ def resolve_docx_address(doc: Any, address: str) -> DocxNode:
     if re.match(r"^p\d+$", address):
         idx = int(address[1:])
         if idx < 0 or idx >= len(paragraphs):
-            raise AddressError(
-                f"Paragraph index {idx} out of range (0-{len(paragraphs)-1})"
-            )
+            raise AddressError(f"Paragraph index {idx} out of range (0-{len(paragraphs) - 1})")
         return DocxNode(paragraph=paragraphs[idx], para_index=idx)
 
     # Section address
@@ -191,9 +180,7 @@ def fetch_section_content(doc: Any, address: str) -> dict[str, Any]:
                     ],
                     "tables": [],
                 }
-        raise AddressError(
-            f"Address '{address}' not valid for flat document. Use pN notation."
-        )
+        raise AddressError(f"Address '{address}' not valid for flat document. Use pN notation.")
 
     # Sectioned document
     section_match = re.match(r"^§(\d+)$", address)
@@ -204,8 +191,7 @@ def fetch_section_content(doc: Any, address: str) -> dict[str, Any]:
     section_num = int(section_match.group(1))
     if section_num < 1 or section_num > len(sections):
         raise AddressError(
-            f"Section §{section_num} not found. "
-            f"Document has {len(sections)} sections."
+            f"Section §{section_num} not found. Document has {len(sections)} sections."
         )
 
     section = sections[section_num - 1]
@@ -237,8 +223,8 @@ def fetch_section_content(doc: Any, address: str) -> dict[str, Any]:
 
 @dataclass
 class XlsxNode:
-    cell: Any = None    # openpyxl Cell
-    cells: Any = None   # list of cells for range
+    cell: Any = None  # openpyxl Cell
+    cells: Any = None  # list of cells for range
 
 
 def build_xlsx_index(wb: Any) -> dict[str, Any]:
@@ -338,8 +324,7 @@ def resolve_pptx_address(prs: Any, address: str) -> PptxNode:
 
     if slide_idx >= len(prs.slides):
         raise AddressError(
-            f"Slide index {slide_idx} out of range. "
-            f"Presentation has {len(prs.slides)} slides."
+            f"Slide index {slide_idx} out of range. Presentation has {len(prs.slides)} slides."
         )
 
     slide = prs.slides[slide_idx]
@@ -352,8 +337,7 @@ def resolve_pptx_address(prs: Any, address: str) -> PptxNode:
     if shape is None:
         available = [s.name for s in slide.shapes]
         raise AddressError(
-            f"Shape '{shape_name}' not found on slide {slide_idx}. "
-            f"Available: {available}"
+            f"Shape '{shape_name}' not found on slide {slide_idx}. Available: {available}"
         )
 
     if para_idx is not None:
@@ -362,8 +346,7 @@ def resolve_pptx_address(prs: Any, address: str) -> PptxNode:
         paras = shape.text_frame.paragraphs
         if para_idx >= len(paras):
             raise AddressError(
-                f"Paragraph index {para_idx} out of range. "
-                f"Shape has {len(paras)} paragraphs."
+                f"Paragraph index {para_idx} out of range. Shape has {len(paras)} paragraphs."
             )
         return PptxNode(
             slide=slide,

@@ -7,17 +7,17 @@ from typing import Any
 from shared.file_utils import resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_pdf_converter
-from shared.progress import fail, info, ok, warn
+from shared.progress import fail, info, ok
 from shared.receipt import append_receipt
 from shared.version_control import snapshot
-
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _not_found(path: Path, progress: list[dict[str, Any]]) -> dict[str, Any]:
-    progress.append(fail(f"File not found", str(path.name)))
+    progress.append(fail("File not found", str(path.name)))
     return {
         "success": False,
         "error": f"File not found: {path}",
@@ -27,9 +27,7 @@ def _not_found(path: Path, progress: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _wrong_type(
-    path: Path, expected: str, progress: list[dict[str, Any]]
-) -> dict[str, Any]:
+def _wrong_type(path: Path, expected: str, progress: list[dict[str, Any]]) -> dict[str, Any]:
     progress.append(fail(f"Wrong file type: {path.suffix}", f"Expected {expected}"))
     return {
         "success": False,
@@ -71,6 +69,7 @@ def _out_of_range(
 # Tool implementations
 # ---------------------------------------------------------------------------
 
+
 def set_heading(file_path: str, paragraph_index: int, level: int) -> dict[str, Any]:
     """Apply Heading 1-6 style to paragraph N."""
     progress: list[dict[str, Any]] = []
@@ -110,10 +109,13 @@ def set_heading(file_path: str, paragraph_index: int, level: int) -> dict[str, A
         progress.append(notify_reload(str(path), "docx"))
 
         append_receipt(
-            str(path), "set_heading", "docx_layout",
+            str(path),
+            "set_heading",
+            "docx_layout",
             {"paragraph_index": paragraph_index, "level": level},
             f"✔ Applied Heading {level} to paragraph {paragraph_index}",
-            backup, True,
+            backup,
+            True,
         )
 
         return {
@@ -128,11 +130,17 @@ def set_heading(file_path: str, paragraph_index: int, level: int) -> dict[str, A
     except Exception as e:
         progress.append(fail(str(e)))
         append_receipt(
-            file_path, "set_heading", "docx_layout",
+            file_path,
+            "set_heading",
+            "docx_layout",
             {"paragraph_index": paragraph_index, "level": level},
-            f"✘ {e}", backup, False,
+            f"✘ {e}",
+            backup,
+            False,
         )
-        return _error(str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup)
+        return _error(
+            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
+        )
 
 
 def set_font(
@@ -195,11 +203,19 @@ def set_font(
         progress.append(notify_reload(str(path), "docx"))
 
         append_receipt(
-            str(path), "set_font", "docx_layout",
-            {"paragraph_index": paragraph_index, "font_name": font_name,
-             "font_size": font_size, "bold": bold, "italic": italic},
+            str(path),
+            "set_font",
+            "docx_layout",
+            {
+                "paragraph_index": paragraph_index,
+                "font_name": font_name,
+                "font_size": font_size,
+                "bold": bold,
+                "italic": italic,
+            },
             f"✔ Font updated: {detail}",
-            backup, True,
+            backup,
+            True,
         )
 
         return {
@@ -214,16 +230,20 @@ def set_font(
     except Exception as e:
         progress.append(fail(str(e)))
         append_receipt(
-            file_path, "set_font", "docx_layout",
+            file_path,
+            "set_font",
+            "docx_layout",
             {"paragraph_index": paragraph_index},
-            f"✘ {e}", backup, False,
+            f"✘ {e}",
+            backup,
+            False,
         )
-        return _error(str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup)
+        return _error(
+            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
+        )
 
 
-def set_paragraph_style(
-    file_path: str, paragraph_index: int, style_name: str
-) -> dict[str, Any]:
+def set_paragraph_style(file_path: str, paragraph_index: int, style_name: str) -> dict[str, Any]:
     """Apply a named style from the document style gallery to paragraph N."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -246,7 +266,7 @@ def set_paragraph_style(
             progress.append(fail(f"Style not found: {style_name}"))
             return _error(
                 f"Style '{style_name}' not found in document.",
-                f"Available styles include: Normal, Body Text, Heading 1-6.",
+                "Available styles include: Normal, Body Text, Heading 1-6.",
                 progress,
             )
 
@@ -264,10 +284,13 @@ def set_paragraph_style(
         progress.append(notify_reload(str(path), "docx"))
 
         append_receipt(
-            str(path), "set_paragraph_style", "docx_layout",
+            str(path),
+            "set_paragraph_style",
+            "docx_layout",
             {"paragraph_index": paragraph_index, "style_name": style_name},
             f"✔ Applied style '{style_name}' to paragraph {paragraph_index}",
-            backup, True,
+            backup,
+            True,
         )
 
         return {
@@ -282,11 +305,17 @@ def set_paragraph_style(
     except Exception as e:
         progress.append(fail(str(e)))
         append_receipt(
-            file_path, "set_paragraph_style", "docx_layout",
+            file_path,
+            "set_paragraph_style",
+            "docx_layout",
             {"paragraph_index": paragraph_index, "style_name": style_name},
-            f"✘ {e}", backup, False,
+            f"✘ {e}",
+            backup,
+            False,
         )
-        return _error(str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup)
+        return _error(
+            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
+        )
 
 
 def add_image(
@@ -311,7 +340,7 @@ def add_image(
 
         img_path = Path(image_path).resolve()
         if not img_path.exists():
-            progress.append(fail(f"Image file not found", str(img_path.name)))
+            progress.append(fail("Image file not found", str(img_path.name)))
             return _error(
                 f"Image file not found: {image_path}",
                 "Check that image_path is an absolute path to an existing image file.",
@@ -338,18 +367,28 @@ def add_image(
         para = doc.paragraphs[paragraph_index]
         run = para.add_run()
         run.add_picture(str(img_path), width=Inches(width_inches))
-        progress.append(ok(f"Inserted image into paragraph {paragraph_index}",
-                           f"{img_path.name} at {width_inches}in"))
+        progress.append(
+            ok(
+                f"Inserted image into paragraph {paragraph_index}",
+                f"{img_path.name} at {width_inches}in",
+            )
+        )
 
         doc.save(str(path))
         progress.append(notify_reload(str(path), "docx"))
 
         append_receipt(
-            str(path), "add_image", "docx_layout",
-            {"paragraph_index": paragraph_index, "image_path": image_path,
-             "width_inches": width_inches},
+            str(path),
+            "add_image",
+            "docx_layout",
+            {
+                "paragraph_index": paragraph_index,
+                "image_path": image_path,
+                "width_inches": width_inches,
+            },
             f"✔ Inserted {img_path.name} at paragraph {paragraph_index}",
-            backup, True,
+            backup,
+            True,
         )
 
         return {
@@ -365,11 +404,17 @@ def add_image(
     except Exception as e:
         progress.append(fail(str(e)))
         append_receipt(
-            file_path, "add_image", "docx_layout",
+            file_path,
+            "add_image",
+            "docx_layout",
             {"paragraph_index": paragraph_index, "image_path": image_path},
-            f"✘ {e}", backup, False,
+            f"✘ {e}",
+            backup,
+            False,
         )
-        return _error(str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup)
+        return _error(
+            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
+        )
 
 
 def set_page_margins(
@@ -412,10 +457,13 @@ def set_page_margins(
         progress.append(notify_reload(str(path), "docx"))
 
         append_receipt(
-            str(path), "set_page_margins", "docx_layout",
+            str(path),
+            "set_page_margins",
+            "docx_layout",
             {"top": top, "bottom": bottom, "left": left, "right": right},
             f"✔ Margins updated: {detail}",
-            backup, True,
+            backup,
+            True,
         )
 
         return {
@@ -433,11 +481,17 @@ def set_page_margins(
     except Exception as e:
         progress.append(fail(str(e)))
         append_receipt(
-            file_path, "set_page_margins", "docx_layout",
+            file_path,
+            "set_page_margins",
+            "docx_layout",
             {"top": top, "bottom": bottom, "left": left, "right": right},
-            f"✘ {e}", backup, False,
+            f"✘ {e}",
+            backup,
+            False,
         )
-        return _error(str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup)
+        return _error(
+            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
+        )
 
 
 def add_header_footer(
@@ -477,17 +531,19 @@ def add_header_footer(
             else:
                 section.footer.paragraphs[0].text = text
 
-        progress.append(ok(f"Set {location} text on {section_count} section(s)",
-                           f'"{text[:60]}"'))
+        progress.append(ok(f"Set {location} text on {section_count} section(s)", f'"{text[:60]}"'))
 
         doc.save(str(path))
         progress.append(notify_reload(str(path), "docx"))
 
         append_receipt(
-            str(path), "add_header_footer", "docx_layout",
+            str(path),
+            "add_header_footer",
+            "docx_layout",
             {"text": text, "location": location},
             f"✔ {location.capitalize()} set: {text[:60]}",
-            backup, True,
+            backup,
+            True,
         )
 
         return {
@@ -503,11 +559,17 @@ def add_header_footer(
     except Exception as e:
         progress.append(fail(str(e)))
         append_receipt(
-            file_path, "add_header_footer", "docx_layout",
+            file_path,
+            "add_header_footer",
+            "docx_layout",
             {"text": text, "location": location},
-            f"✘ {e}", backup, False,
+            f"✘ {e}",
+            backup,
+            False,
         )
-        return _error(str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup)
+        return _error(
+            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
+        )
 
 
 def export_pdf(file_path: str, output_path: str = "", open_after: bool = True) -> dict[str, Any]:
@@ -548,8 +610,13 @@ def export_pdf(file_path: str, output_path: str = "", open_after: bool = True) -
 
         if converter == "libreoffice":
             cmd = [
-                "libreoffice", "--headless", "--convert-to", "pdf",
-                "--outdir", str(out_dir), str(path),
+                "libreoffice",
+                "--headless",
+                "--convert-to",
+                "pdf",
+                "--outdir",
+                str(out_dir),
+                str(path),
             ]
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
             # LibreOffice may exit 0 but still fail to produce a file
@@ -568,6 +635,7 @@ def export_pdf(file_path: str, output_path: str = "", open_after: bool = True) -
         elif converter == "word":
             try:
                 import docx2pdf  # type: ignore[import-untyped]
+
                 docx2pdf.convert(str(path), str(out_path))
             except Exception as e:
                 progress.append(fail(f"Word conversion failed: {e}"))
@@ -577,10 +645,11 @@ def export_pdf(file_path: str, output_path: str = "", open_after: bool = True) -
                     progress,
                 )
 
-        progress.append(ok(f"Exported to PDF", out_path.name))
+        progress.append(ok("Exported to PDF", out_path.name))
 
         if open_after:
             from shared.platform_utils import open_file
+
             open_file(out_path)
             progress.append(ok("Opened PDF in default viewer"))
 

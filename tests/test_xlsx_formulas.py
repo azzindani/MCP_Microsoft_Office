@@ -132,9 +132,7 @@ def test_set_conditional_format_less_than(workbook: Path) -> None:
     sheet_name = wb.sheetnames[0]
     wb.close()
 
-    result = set_conditional_format(
-        str(workbook), sheet_name, "A1:A10", "less_than", 50.0, "red"
-    )
+    result = set_conditional_format(str(workbook), sheet_name, "A1:A10", "less_than", 50.0, "red")
     assert result["success"] is True
 
 
@@ -196,9 +194,7 @@ def test_set_data_validation_decimal(workbook: Path) -> None:
     sheet_name = wb.sheetnames[0]
     wb.close()
 
-    result = set_data_validation(
-        str(workbook), sheet_name, "B1:B10", "decimal", "0", "100"
-    )
+    result = set_data_validation(str(workbook), sheet_name, "B1:B10", "decimal", "0", "100")
     assert result["success"] is True
 
 
@@ -207,9 +203,7 @@ def test_set_data_validation_invalid_type(workbook: Path) -> None:
     sheet_name = wb.sheetnames[0]
     wb.close()
 
-    result = set_data_validation(
-        str(workbook), sheet_name, "A1:A5", "not_a_type"
-    )
+    result = set_data_validation(str(workbook), sheet_name, "A1:A5", "not_a_type")
     assert result["success"] is False
     assert "hint" in result
 

@@ -1,4 +1,5 @@
 """PPTX New MCP server — create PowerPoint presentations from scratch."""
+
 from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP

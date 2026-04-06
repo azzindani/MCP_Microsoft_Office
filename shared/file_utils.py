@@ -10,6 +10,7 @@ from typing import Any
 
 try:
     import json5  # type: ignore[import-untyped]
+
     _HAS_JSON5 = True
 except ImportError:
     _HAS_JSON5 = False
@@ -34,8 +35,7 @@ def resolve_path(raw: str) -> Path:
 
     # Strip wrapping quotes (drag-and-drop artifact)
     if len(s) >= 2 and (
-        (s.startswith('"') and s.endswith('"'))
-        or (s.startswith("'") and s.endswith("'"))
+        (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'"))
     ):
         s = s[1:-1].strip()
 

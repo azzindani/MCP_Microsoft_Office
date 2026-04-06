@@ -9,7 +9,6 @@ Usage:
 """
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
@@ -23,9 +22,6 @@ from shared.platform_utils import (
     get_cursor_config_path,
     get_lmstudio_mcp_config_path,
     get_windsurf_config_path,
-    is_linux,
-    is_macos,
-    is_windows,
 )
 
 REPO_ROOT = Path(__file__).parent.parent.resolve()

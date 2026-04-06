@@ -80,9 +80,7 @@ def commit(repo_path: str, message: str, author: str = "office-mcp") -> str | No
         return None
 
 
-def get_log(
-    repo_path: str, file_path: str, max_entries: int = 20
-) -> list[dict]:
+def get_log(repo_path: str, file_path: str, max_entries: int = 20) -> list[dict]:
     """Return Git log for file_path as list of dicts, newest first."""
     if not _git_enabled():
         return []

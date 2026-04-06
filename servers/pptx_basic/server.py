@@ -32,17 +32,13 @@ def read_slide_text(file_path: str, slide_index: int) -> dict:
 
 
 @mcp.tool()
-def set_text(
-    file_path: str, slide_index: int, shape_name: str, new_text: str
-) -> dict:
+def set_text(file_path: str, slide_index: int, shape_name: str, new_text: str) -> dict:
     """Replace shape text using run-level editing."""
     return engine.set_text(file_path, slide_index, shape_name, new_text)
 
 
 @mcp.tool()
-def add_slide(
-    file_path: str, layout_name: str, title: str = "", body: str = ""
-) -> dict:
+def add_slide(file_path: str, layout_name: str, title: str = "", body: str = "") -> dict:
     """Append a slide with given layout, title, and body text."""
     return engine.add_slide(file_path, layout_name, title, body)
 
@@ -70,15 +66,11 @@ def add_text_box(
     height: float = 1.0,
 ) -> dict:
     """Add a text box to a slide at given position in inches."""
-    return engine.add_text_box(
-        file_path, slide_index, text, left, top, width, height
-    )
+    return engine.add_text_box(file_path, slide_index, text, left, top, width, height)
 
 
 @mcp.tool()
-def diff_versions(
-    file_path: str, timestamp_a: str, timestamp_b: str = "current"
-) -> dict:
+def diff_versions(file_path: str, timestamp_a: str, timestamp_b: str = "current") -> dict:
     """Compare two presentation versions by snapshot timestamp."""
     return engine.diff_versions(file_path, timestamp_a, timestamp_b)
 

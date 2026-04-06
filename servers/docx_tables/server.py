@@ -20,9 +20,7 @@ def read_table(file_path: str, table_index: int) -> dict:
 
 
 @mcp.tool()
-def search_table_cells(
-    file_path: str, query: str, max_results: int = 10
-) -> dict:
+def search_table_cells(file_path: str, query: str, max_results: int = 10) -> dict:
     """Scan all table cells for matching text. Returns coordinates."""
     return engine.search_table_cells(file_path, query, max_results)
 
@@ -34,9 +32,7 @@ def read_table_row(file_path: str, table_index: int, row: int) -> dict:
 
 
 @mcp.tool()
-def set_cell(
-    file_path: str, table_index: int, row: int, col: int, text: str
-) -> dict:
+def set_cell(file_path: str, table_index: int, row: int, col: int, text: str) -> dict:
     """Write text to a specific table cell. Snapshot taken before write."""
     return engine.set_cell(file_path, table_index, row, col, text)
 

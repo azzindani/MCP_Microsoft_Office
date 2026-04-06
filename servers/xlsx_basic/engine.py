@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import openpyxl
-from openpyxl.utils import get_column_letter, column_index_from_string
+from openpyxl.utils import column_index_from_string, get_column_letter
 
 from shared.file_utils import resolve_path
 from shared.live_edit import notify_reload
@@ -59,7 +59,7 @@ def list_sheets(file_path: str) -> dict[str, Any]:
     try:
         path = resolve_path(file_path)
         if not path.exists():
-            progress.append(fail(f"File not found", str(path)))
+            progress.append(fail("File not found", str(path)))
             return {
                 "success": False,
                 "error": f"File not found: {file_path}",
@@ -153,9 +153,7 @@ def get_sheet_summary(file_path: str, sheet_name: str) -> dict[str, Any]:
         for row_idx, row in enumerate(ws.iter_rows(values_only=False), start=1):
             if row_idx == 1:
                 for cell in row:
-                    header_row.append(
-                        {"cell": cell.coordinate, "value": cell.value}
-                    )
+                    header_row.append({"cell": cell.coordinate, "value": cell.value})
             else:
                 # First column sample — up to 5 non-empty values
                 if sample_count < 5 and row:
@@ -172,9 +170,7 @@ def get_sheet_summary(file_path: str, sheet_name: str) -> dict[str, Any]:
         if more_rows > 0:
             first_col_sample.append(f"... {more_rows} more rows")
 
-        progress.append(
-            ok(f"Summarised sheet '{sheet_name}'", f"{max_row} rows, {max_col} cols")
-        )
+        progress.append(ok(f"Summarised sheet '{sheet_name}'", f"{max_row} rows, {max_col} cols"))
         result: dict[str, Any] = {
             "success": True,
             "sheet": sheet_name,
@@ -284,9 +280,7 @@ def read_cell(file_path: str, sheet_name: str, cell_address: str) -> dict[str, A
         }
 
 
-def read_cell_range(
-    file_path: str, sheet_name: str, range_address: str
-) -> dict[str, Any]:
+def read_cell_range(file_path: str, sheet_name: str, range_address: str) -> dict[str, Any]:
     """Return a bounded 2D cell array. Max 200 cells."""
     progress: list[dict[str, Any]] = []
     rng = range_address.upper()
@@ -359,9 +353,7 @@ def read_cell_range(
         wb_val.close()
         wb_form.close()
 
-        progress.append(
-            ok(f"Read range {rng}", f"{cell_count} cells from '{sheet_name}'")
-        )
+        progress.append(ok(f"Read range {rng}", f"{cell_count} cells from '{sheet_name}'"))
         result: dict[str, Any] = {
             "success": True,
             "sheet": sheet_name,
@@ -437,9 +429,7 @@ def search_cells(
             for cell in row:
                 total_scanned += 1
                 if cell.value is not None and query_lower in str(cell.value).lower():
-                    matches.append(
-                        {"cell": cell.coordinate, "value": cell.value}
-                    )
+                    matches.append({"cell": cell.coordinate, "value": cell.value})
                     if len(matches) >= cap:
                         break
             if len(matches) >= cap:
@@ -479,9 +469,7 @@ def search_cells(
         }
 
 
-def set_cell(
-    file_path: str, sheet_name: str, cell_address: str, value: Any
-) -> dict[str, Any]:
+def set_cell(file_path: str, sheet_name: str, cell_address: str, value: Any) -> dict[str, Any]:
     """Write a value to a single cell by address."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -643,9 +631,7 @@ def set_range(
         }
 
 
-def insert_row(
-    file_path: str, sheet_name: str, row_index: int
-) -> dict[str, Any]:
+def insert_row(file_path: str, sheet_name: str, row_index: int) -> dict[str, Any]:
     """Insert an empty row at row_index (1-based), shifting existing rows down."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -705,9 +691,7 @@ def insert_row(
         }
 
 
-def delete_row(
-    file_path: str, sheet_name: str, row_index: int
-) -> dict[str, Any]:
+def delete_row(file_path: str, sheet_name: str, row_index: int) -> dict[str, Any]:
     """Remove row at row_index (1-based), shifting remaining rows up."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -741,9 +725,7 @@ def delete_row(
         ws = wb[sheet_name]
         max_row = ws.max_row or 0
         if row_index < 1 or row_index > max_row:
-            progress.append(
-                fail(f"Row {row_index} out of range", f"sheet has {max_row} rows")
-            )
+            progress.append(fail(f"Row {row_index} out of range", f"sheet has {max_row} rows"))
             return {
                 "success": False,
                 "error": f"row_index {row_index} out of range (1-{max_row})",
@@ -913,10 +895,8 @@ def sort_sheet(
             }
 
         if has_header:
-            header = all_rows[0]
             data_rows = all_rows[1:]
         else:
-            header = None
             data_rows = all_rows
 
         # Sort: None values sink to bottom
@@ -1104,11 +1084,7 @@ def find_duplicates(
         wb.close()
 
         # Keep only values that appear more than once
-        duplicates = [
-            {"value": v, "rows": rows}
-            for v, rows in value_rows.items()
-            if len(rows) > 1
-        ]
+        duplicates = [{"value": v, "rows": rows} for v, rows in value_rows.items() if len(rows) > 1]
 
         truncated = False
         if len(duplicates) > 100:

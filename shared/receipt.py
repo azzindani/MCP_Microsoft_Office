@@ -3,7 +3,7 @@
 import json
 import shutil
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -28,15 +28,13 @@ def append_receipt(
         receipt_path = path.parent / f"{path.stem}.mcp_receipt.json"
 
         if receipt_path.exists():
-            data: dict[str, Any] = json.loads(
-                receipt_path.read_text(encoding="utf-8")
-            )
+            data: dict[str, Any] = json.loads(receipt_path.read_text(encoding="utf-8"))
         else:
             data = {"file": path.name, "entries": []}
 
         data["entries"].append(
             {
-                "ts": datetime.now(timezone.utc).isoformat(),
+                "ts": datetime.now(UTC).isoformat(),
                 "tool": tool,
                 "server": server,
                 "args": _sanitise_args(args),

@@ -28,12 +28,8 @@ def _not_found(path: Path, progress: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _wrong_type(
-    path: Path, expected: str, progress: list[dict[str, Any]]
-) -> dict[str, Any]:
-    progress.append(
-        fail(f"Wrong file type: {path.suffix}", f"Expected: {expected}")
-    )
+def _wrong_type(path: Path, expected: str, progress: list[dict[str, Any]]) -> dict[str, Any]:
+    progress.append(fail(f"Wrong file type: {path.suffix}", f"Expected: {expected}"))
     return {
         "success": False,
         "error": f"Expected {expected} file, got {path.suffix}",
@@ -186,9 +182,7 @@ def read_table(file_path: str, table_index: int) -> dict[str, Any]:
         return _error(str(e), "Check file_path and table_index.", progress)
 
 
-def search_table_cells(
-    file_path: str, query: str, max_results: int = 10
-) -> dict[str, Any]:
+def search_table_cells(file_path: str, query: str, max_results: int = 10) -> dict[str, Any]:
     """Scan all table cells for text match. Return cell coordinates only."""
     progress: list[dict[str, Any]] = []
     try:
@@ -215,12 +209,14 @@ def search_table_cells(
                 for c_idx, cell in enumerate(row.cells):
                     cells_scanned += 1
                     if query_lower in cell.text.lower():
-                        matches.append({
-                            "table_index": t_idx,
-                            "row": r_idx,
-                            "col": c_idx,
-                            "text": cell.text,
-                        })
+                        matches.append(
+                            {
+                                "table_index": t_idx,
+                                "row": r_idx,
+                                "col": c_idx,
+                                "text": cell.text,
+                            }
+                        )
                         if len(matches) >= max_results:
                             break
                 if len(matches) >= max_results:
@@ -285,8 +281,7 @@ def read_table_row(file_path: str, table_index: int, row: int) -> dict[str, Any]
             )
 
         cells = [
-            {"col": c_idx, "text": cell.text}
-            for c_idx, cell in enumerate(tbl.rows[row].cells)
+            {"col": c_idx, "text": cell.text} for c_idx, cell in enumerate(tbl.rows[row].cells)
         ]
         progress.append(ok(f"Read row {row} of table {table_index}", f"{len(cells)} cells"))
 
@@ -308,9 +303,7 @@ def read_table_row(file_path: str, table_index: int, row: int) -> dict[str, Any]
 # ---------------------------------------------------------------------------
 
 
-def set_cell(
-    file_path: str, table_index: int, row: int, col: int, text: str
-) -> dict[str, Any]:
+def set_cell(file_path: str, table_index: int, row: int, col: int, text: str) -> dict[str, Any]:
     """Write text to a specific table cell. Snapshot taken before write."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -396,12 +389,12 @@ def set_cell(
             backup=backup,
             success=False,
         )
-        return _error(str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup)
+        return _error(
+            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
+        )
 
 
-def add_row(
-    file_path: str, table_index: int, data: list[str]
-) -> dict[str, Any]:
+def add_row(file_path: str, table_index: int, data: list[str]) -> dict[str, Any]:
     """Append a row to table N. data is a list of cell strings."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -478,7 +471,9 @@ def add_row(
             backup=backup,
             success=False,
         )
-        return _error(str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup)
+        return _error(
+            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
+        )
 
 
 def delete_row(file_path: str, table_index: int, row: int) -> dict[str, Any]:
@@ -562,7 +557,9 @@ def delete_row(file_path: str, table_index: int, row: int) -> dict[str, Any]:
             backup=backup,
             success=False,
         )
-        return _error(str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup)
+        return _error(
+            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
+        )
 
 
 def add_table(
@@ -664,7 +661,9 @@ def add_table(
             backup=backup,
             success=False,
         )
-        return _error(str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup)
+        return _error(
+            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
+        )
 
 
 def delete_table(file_path: str, table_index: int) -> dict[str, Any]:
@@ -737,4 +736,6 @@ def delete_table(file_path: str, table_index: int) -> dict[str, Any]:
             backup=backup,
             success=False,
         )
-        return _error(str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup)
+        return _error(
+            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
+        )
