@@ -54,6 +54,36 @@ def create_from_template(
     )
 
 
+@mcp.tool()
+def create_from_csv(
+    csv_path: str,
+    output_path: str,
+    sheet_name: str = "Data",
+    delimiter: str = ",",
+    has_header: bool = True,
+    open_after: bool = True,
+) -> dict:
+    """Import a CSV file into a new Excel workbook."""
+    return engine.create_from_csv(csv_path, output_path, sheet_name, delimiter, has_header, open_after)
+
+
+@mcp.tool()
+def create_invoice(
+    output_path: str,
+    company_name: str,
+    client_name: str,
+    invoice_number: str,
+    items: list,
+    tax_rate: float = 0.0,
+    currency: str = "USD",
+    open_after: bool = True,
+) -> dict:
+    """Create a formatted invoice .xlsx with items, totals, and tax formula."""
+    return engine.create_invoice(
+        output_path, company_name, client_name, invoice_number, items, tax_rate, currency, open_after
+    )
+
+
 def main() -> None:
     mcp.run()
 

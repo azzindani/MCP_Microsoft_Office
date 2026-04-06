@@ -80,6 +80,40 @@ def set_autofilter(
     return engine.set_autofilter(file_path, sheet_name, range_address)
 
 
+@mcp.tool()
+def fill_formula_down(
+    file_path: str,
+    sheet_name: str,
+    formula: str,
+    start_cell: str,
+    end_row: int,
+) -> dict:
+    """Fill formula down from start_cell to end_row, adjusting row refs."""
+    return engine.fill_formula_down(file_path, sheet_name, formula, start_cell, end_row)
+
+
+@mcp.tool()
+def auto_sum(
+    file_path: str,
+    sheet_name: str,
+    data_range: str,
+    sum_cell: str,
+    function_name: str = "SUM",
+) -> dict:
+    """Add SUM/AVERAGE/COUNT/MAX/MIN formula for a range into sum_cell."""
+    return engine.auto_sum(file_path, sheet_name, data_range, sum_cell, function_name)
+
+
+@mcp.tool()
+def convert_to_values(
+    file_path: str,
+    sheet_name: str,
+    range_address: str,
+) -> dict:
+    """Replace formulas with their calculated values in a range."""
+    return engine.convert_to_values(file_path, sheet_name, range_address)
+
+
 def main() -> None:
     mcp.run()
 

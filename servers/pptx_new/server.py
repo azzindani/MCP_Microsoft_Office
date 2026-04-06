@@ -50,6 +50,30 @@ def create_from_template(
     return engine.create_from_template(template_path, output_path, open_after)
 
 
+@mcp.tool()
+def create_agenda(
+    output_path: str,
+    meeting_title: str,
+    date: str,
+    items: list,
+    presenter: str = "",
+    open_after: bool = True,
+) -> dict:
+    """Create a meeting agenda .pptx from a list of {topic,duration,owner} items."""
+    return engine.create_agenda(output_path, meeting_title, date, items, presenter, open_after)
+
+
+@mcp.tool()
+def create_from_docx(
+    docx_path: str,
+    output_path: str,
+    max_slides: int = 20,
+    open_after: bool = True,
+) -> dict:
+    """Convert a Word document outline into a PowerPoint presentation."""
+    return engine.create_from_docx(docx_path, output_path, max_slides, open_after)
+
+
 def main() -> None:
     mcp.run()
 

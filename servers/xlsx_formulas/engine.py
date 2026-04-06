@@ -522,3 +522,293 @@ def set_autofilter(
             "progress": progress,
             "token_estimate": 15,
         }
+
+
+def fill_formula_down(
+    file_path: str,
+    sheet_name: str,
+    formula: str,
+    start_cell: str,
+    end_row: int,
+) -> dict[str, Any]:
+    """Fill formula down from start_cell to end_row, adjusting row references."""
+    progress: list[dict[str, Any]] = []
+    backup: str | None = None
+    try:
+        if not formula.startswith("="):
+            progress.append(fail("Formula must start with '='", formula))
+            return {
+                "success": False,
+                "error": "Formula must start with '='",
+                "hint": "Prefix the formula with '=', e.g. '=B2*C2'.",
+                "progress": progress,
+                "token_estimate": 15,
+            }
+
+        addr = start_cell.upper()
+        if not _validate_cell(addr):
+            progress.append(fail(f"Invalid start_cell: {start_cell}"))
+            return {
+                "success": False,
+                "error": f"Invalid cell address: {start_cell}",
+                "hint": "Use Excel notation like D2 or B5.",
+                "progress": progress,
+                "token_estimate": 15,
+            }
+
+        # Parse column letters and start row from start_cell
+        col_match = re.match(r"^([A-Z]+)(\d+)$", addr)
+        if not col_match:
+            progress.append(fail(f"Cannot parse start_cell: {start_cell}"))
+            return {
+                "success": False,
+                "error": f"Cannot parse cell address: {start_cell}",
+                "hint": "Use Excel notation like D2.",
+                "progress": progress,
+                "token_estimate": 15,
+            }
+        col_letters = col_match.group(1)
+        start_row = int(col_match.group(2))
+
+        if end_row < start_row:
+            progress.append(fail(f"end_row {end_row} is before start_row {start_row}"))
+            return {
+                "success": False,
+                "error": f"end_row ({end_row}) must be >= start_row ({start_row})",
+                "hint": "end_row is the last row number to fill to.",
+                "progress": progress,
+                "token_estimate": 15,
+            }
+
+        path = resolve_path(file_path)
+        wb, err = _open_wb(path, progress)
+        if err:
+            return err
+
+        backup = snapshot(str(path))
+        progress.append(ok("Snapshot saved", Path(backup).name))
+
+        ws, err = _check_sheet(wb, sheet_name, progress, backup)
+        if err:
+            return err
+
+        # Write formula to each row, adjusting row numbers in cell references
+        cells_filled = 0
+        for target_row in range(start_row, end_row + 1):
+            adjusted = re.sub(
+                r"([A-Z]+)(" + str(start_row) + r")\b",
+                lambda m, tr=target_row: m.group(1) + str(tr),
+                formula,
+            )
+            ws[f"{col_letters}{target_row}"] = adjusted
+            cells_filled += 1
+
+        wb.save(str(path))
+        wb.close()
+
+        progress.append(ok(
+            f"Filled formula down {col_letters}{start_row}:{col_letters}{end_row}",
+            f"{cells_filled} cells",
+        ))
+        progress.append(notify_reload(str(path), "xlsx"))
+        result: dict[str, Any] = {
+            "success": True,
+            "op": "fill_formula_down",
+            "sheet": sheet_name,
+            "column": col_letters,
+            "start_row": start_row,
+            "end_row": end_row,
+            "cells_filled": cells_filled,
+            "backup": backup,
+            "progress": progress,
+        }
+        result["token_estimate"] = len(str(result)) // 4
+        return result
+
+    except Exception as e:
+        progress.append(fail(str(e)))
+        return {
+            "success": False,
+            "error": str(e),
+            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "backup": backup,
+            "progress": progress,
+            "token_estimate": 15,
+        }
+
+
+def auto_sum(
+    file_path: str,
+    sheet_name: str,
+    data_range: str,
+    sum_cell: str,
+    function_name: str = "SUM",
+) -> dict[str, Any]:
+    """Write a SUM/AVERAGE/COUNT/MAX/MIN formula for data_range into sum_cell."""
+    progress: list[dict[str, Any]] = []
+    backup: str | None = None
+    valid_functions = {"SUM", "AVERAGE", "COUNT", "MAX", "MIN"}
+    try:
+        fn = function_name.upper()
+        if fn not in valid_functions:
+            progress.append(fail(f"Unknown function: {function_name}"))
+            return {
+                "success": False,
+                "error": f"Unknown function_name: {function_name}",
+                "hint": f"Allowed functions: {', '.join(sorted(valid_functions))}",
+                "progress": progress,
+                "token_estimate": 15,
+            }
+
+        if not _validate_range(data_range.upper()):
+            progress.append(fail(f"Invalid data_range: {data_range}"))
+            return {
+                "success": False,
+                "error": f"Invalid range address: {data_range}",
+                "hint": "Use Excel range notation like B2:B20.",
+                "progress": progress,
+                "token_estimate": 15,
+            }
+
+        addr = sum_cell.upper()
+        if not _validate_cell(addr):
+            progress.append(fail(f"Invalid sum_cell: {sum_cell}"))
+            return {
+                "success": False,
+                "error": f"Invalid cell address: {sum_cell}",
+                "hint": "Use Excel notation like B21.",
+                "progress": progress,
+                "token_estimate": 15,
+            }
+
+        path = resolve_path(file_path)
+        wb, err = _open_wb(path, progress)
+        if err:
+            return err
+
+        backup = snapshot(str(path))
+        progress.append(ok("Snapshot saved", Path(backup).name))
+
+        ws, err = _check_sheet(wb, sheet_name, progress, backup)
+        if err:
+            return err
+
+        formula = f"={fn}({data_range})"
+        ws[addr] = formula
+        wb.save(str(path))
+        wb.close()
+
+        progress.append(ok(f"Set {addr} = {formula}", sheet_name))
+        progress.append(notify_reload(str(path), "xlsx"))
+        result: dict[str, Any] = {
+            "success": True,
+            "op": "auto_sum",
+            "sheet": sheet_name,
+            "sum_cell": addr,
+            "formula": formula,
+            "data_range": data_range,
+            "function_name": fn,
+            "backup": backup,
+            "progress": progress,
+        }
+        result["token_estimate"] = len(str(result)) // 4
+        return result
+
+    except Exception as e:
+        progress.append(fail(str(e)))
+        return {
+            "success": False,
+            "error": str(e),
+            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "backup": backup,
+            "progress": progress,
+            "token_estimate": 15,
+        }
+
+
+def convert_to_values(
+    file_path: str,
+    sheet_name: str,
+    range_address: str,
+) -> dict[str, Any]:
+    """Replace formula cells with their calculated values in a range."""
+    progress: list[dict[str, Any]] = []
+    backup: str | None = None
+    try:
+        if not _validate_range(range_address.upper()):
+            progress.append(fail(f"Invalid range: {range_address}"))
+            return {
+                "success": False,
+                "error": f"Invalid range address: {range_address}",
+                "hint": "Use Excel range notation like B2:D10.",
+                "progress": progress,
+                "token_estimate": 15,
+            }
+
+        path = resolve_path(file_path)
+        wb, err = _open_wb(path, progress)
+        if err:
+            return err
+
+        # Load a second copy with data_only=True to read evaluated values
+        wb_values = openpyxl.load_workbook(str(path), data_only=True)
+
+        if sheet_name not in wb.sheetnames:
+            progress.append(fail(f"Sheet '{sheet_name}' not found"))
+            wb.close()
+            wb_values.close()
+            return {
+                "success": False,
+                "error": f"Sheet '{sheet_name}' not found",
+                "hint": "Use list_sheets to get available sheet names.",
+                "progress": progress,
+                "token_estimate": 15,
+            }
+
+        backup = snapshot(str(path))
+        progress.append(ok("Snapshot saved", Path(backup).name))
+
+        ws = wb[sheet_name]
+        ws_values = wb_values[sheet_name]
+
+        converted = 0
+        for row in ws_values[range_address.upper()]:
+            for cell_v in row:
+                coord = cell_v.coordinate
+                cell_w = ws[coord]
+                # Only replace formula cells (value starts with "=")
+                if isinstance(cell_w.value, str) and cell_w.value.startswith("="):
+                    cell_w.value = cell_v.value
+                    converted += 1
+
+        wb_values.close()
+        wb.save(str(path))
+        wb.close()
+
+        progress.append(ok(
+            f"Converted formulas to values in {range_address}",
+            f"{converted} formula{'s' if converted != 1 else ''} replaced",
+        ))
+        progress.append(notify_reload(str(path), "xlsx"))
+        result: dict[str, Any] = {
+            "success": True,
+            "op": "convert_to_values",
+            "sheet": sheet_name,
+            "range": range_address,
+            "formulas_converted": converted,
+            "backup": backup,
+            "progress": progress,
+        }
+        result["token_estimate"] = len(str(result)) // 4
+        return result
+
+    except Exception as e:
+        progress.append(fail(str(e)))
+        return {
+            "success": False,
+            "error": str(e),
+            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "backup": backup,
+            "progress": progress,
+            "token_estimate": 15,
+        }

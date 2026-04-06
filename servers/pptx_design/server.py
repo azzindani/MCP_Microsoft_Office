@@ -86,6 +86,31 @@ def export_pdf(
     return engine.export_pdf(file_path, output_path, open_after)
 
 
+@mcp.tool()
+def add_image_to_all_slides(
+    file_path: str,
+    image_path: str,
+    left: float = 0.1,
+    top: float = 0.1,
+    width: float = 1.0,
+    height: float = 0.5,
+) -> dict:
+    """Add the same image (logo/watermark) to every slide at given position."""
+    return engine.add_image_to_all_slides(file_path, image_path, left, top, width, height)
+
+
+@mcp.tool()
+def set_font_all_slides(
+    file_path: str,
+    font_name: str = "",
+    font_size: float = 0,
+    bold: bool = False,
+    color_hex: str = "",
+) -> dict:
+    """Apply font name/size/bold/color to every text run on all slides."""
+    return engine.set_font_all_slides(file_path, font_name, font_size, bold, color_hex)
+
+
 def main() -> None:
     mcp.run()
 

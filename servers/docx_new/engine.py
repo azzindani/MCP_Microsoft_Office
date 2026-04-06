@@ -379,3 +379,202 @@ def create_letter(
             str(exc),
             "Check that output_path is a valid writable path ending in .docx.",
         )
+
+
+def merge_documents(
+    file_paths: list,
+    output_path: str,
+    add_page_break: bool = True,
+    open_after: bool = True,
+) -> dict[str, Any]:
+    """Merge multiple .docx files into one document."""
+    progress: list[dict[str, Any]] = []
+    try:
+        import copy
+
+        from docx import Document  # type: ignore[import-untyped]
+        from docx.oxml import OxmlElement  # type: ignore[import-untyped]
+        from docx.oxml.ns import qn  # type: ignore[import-untyped]
+
+        if not isinstance(file_paths, list) or len(file_paths) == 0:
+            progress.append(fail("file_paths must be a non-empty list"))
+            return _err(
+                progress,
+                "file_paths must be a non-empty list",
+                "Pass a list of absolute paths to .docx files.",
+            )
+
+        out_path = Path(output_path).resolve()
+        if out_path.suffix.lower() != ".docx":
+            progress.append(fail(f"output_path must end in .docx", out_path.suffix))
+            return _err(
+                progress,
+                f"Expected .docx output_path, got {out_path.suffix}",
+                "Set output_path to a path ending in .docx.",
+            )
+
+        # Validate all source files up front
+        resolved: list[Path] = []
+        for fp in file_paths:
+            p = Path(str(fp)).resolve()
+            if not p.exists():
+                progress.append(fail(f"File not found", str(p)))
+                return _err(
+                    progress,
+                    f"File not found: {fp}",
+                    "Check that all file_paths exist and are accessible.",
+                )
+            if p.suffix.lower() != ".docx":
+                progress.append(fail(f"Not a .docx file", p.suffix))
+                return _err(
+                    progress,
+                    f"Expected .docx file, got {p.suffix}",
+                    "All file_paths must point to .docx files.",
+                )
+            resolved.append(p)
+
+        _ensure_parent(out_path)
+        progress.append(info(f"Merging {len(resolved)} documents", out_path.name))
+
+        base_doc = Document()
+        # Remove the default empty paragraph python-docx adds to a new document
+        for para in base_doc.paragraphs:
+            p_elem = para._element
+            p_elem.getparent().remove(p_elem)
+
+        for idx, src_path in enumerate(resolved):
+            src_doc = Document(str(src_path))
+
+            if add_page_break and idx > 0:
+                page_para = base_doc.add_paragraph()
+                run = page_para.add_run()
+                break_elem = OxmlElement("w:br")
+                break_elem.set(qn("w:type"), "page")
+                run._r.append(break_elem)
+                progress.append(info(f"Added page break before {src_path.name}"))
+
+            for para in src_doc.paragraphs:
+                new_para = copy.deepcopy(para._element)
+                base_doc.element.body.append(new_para)
+
+            progress.append(ok(f"Merged {src_path.name}"))
+
+        base_doc.save(str(out_path))
+        progress.append(ok(f"Saved {out_path.name}", f"{len(resolved)} documents merged"))
+
+        _open_if_requested(out_path, open_after, progress)
+
+        return {
+            "success": True,
+            "op": "merge_documents",
+            "output": str(out_path),
+            "output_name": out_path.name,
+            "merged_count": len(resolved),
+            "progress": progress,
+            "token_estimate": _token_estimate(progress),
+        }
+    except Exception as exc:
+        logger.warning("merge_documents failed: %s", exc)
+        progress.append(fail(str(exc)))
+        return _err(
+            progress,
+            str(exc),
+            "Check that all file_paths are valid .docx files and output_path is writable.",
+        )
+
+
+def batch_create_from_template(
+    template_path: str,
+    data_list: list,
+    output_dir: str,
+    filename_key: str = "",
+    open_after: bool = False,
+) -> dict[str, Any]:
+    """Generate N .docx files from a template + list of {key:value} dicts."""
+    progress: list[dict[str, Any]] = []
+    try:
+        import shutil
+
+        import docxedit  # type: ignore[import-untyped]
+        from docx import Document  # type: ignore[import-untyped]
+
+        tpl_path = Path(template_path).resolve()
+        if not tpl_path.exists():
+            progress.append(fail("Template not found", str(tpl_path)))
+            return _err(
+                progress,
+                f"File not found: {template_path}",
+                "Check that template_path is an absolute path to an existing .docx file.",
+            )
+        if tpl_path.suffix.lower() != ".docx":
+            progress.append(fail("Template is not a .docx file", tpl_path.suffix))
+            return _err(
+                progress,
+                f"Expected .docx file, got {tpl_path.suffix}",
+                "Use the correct server for this file type.",
+            )
+
+        if not isinstance(data_list, list) or len(data_list) == 0:
+            progress.append(fail("data_list must be a non-empty list"))
+            return _err(
+                progress,
+                "data_list must be a non-empty list of dicts",
+                'Pass a list like [{"NAME": "Alice", "DATE": "April 1"}].',
+            )
+
+        out_dir = Path(output_dir).resolve()
+        out_dir.mkdir(parents=True, exist_ok=True)
+        progress.append(info(f"Generating {len(data_list)} documents", str(out_dir)))
+
+        created_files: list[str] = []
+
+        for idx, data_dict in enumerate(data_list):
+            if not isinstance(data_dict, dict):
+                progress.append(warn(f"Item {idx} is not a dict, skipping"))
+                continue
+
+            # Determine output filename
+            if filename_key and filename_key in data_dict:
+                stem = str(data_dict[filename_key])
+            else:
+                stem = f"document_{idx + 1:03d}"
+
+            out_file = out_dir / f"{stem}.docx"
+
+            # Copy template to output location
+            shutil.copy2(str(tpl_path), str(out_file))
+
+            # Open copy and apply substitutions using run-level editing
+            doc = Document(str(out_file))
+            for key, value in data_dict.items():
+                placeholder = "{{" + str(key) + "}}"
+                docxedit.replace_string(doc, placeholder, str(value))
+
+            doc.save(str(out_file))
+            created_files.append(out_file.name)
+            progress.append(ok(f"Created {out_file.name}"))
+
+            if open_after:
+                open_file(out_file)
+
+        progress.append(
+            ok(f"Batch complete", f"{len(created_files)} of {len(data_list)} created")
+        )
+
+        return {
+            "success": True,
+            "op": "batch_create",
+            "output_dir": str(out_dir),
+            "created_count": len(created_files),
+            "files": created_files,
+            "progress": progress,
+            "token_estimate": _token_estimate(progress),
+        }
+    except Exception as exc:
+        logger.warning("batch_create_from_template failed: %s", exc)
+        progress.append(fail(str(exc)))
+        return _err(
+            progress,
+            str(exc),
+            "Check template_path, output_dir permissions, and that data_list is a list of dicts.",
+        )

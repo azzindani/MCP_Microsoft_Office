@@ -75,6 +75,41 @@ def add_sheet(file_path: str, sheet_name: str = "") -> dict:
     return engine.add_sheet(file_path, sheet_name)
 
 
+@mcp.tool()
+def sort_sheet(
+    file_path: str,
+    sheet_name: str,
+    column: str,
+    ascending: bool = True,
+    has_header: bool = True,
+) -> dict:
+    """Sort sheet rows by column. column='A'. has_header skips row 1."""
+    return engine.sort_sheet(file_path, sheet_name, column, ascending, has_header)
+
+
+@mcp.tool()
+def rename_sheet(file_path: str, old_name: str, new_name: str) -> dict:
+    """Rename a sheet tab from old_name to new_name."""
+    return engine.rename_sheet(file_path, old_name, new_name)
+
+
+@mcp.tool()
+def find_duplicates(
+    file_path: str,
+    sheet_name: str,
+    column: str,
+    has_header: bool = True,
+) -> dict:
+    """Find duplicate values in a column. Returns rows where value repeats."""
+    return engine.find_duplicates(file_path, sheet_name, column, has_header)
+
+
+@mcp.tool()
+def copy_sheet(file_path: str, source_sheet: str, new_sheet_name: str) -> dict:
+    """Copy source_sheet to a new sheet named new_sheet_name."""
+    return engine.copy_sheet(file_path, source_sheet, new_sheet_name)
+
+
 def main() -> None:
     mcp.run()
 

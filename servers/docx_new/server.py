@@ -63,6 +63,31 @@ def create_letter(
     )
 
 
+@mcp.tool()
+def merge_documents(
+    file_paths: list,
+    output_path: str,
+    add_page_break: bool = True,
+    open_after: bool = True,
+) -> dict:
+    """Merge multiple .docx files into one document."""
+    return engine.merge_documents(file_paths, output_path, add_page_break, open_after)
+
+
+@mcp.tool()
+def batch_create_from_template(
+    template_path: str,
+    data_list: list,
+    output_dir: str,
+    filename_key: str = "",
+    open_after: bool = False,
+) -> dict:
+    """Generate N .docx files from a template + list of {key:value} dicts."""
+    return engine.batch_create_from_template(
+        template_path, data_list, output_dir, filename_key, open_after
+    )
+
+
 def main() -> None:
     mcp.run()
 

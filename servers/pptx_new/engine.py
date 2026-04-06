@@ -326,3 +326,203 @@ def create_from_template(
     except Exception as exc:
         logger.exception("create_from_template failed")
         return _error(str(exc), "Check template_path and output_path are valid.", progress)
+
+
+def create_agenda(
+    output_path: str,
+    meeting_title: str,
+    date: str,
+    items: list,
+    presenter: str = "",
+    open_after: bool = True,
+) -> dict[str, Any]:
+    """Create a meeting agenda presentation with title and agenda slides."""
+    progress: list[dict[str, Any]] = []
+    path = Path(output_path)
+
+    try:
+        _ensure_parent(path)
+        progress.append(info("Creating agenda presentation", path.name))
+
+        prs = Presentation()
+
+        # Slide 1 — Title slide (layout index 0)
+        title_layout = prs.slide_layouts[0]
+        title_slide = prs.slides.add_slide(title_layout)
+        _set_placeholder_text(title_slide, 0, meeting_title)
+        subtitle = date
+        if presenter:
+            subtitle = f"{date}\nPresented by: {presenter}"
+        _set_placeholder_text(title_slide, 1, subtitle)
+        progress.append(ok("Added title slide", meeting_title[:60]))
+
+        # Slide 2 — Agenda (layout index 1)
+        content_layout = prs.slide_layouts[1]
+        agenda_slide = prs.slides.add_slide(content_layout)
+        _set_placeholder_text(agenda_slide, 0, "Agenda")
+
+        agenda_lines = []
+        for item in items:
+            topic = item.get("topic", "")
+            duration = item.get("duration", "")
+            owner = item.get("owner", "")
+            agenda_lines.append(f"• {topic} ({duration}) — {owner}")
+        agenda_text = "\n".join(agenda_lines)
+
+        try:
+            tf = agenda_slide.placeholders[1].text_frame
+            tf.clear()
+            tf.text = agenda_text
+        except (IndexError, KeyError, AttributeError):
+            pass
+
+        progress.append(ok("Added agenda slide", f"{len(items)} item(s)"))
+
+        prs.save(str(path))
+        progress.append(ok(f"Saved {path.name}", "2 slides"))
+
+        if open_after:
+            open_file(path)
+            progress.append(ok("Opened in default application"))
+
+        return {
+            "success": True,
+            "op": "create_agenda",
+            "output": str(path),
+            "output_name": path.name,
+            "slide_count": 2,
+            "item_count": len(items),
+            "progress": progress,
+            "token_estimate": _token_estimate(progress),
+        }
+
+    except Exception as exc:
+        logger.exception("create_agenda failed")
+        return _error(str(exc), "Check output_path is writable and items is a valid list.", progress)
+
+
+def create_from_docx(
+    docx_path: str,
+    output_path: str,
+    max_slides: int = 20,
+    open_after: bool = True,
+) -> dict[str, Any]:
+    """Convert a Word document outline into a PowerPoint presentation."""
+    progress: list[dict[str, Any]] = []
+    path = Path(output_path)
+    docx_file = Path(docx_path)
+
+    if not docx_file.exists():
+        return _error(
+            f"File not found: {docx_file.name}",
+            "Check that docx_path is absolute and the file exists.",
+            progress,
+        )
+    if docx_file.suffix.lower() != ".docx":
+        return _error(
+            f"Expected .docx file, got {docx_file.suffix}",
+            "Provide a .docx file as the source document.",
+            progress,
+        )
+
+    try:
+        from docx import Document as DocxDocument  # type: ignore[import-untyped]
+
+        _ensure_parent(path)
+        progress.append(info(f"Reading {docx_file.name}", str(docx_file)))
+
+        doc = DocxDocument(str(docx_file))
+        paragraphs = doc.paragraphs
+        source_para_count = len(paragraphs)
+        progress.append(ok(f"Opened {docx_file.name}", f"{source_para_count} paragraphs"))
+
+        # Extract slide structure from headings
+        slides_data: list[dict[str, Any]] = []
+        current_slide: dict[str, Any] | None = None
+        has_headings = any(
+            p.style.name.startswith("Heading") for p in paragraphs
+        )
+
+        if has_headings:
+            for para in paragraphs:
+                style = para.style.name
+                text = para.text.strip()
+                if not text:
+                    continue
+                if style == "Heading 1":
+                    current_slide = {"title": text, "content_lines": []}
+                    slides_data.append(current_slide)
+                elif style == "Heading 2":
+                    if current_slide is not None:
+                        current_slide["content_lines"].append(f"  • {text}")
+                    else:
+                        current_slide = {"title": text, "content_lines": []}
+                        slides_data.append(current_slide)
+                else:
+                    # Normal / Body Text — add to current slide content
+                    if current_slide is not None:
+                        current_slide["content_lines"].append(text)
+        else:
+            # No headings: group every non-empty paragraph into slides of 5
+            bullets: list[str] = [p.text.strip() for p in paragraphs if p.text.strip()]
+            group_size = 5
+            for i in range(0, len(bullets), group_size):
+                group = bullets[i:i + group_size]
+                title = group[0] if group else f"Slide {len(slides_data) + 1}"
+                slides_data.append({
+                    "title": title,
+                    "content_lines": group[1:],
+                })
+
+        # Cap at max_slides
+        slides_data = slides_data[:max_slides]
+
+        prs = Presentation()
+        slide_count = 0
+
+        for i, slide_def in enumerate(slides_data):
+            title_text = slide_def["title"]
+            content_text = "\n".join(slide_def.get("content_lines", []))
+
+            if i == 0:
+                layout = prs.slide_layouts[0]  # Title Slide
+                slide = prs.slides.add_slide(layout)
+                _set_placeholder_text(slide, 0, title_text)
+                if content_text:
+                    _set_placeholder_text(slide, 1, content_text)
+            else:
+                layout = prs.slide_layouts[1]  # Title and Content
+                slide = prs.slides.add_slide(layout)
+                _set_placeholder_text(slide, 0, title_text)
+                if content_text:
+                    try:
+                        tf = slide.placeholders[1].text_frame
+                        tf.clear()
+                        tf.text = content_text
+                    except (IndexError, KeyError, AttributeError):
+                        pass
+
+            slide_count += 1
+            progress.append(ok(f"Added slide {i + 1}: {title_text[:40] or '(no title)'}"))
+
+        prs.save(str(path))
+        progress.append(ok(f"Saved {path.name}", f"{slide_count} slides"))
+
+        if open_after:
+            open_file(path)
+            progress.append(ok("Opened in default application"))
+
+        return {
+            "success": True,
+            "op": "create_from_docx",
+            "output": str(path),
+            "output_name": path.name,
+            "slide_count": slide_count,
+            "source_paragraph_count": source_para_count,
+            "progress": progress,
+            "token_estimate": _token_estimate(progress),
+        }
+
+    except Exception as exc:
+        logger.exception("create_from_docx failed")
+        return _error(str(exc), "Check docx_path and output_path are valid.", progress)

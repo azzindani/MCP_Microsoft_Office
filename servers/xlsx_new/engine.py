@@ -334,3 +334,232 @@ def create_from_template(
             "progress": progress,
             "token_estimate": _token_estimate(progress),
         }
+
+
+def create_from_csv(
+    csv_path: str,
+    output_path: str,
+    sheet_name: str = "Data",
+    delimiter: str = ",",
+    has_header: bool = True,
+    open_after: bool = True,
+) -> dict[str, Any]:
+    """Import a CSV file into a new Excel workbook."""
+    progress: list[dict[str, Any]] = []
+    try:
+        import csv
+
+        src = Path(csv_path).resolve()
+        if not src.exists():
+            progress.append(fail("CSV file not found", str(src)))
+            return {
+                "success": False,
+                "error": f"File not found: {csv_path}",
+                "hint": "Check that csv_path is an absolute path to an existing CSV file.",
+                "progress": progress,
+                "token_estimate": _token_estimate(progress),
+            }
+
+        out_path = Path(output_path).resolve()
+        _ensure_parent(out_path)
+        progress.append(info(f"Reading CSV", src.name))
+
+        all_rows: list[list[Any]] = []
+        with open(str(src), newline="", encoding="utf-8-sig") as fh:
+            reader = csv.reader(fh, delimiter=delimiter)
+            for row in reader:
+                all_rows.append(list(row))
+
+        if len(all_rows) == 0:
+            progress.append(warn("CSV file is empty"))
+
+        row_count = len(all_rows) - (1 if has_header else 0)
+        col_count = max((len(r) for r in all_rows), default=0)
+        progress.append(ok(f"Read {len(all_rows)} row(s)", f"{col_count} column(s)"))
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        if ws is None:
+            ws = wb.create_sheet()
+        ws.title = sheet_name
+
+        for r_idx, row_data in enumerate(all_rows, start=1):
+            for c_idx, value in enumerate(row_data, start=1):
+                cell = ws.cell(row=r_idx, column=c_idx, value=value)
+                if has_header and r_idx == 1:
+                    cell.font = Font(bold=True)
+
+        wb.save(str(out_path))
+        progress.append(ok(f"Saved {out_path.name}", f"{row_count} data row(s)"))
+
+        if open_after:
+            open_file(out_path)
+            progress.append(ok("Opened in default application"))
+
+        result: dict[str, Any] = {
+            "success": True,
+            "op": "create_from_csv",
+            "output": str(out_path),
+            "output_name": out_path.name,
+            "row_count": row_count,
+            "column_count": col_count,
+            "progress": progress,
+        }
+        result["token_estimate"] = _token_estimate(result)
+        return result
+
+    except Exception as exc:
+        progress.append(fail(str(exc)))
+        return {
+            "success": False,
+            "error": str(exc),
+            "hint": (
+                "Check that csv_path points to a readable CSV file and "
+                "output_path is a writable .xlsx destination."
+            ),
+            "progress": progress,
+            "token_estimate": _token_estimate(progress),
+        }
+
+
+def create_invoice(
+    output_path: str,
+    company_name: str,
+    client_name: str,
+    invoice_number: str,
+    items: list,
+    tax_rate: float = 0.0,
+    currency: str = "USD",
+    open_after: bool = True,
+) -> dict[str, Any]:
+    """Create a formatted invoice .xlsx with items, totals, and tax formula."""
+    progress: list[dict[str, Any]] = []
+    try:
+        from openpyxl.styles import PatternFill  # type: ignore[import-untyped]
+
+        if not isinstance(items, list) or len(items) == 0:
+            progress.append(fail("items must be a non-empty list"))
+            return {
+                "success": False,
+                "error": "items must be a non-empty list",
+                "hint": (
+                    'Pass a list like [{"description":"Widget","quantity":2,"unit_price":50.0}].'
+                ),
+                "progress": progress,
+                "token_estimate": _token_estimate(progress),
+            }
+
+        out_path = Path(output_path).resolve()
+        _ensure_parent(out_path)
+        progress.append(info("Creating invoice", out_path.name))
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        if ws is None:
+            ws = wb.create_sheet()
+        ws.title = "Invoice"
+
+        # Header block
+        ws["A1"] = company_name
+        ws["A1"].font = Font(bold=True, size=16)
+        ws["A2"] = "INVOICE"
+        ws["A3"] = f"Invoice #: {invoice_number}"
+        ws["A4"] = f"Client: {client_name}"
+
+        # Column headers in row 6
+        header_fill = PatternFill(
+            start_color="E2EFDA", end_color="E2EFDA", fill_type="solid"
+        )
+        col_headers = ["Description", "Quantity", "Unit Price", "Total"]
+        for c_idx, label in enumerate(col_headers, start=1):
+            cell = ws.cell(row=6, column=c_idx, value=label)
+            cell.font = Font(bold=True)
+            cell.fill = header_fill
+
+        progress.append(ok("Written invoice header"))
+
+        # Item rows starting at row 7
+        item_start_row = 7
+        subtotal = 0.0
+        for i, item in enumerate(items):
+            row_num = item_start_row + i
+            description = item.get("description", "") if isinstance(item, dict) else str(item)
+            quantity = item.get("quantity", 0) if isinstance(item, dict) else 0
+            unit_price = item.get("unit_price", 0.0) if isinstance(item, dict) else 0.0
+            ws.cell(row=row_num, column=1, value=description)
+            ws.cell(row=row_num, column=2, value=quantity)
+            ws.cell(row=row_num, column=3, value=unit_price)
+            # Total formula: =B{row}*C{row}
+            ws.cell(row=row_num, column=4, value=f"=B{row_num}*C{row_num}")
+            subtotal += float(quantity) * float(unit_price)
+
+        last_item_row = item_start_row + len(items) - 1
+        progress.append(ok(f"Written {len(items)} item row(s)"))
+
+        # Subtotal row
+        subtotal_row = last_item_row + 2
+        ws.cell(row=subtotal_row, column=3, value="Subtotal")
+        ws.cell(row=subtotal_row, column=3).font = Font(bold=True)
+        ws.cell(
+            row=subtotal_row,
+            column=4,
+            value=f"=SUM(D{item_start_row}:D{last_item_row})",
+        )
+
+        current_row = subtotal_row
+
+        # Tax row (only if tax_rate > 0)
+        if tax_rate > 0:
+            tax_row = subtotal_row + 1
+            ws.cell(row=tax_row, column=3, value=f"Tax ({tax_rate * 100:.1f}%)")
+            ws.cell(row=tax_row, column=4, value=f"=D{subtotal_row}*{tax_rate}")
+            current_row = tax_row
+
+        # Total row
+        total_row = current_row + 1
+        ws.cell(row=total_row, column=3, value=f"Total ({currency})")
+        ws.cell(row=total_row, column=3).font = Font(bold=True)
+        if tax_rate > 0:
+            ws.cell(
+                row=total_row,
+                column=4,
+                value=f"=D{subtotal_row}+D{current_row}",
+            )
+        else:
+            ws.cell(row=total_row, column=4, value=f"=D{subtotal_row}")
+        ws.cell(row=total_row, column=4).font = Font(bold=True)
+
+        progress.append(ok("Written subtotal, tax, and total rows"))
+
+        wb.save(str(out_path))
+        progress.append(ok(f"Saved {out_path.name}"))
+
+        if open_after:
+            open_file(out_path)
+            progress.append(ok("Opened in default application"))
+
+        result: dict[str, Any] = {
+            "success": True,
+            "op": "create_invoice",
+            "output": str(out_path),
+            "output_name": out_path.name,
+            "item_count": len(items),
+            "subtotal": round(subtotal, 2),
+            "currency": currency,
+            "progress": progress,
+        }
+        result["token_estimate"] = _token_estimate(result)
+        return result
+
+    except Exception as exc:
+        progress.append(fail(str(exc)))
+        return {
+            "success": False,
+            "error": str(exc),
+            "hint": (
+                "Ensure items is a list of dicts with 'description', 'quantity', "
+                "and 'unit_price' keys. Check that output_path is writable."
+            ),
+            "progress": progress,
+            "token_estimate": _token_estimate(progress),
+        }

@@ -648,3 +648,166 @@ def export_pdf(
             "progress": progress,
             "token_estimate": 15,
         }
+
+
+def add_image_to_all_slides(
+    file_path: str,
+    image_path: str,
+    left: float = 0.1,
+    top: float = 0.1,
+    width: float = 1.0,
+    height: float = 0.5,
+) -> dict[str, Any]:
+    """Add the same image to every slide at a fixed position."""
+    progress: list[dict[str, Any]] = []
+    backup: str | None = None
+    try:
+        path = resolve_path(file_path)
+        prs, err = _open_prs(path, progress)
+        if err:
+            return err
+
+        # Validate image path and format
+        img_path = Path(image_path).resolve()
+        supported = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff"}
+        if not img_path.exists():
+            progress.append(fail(f"Image not found: {img_path.name}"))
+            return {
+                "success": False,
+                "error": f"Image file not found: {image_path}",
+                "hint": "Check that image_path is absolute and the file exists.",
+                "progress": progress,
+                "token_estimate": 15,
+            }
+        if img_path.suffix.lower() not in supported:
+            progress.append(fail(f"Unsupported image format: {img_path.suffix}"))
+            return {
+                "success": False,
+                "error": f"Unsupported image format: {img_path.suffix}",
+                "hint": f"Supported formats: {', '.join(sorted(supported))}",
+                "progress": progress,
+                "token_estimate": 15,
+            }
+
+        progress.append(ok(f"Opened {path.name}", f"{len(prs.slides)} slides"))
+
+        backup = snapshot(str(path))
+        progress.append(ok("Snapshot saved", Path(backup).name))
+
+        slide_count = len(prs.slides)
+        for slide in prs.slides:
+            slide.shapes.add_picture(
+                str(img_path),
+                Inches(left),
+                Inches(top),
+                Inches(width),
+                Inches(height),
+            )
+
+        prs.save(str(path))
+        progress.append(notify_reload(str(path), "pptx"))
+        progress.append(ok(f"Added image to {slide_count} slides", img_path.name))
+
+        result: dict[str, Any] = {
+            "success": True,
+            "op": "add_image_to_all_slides",
+            "image": img_path.name,
+            "slide_count": slide_count,
+            "backup": backup,
+            "progress": progress,
+        }
+        result["token_estimate"] = len(str(result)) // 4
+        return result
+
+    except Exception as e:
+        progress.append(fail(str(e)))
+        return {
+            "success": False,
+            "error": str(e),
+            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "backup": backup,
+            "progress": progress,
+            "token_estimate": 15,
+        }
+
+
+def set_font_all_slides(
+    file_path: str,
+    font_name: str = "",
+    font_size: float = 0,
+    bold: bool = False,
+    color_hex: str = "",
+) -> dict[str, Any]:
+    """Apply font settings to every text run across all slides."""
+    progress: list[dict[str, Any]] = []
+    backup: str | None = None
+    try:
+        path = resolve_path(file_path)
+        prs, err = _open_prs(path, progress)
+        if err:
+            return err
+
+        progress.append(ok(f"Opened {path.name}", f"{len(prs.slides)} slides"))
+
+        backup = snapshot(str(path))
+        progress.append(ok("Snapshot saved", Path(backup).name))
+
+        rgb: RGBColor | None = None
+        if color_hex:
+            clean = color_hex.lstrip("#")
+            rgb = RGBColor.from_string(clean)
+
+        slides_modified = 0
+        shapes_modified = 0
+        for slide in prs.slides:
+            slide_touched = False
+            for shape in slide.shapes:
+                if not shape.has_text_frame:
+                    continue
+                for para in shape.text_frame.paragraphs:
+                    for run in para.runs:
+                        if font_name:
+                            run.font.name = font_name
+                        if font_size > 0:
+                            run.font.size = Pt(font_size)
+                        if bold:
+                            run.font.bold = True
+                        if rgb is not None:
+                            run.font.color.rgb = rgb
+                shapes_modified += 1
+                slide_touched = True
+            if slide_touched:
+                slides_modified += 1
+
+        prs.save(str(path))
+        progress.append(notify_reload(str(path), "pptx"))
+        progress.append(ok(
+            f"Updated font on {slides_modified} slides",
+            f"{shapes_modified} shapes modified",
+        ))
+
+        result: dict[str, Any] = {
+            "success": True,
+            "op": "set_font_all_slides",
+            "slides_modified": slides_modified,
+            "shapes_modified": shapes_modified,
+            "font_name": font_name,
+            "font_size": font_size,
+            "bold": bold,
+            "color_hex": color_hex,
+            "backup": backup,
+            "progress": progress,
+        }
+        result["token_estimate"] = len(str(result)) // 4
+        return result
+
+    except Exception as e:
+        progress.append(fail(str(e)))
+        return {
+            "success": False,
+            "error": str(e),
+            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "backup": backup,
+            "progress": progress,
+            "token_estimate": 15,
+        }
