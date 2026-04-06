@@ -1,1 +1,518 @@
-# MCP_Microsoft_Office
+# MCP Microsoft Office
+
+A self-hosted MCP server that gives local LLMs full control over Word, Excel, and PowerPoint files. No cloud APIs, no API keys — everything runs on your machine and writes directly to your files.
+
+## Features
+
+- **96 tools** across 11 servers — Word, Excel, PowerPoint read, edit, and create
+- **Create new documents** — blank or structured, from text, sections, templates, or outlines
+- **Auto-open** — every creation and export tool opens the file in its native app automatically
+- **Batch generation** — one template + a list of data → N output files (offer letters, invoices, proposals)
+- **Fill formula down** — the drag-down equivalent: write a formula once, fill it across 1000 rows
+- **Doc → Presentation** — convert a Word outline into a PowerPoint draft in one tool call
+- **LOCATE → INSPECT → PATCH → VERIFY** workflow for surgical document edits
+- **Automatic version control** — every write is snapshotted and fully restorable
+- **Operation receipt logging** — full audit trail of all modifications per file
+- **8GB VRAM mode** — safe for machines with constrained local hardware
+- **Works with any local model** — Qwen, Llama, Mistral, Phi — any model that supports tool calling
+- **Zero cloud dependency** — no OneDrive, no Microsoft 365 subscription required
+
+## Quick Install (LM Studio — Windows)
+
+> **Tested on Windows 11** with LM Studio 0.3.x / 0.4.x and uv 0.5+.
+
+1. Open LM Studio → **Developer** tab (`</>` icon)
+2. Scroll to **MCP Servers** → click **Add Server**
+3. Paste the config for the servers you want (see combinations below)
+4. Restart LM Studio
+5. Wait for the green dot next to each server
+6. Start chatting — the model will see the tools immediately
+
+### Recommended starting config — Word + Create
+
+```json
+{
+  "mcpServers": {
+    "docx_basic": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\docx_basic') docx-basic"
+      ],
+      "env": { "OFFICE_MCP_8GB_MODE": "0" },
+      "timeout": 600000
+    },
+    "docx_new": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\docx_new') docx-new"
+      ],
+      "env": { "OFFICE_MCP_8GB_MODE": "0" },
+      "timeout": 600000
+    }
+  }
+}
+```
+
+### Full Excel config — read, edit, formulas
+
+```json
+{
+  "mcpServers": {
+    "xlsx_basic": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\xlsx_basic') xlsx-basic"
+      ],
+      "env": { "OFFICE_MCP_8GB_MODE": "0" },
+      "timeout": 600000
+    },
+    "xlsx_formulas": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\xlsx_formulas') xlsx-formulas"
+      ],
+      "env": { "OFFICE_MCP_8GB_MODE": "0" },
+      "timeout": 600000
+    },
+    "xlsx_new": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\xlsx_new') xlsx-new"
+      ],
+      "env": { "OFFICE_MCP_8GB_MODE": "0" },
+      "timeout": 600000
+    }
+  }
+}
+```
+
+### First Run
+
+The first launch clones the repo and installs all dependencies (~2–5 minutes). Subsequent launches are instant.
+
+### Requirements
+
+- **Git** — `git --version`
+- **uv** — `uv --version` ([install guide](https://docs.astral.sh/uv/getting-started/installation/))
+- **Python 3.11** (auto-managed by uv)
+- **LM Studio** with a model that supports tool calling (Qwen 2.5 7B+, Llama 3.1 8B+, etc.)
+- **Microsoft Office** installed is optional — only required for PDF export (`export_pdf`)
+
+---
+
+## Available Tools
+
+### Word — docx_basic (15 tools)
+
+Read, search, and edit existing `.docx` files surgically without touching surrounding content.
+
+| Tool | Purpose |
+|---|---|
+| `get_document_outline` | Return heading structure and paragraph indices — navigate without reading the full doc |
+| `get_document_index` | Section tree with paragraph ranges — zero body text returned |
+| `fetch_section` | Read only the paragraphs inside one addressed section |
+| `read_document` | Full document text (warns on large files, truncates at 150 paragraphs) |
+| `read_paragraph` | Single paragraph with full run detail (bold, italic, font, size per run) |
+| `read_paragraph_range` | Bounded paragraph range (max 50) |
+| `search_paragraphs` | Scan for matching text — returns only matching paragraphs, not the full doc |
+| `replace_text` | Find and replace preserving all run formatting (bold, italic, color) |
+| `insert_paragraph` | Insert a new paragraph at index N with a named style |
+| `delete_paragraph` | Remove paragraph by index or matching text |
+| `append_text` | Add a paragraph at the end of the document |
+| `get_history` | List all version snapshots for a file |
+| `restore_version` | Roll back a file to any previous snapshot |
+| `diff_versions` | Compare two versions — shows added, changed, and removed paragraphs |
+| `read_receipt` | Full audit trail of all tool operations on a file |
+
+### Word — docx_tables (9 tools)
+
+| Tool | Purpose |
+|---|---|
+| `list_tables` | Count tables, return dimensions of each |
+| `read_table` | Full table as 2D array with merged-cell handling |
+| `search_table_cells` | Scan all cells for matching text — returns coordinates |
+| `read_table_row` | Single row from table N |
+| `set_cell` | Write text to table[N] row[R] col[C] at run level |
+| `add_row` | Append a row with data values to table N |
+| `delete_row` | Remove row R from table N |
+| `add_table` | Insert a new table at paragraph position N |
+| `delete_table` | Remove table N from document |
+
+### Word — docx_layout (7 tools)
+
+| Tool | Purpose |
+|---|---|
+| `set_heading` | Apply Heading 1–6 style to paragraph N |
+| `set_font` | Set font name, size, bold, italic on paragraph N |
+| `set_paragraph_style` | Apply any named style from the document gallery |
+| `add_image` | Insert image at paragraph N with width control |
+| `set_page_margins` | Set top/bottom/left/right margins in cm |
+| `add_header_footer` | Set header or footer text for all pages |
+| `export_pdf` | Export to PDF via LibreOffice or Word. `open_after=True` opens it automatically |
+
+### Word — docx_new (7 tools)
+
+Create new Word documents from scratch. Every tool accepts `open_after=True`.
+
+| Tool | Purpose |
+|---|---|
+| `create_document` | Blank `.docx` — save and open |
+| `create_from_text` | Build from a `[{text, style}]` paragraph list |
+| `create_from_sections` | Structured doc from `[{heading, body}]` sections — Heading 1 title, Heading 2 sections |
+| `create_from_template` | Copy a template and fill `{{PLACEHOLDER}}` substitutions |
+| `create_letter` | Formatted business letter with sender, recipient, subject, body |
+| `merge_documents` | Combine multiple `.docx` files into one with optional page breaks |
+| `batch_create_from_template` | Template + `[{KEY: value}]` list → N output files (offer letters, proposals, contracts) |
+
+---
+
+### Excel — xlsx_basic (14 tools)
+
+| Tool | Purpose |
+|---|---|
+| `get_sheet_summary` | Sheet dimensions, header row, first-column sample — no cell data |
+| `list_sheets` | Sheet names with row/column counts |
+| `search_cells` | Scan all cells for matching text — returns addresses only |
+| `read_cell_range` | Bounded cell range as 2D array (max 200 cells) |
+| `read_cell` | Single cell: value, formula string, and data type |
+| `set_cell` | Write value to exact cell address |
+| `set_range` | Write 2D array to a cell range |
+| `insert_row` | Insert row at position N, shift down |
+| `delete_row` | Remove row N, shift up |
+| `add_sheet` | Create a new sheet with optional name |
+| `sort_sheet` | Sort all rows by a column (A→Z or Z→A), preserves header row |
+| `rename_sheet` | Rename a sheet tab |
+| `find_duplicates` | Find repeated values in a column — returns row numbers per value |
+| `copy_sheet` | Duplicate a sheet within the same workbook |
+
+### Excel — xlsx_formulas (9 tools)
+
+| Tool | Purpose |
+|---|---|
+| `set_formula` | Write a formula to a cell (`=SUM(B2:B10)` etc.) |
+| `fill_formula_down` | Drag-down equivalent — fill formula from start cell to end row, adjusting all row references automatically |
+| `auto_sum` | Add SUM / AVERAGE / COUNT / MAX / MIN formula for a range |
+| `convert_to_values` | Paste-as-values — replace formula cells with their calculated results |
+| `set_named_range` | Define a named range for formula use |
+| `set_conditional_format` | Color cells by rule (greater than, less than, between, equal to) |
+| `set_data_validation` | Add dropdown list or number constraint to a range |
+| `freeze_panes` | Freeze header rows and/or columns |
+| `set_autofilter` | Enable filter dropdowns on a header row range |
+
+### Excel — xlsx_charts (5 tools)
+
+| Tool | Purpose |
+|---|---|
+| `add_chart` | Create bar, line, pie, area, or scatter chart from a data range |
+| `update_chart` | Change chart title or data range (delete-and-recreate internally) |
+| `delete_chart` | Remove chart by name or index |
+| `add_pivot_table` | Create a pivot summary table from a data range |
+| `set_cell_style` | Set font, fill color (hex), border, and number format on a cell |
+
+### Excel — xlsx_new (6 tools)
+
+Create new Excel workbooks from scratch. Every tool accepts `open_after=True`.
+
+| Tool | Purpose |
+|---|---|
+| `create_workbook` | Blank `.xlsx` with a named sheet |
+| `create_from_data` | Workbook from headers + rows — first row auto-bolded |
+| `create_report` | Multi-sheet workbook with auto-generated Cover sheet |
+| `create_from_template` | Copy existing `.xlsx`, replace matching cell values |
+| `create_from_csv` | Import CSV file → formatted Excel workbook (no pandas required) |
+| `create_invoice` | Invoice with item rows, `=B*C` totals, SUM subtotal, tax formula |
+
+---
+
+### PowerPoint — pptx_basic (10 tools)
+
+| Tool | Purpose |
+|---|---|
+| `read_presentation` | Slide count, titles, shape counts, available layouts |
+| `read_slide` | All shapes with name, type, and text content for one slide |
+| `read_slide_text` | Quick text-only scan of one slide |
+| `search_slides` | Scan all slide text for a query — returns slide index + shape name |
+| `set_text` | Replace text in a named shape on a slide (run-level, preserves formatting) |
+| `add_slide` | Append slide with layout, title, and body text |
+| `delete_slide` | Remove slide by index |
+| `reorder_slide` | Move slide from index A to index B |
+| `add_text_box` | Insert text box at x/y (inches) position |
+| `add_image` | Insert image at x/y/width/height on a slide |
+
+### PowerPoint — pptx_design (8 tools)
+
+| Tool | Purpose |
+|---|---|
+| `set_background` | Solid hex color or image file background on a slide |
+| `set_font_style` | Font name/size/bold/color on a named shape |
+| `add_image_to_all_slides` | Add logo or watermark to every slide at a fixed position |
+| `set_font_all_slides` | Apply font name/size/bold/color to all text runs on all slides |
+| `add_table` | Insert table with data on a slide |
+| `add_chart` | Add bar/line/pie chart from data dict on a slide |
+| `duplicate_slide` | Copy slide N to position M |
+| `export_pdf` | Export to PDF via LibreOffice or PowerPoint. `open_after=True` opens it automatically |
+
+### PowerPoint — pptx_new (6 tools)
+
+Create new presentations from scratch. Every tool accepts `open_after=True`.
+
+| Tool | Purpose |
+|---|---|
+| `create_presentation` | Blank `.pptx` with a title slide |
+| `create_from_outline` | Deck from `[{title, content, layout}]` slide list |
+| `create_deck_from_data` | Title slide + content slides from `[{heading, bullets}]` list |
+| `create_from_template` | Copy existing `.pptx` as a starting point |
+| `create_agenda` | Meeting agenda deck: title slide + agenda slide from `[{topic, duration, owner}]` |
+| `create_from_docx` | Convert Word document outline → PowerPoint draft (H1=slide, H2=bullets) |
+
+---
+
+## Recommended Server Combinations
+
+Load only what the task requires — fewer tools in context means better model reliability.
+
+| Task | Servers to load | Tools in context |
+|---|---|---|
+| Edit an existing contract | `docx_basic` | 15 |
+| Contract + tables | `docx_basic` + `docx_tables` | 24 |
+| Format a document | `docx_layout` | 7 |
+| Write a new report or letter | `docx_new` | 7 |
+| Generate 20 offer letters from template | `docx_new` | 7 |
+| Data entry + formulas | `xlsx_basic` + `xlsx_formulas` | 23 |
+| Build an invoice or budget | `xlsx_new` + `xlsx_formulas` | 15 |
+| Create charts and dashboards | `xlsx_charts` | 5 |
+| Edit an existing presentation | `pptx_basic` | 10 |
+| Style and brand a deck | `pptx_basic` + `pptx_design` | 18 |
+| Create a presentation from scratch | `pptx_new` | 6 |
+| Full office workflow | Any 2 servers per format | ≤24 |
+
+---
+
+## Usage Examples
+
+### Write a report
+
+```
+Write me a 5-section business report on Q3 performance, save it as report.docx
+```
+
+### Create an offer letter from a template
+
+```
+I have a template at C:\HR\offer_template.docx with {{NAME}}, {{POSITION}}, {{SALARY}}, {{START_DATE}} placeholders.
+Generate offer letters for: Alice (Engineer, $90,000, May 1), Bob (Designer, $75,000, May 15).
+Save them to C:\HR\Offers\
+```
+
+### Edit a contract
+
+```
+In contract.docx, replace all instances of "30 days" with "14 days" without changing the formatting
+```
+
+### Compare two contract versions
+
+```
+Show me what changed between contract_v1.docx and contract_v2.docx
+```
+
+### Apply a VLOOKUP across 500 rows
+
+```
+In budget.xlsx sheet "Q3", write =VLOOKUP(A2,Sheet2!A:B,2,0) in cell B2, then fill it down to row 500
+```
+
+### Build an invoice
+
+```
+Create an invoice for Acme Corp from Widget Ltd.
+Invoice #INV-2026-001, items: Consulting 10 hours at $150, Support 5 hours at $80.
+Apply 10% tax. Save as invoice_april.xlsx
+```
+
+### Import CSV to Excel
+
+```
+Import my data from C:\exports\sales_q3.csv into a formatted Excel file at C:\reports\sales_q3.xlsx
+```
+
+### Sort and clean a spreadsheet
+
+```
+In employees.xlsx sheet "Staff", sort all rows by column C alphabetically, then find any duplicate email addresses in column D
+```
+
+### Turn meeting notes into a presentation
+
+```
+I have meeting_notes.docx with sections for each agenda topic.
+Convert it into a PowerPoint presentation and save as meeting_slides.pptx
+```
+
+### Create a meeting agenda deck
+
+```
+Create an agenda presentation for the Q2 planning meeting on April 15.
+Items: Revenue Review (15 min, Alice), Product Roadmap (20 min, Bob), Action Items (10 min, All).
+Presenter: Carol
+```
+
+### Add company logo to every slide
+
+```
+Add our logo from C:\assets\logo.png to every slide in pitch_deck.pptx.
+Place it in the top-right corner, 1 inch wide, 0.5 inch tall.
+```
+
+### Undo a change
+
+```
+Restore budget.xlsx to the previous version
+```
+
+---
+
+## Configuration
+
+### 8GB VRAM Mode
+
+For machines with ≤8 GB VRAM, set `OFFICE_MCP_8GB_MODE=1` in the `env` section of your MCP config. This reduces response sizes to keep tool results within the model's effective context window:
+
+| Limit | Normal | 8GB Mode |
+|---|---|---|
+| Max paragraphs returned | 50 | 20 |
+| Max cells returned | 200 | 100 |
+| Max search results | 50 | 10 |
+
+### Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `OFFICE_MCP_8GB_MODE` | `0` | Set to `1` for ≤8 GB VRAM machines |
+| `GIT_INTEGRATION` | `true` | Set to `false` to disable auto Git commits on edits |
+
+### Model Recommendations by VRAM
+
+| VRAM | Recommended model | Effective context |
+|---|---|---|
+| 6 GB | Qwen 2.5 7B Q4_K_M | ~8,000 tokens |
+| 8 GB | Qwen 2.5 9B Q3_K_S | ~12,000 tokens |
+| 12 GB | Qwen 2.5 9B Q8_0 | ~20,000 tokens |
+| 16 GB | Qwen 2.5 14B Q4_K_M | ~24,000 tokens |
+| 24 GB+ | Qwen 2.5 32B Q4_K_M | ~32,000 tokens |
+
+---
+
+## Uninstall
+
+**Step 1:** Remove from LM Studio
+1. Open LM Studio → Developer tab (`</>`)
+2. Delete the office MCP entries from MCP Servers
+3. Restart LM Studio
+
+**Step 2:** Delete installed files
+
+```cmd
+rmdir /s /q %USERPROFILE%\.mcp_servers\MCP_Microsoft_Office
+```
+
+---
+
+## Architecture
+
+```
+MCP_Microsoft_Office/
+├── servers/
+│   ├── docx_basic/          ← 15 tools: read, search, edit, history
+│   │   ├── server.py        ← thin MCP wrapper (zero domain logic)
+│   │   ├── engine.py        ← pure python-docx logic
+│   │   └── pyproject.toml
+│   ├── docx_tables/         ← 9 tools: table CRUD
+│   ├── docx_layout/         ← 7 tools: styles, fonts, margins, PDF export
+│   ├── docx_new/            ← 7 tools: create, merge, batch generate
+│   ├── xlsx_basic/          ← 14 tools: read, edit, sort, dedup
+│   ├── xlsx_formulas/       ← 9 tools: formulas, fill-down, auto-sum
+│   ├── xlsx_charts/         ← 5 tools: charts, pivot tables, cell styles
+│   ├── xlsx_new/            ← 6 tools: create, CSV import, invoice
+│   ├── pptx_basic/          ← 10 tools: read, edit, add, reorder slides
+│   ├── pptx_design/         ← 8 tools: backgrounds, fonts, global changes
+│   └── pptx_new/            ← 6 tools: create, agenda, doc→deck
+├── shared/
+│   ├── version_control.py   ← snapshot() and restore()
+│   ├── patch_validator.py   ← validate op arrays before apply
+│   ├── file_utils.py        ← path resolution, atomic writes
+│   ├── platform_utils.py    ← 8GB mode, limits, open_file()
+│   ├── progress.py          ← ok/fail/info/warn step helpers
+│   ├── receipt.py           ← per-file operation audit log
+│   ├── address_resolver.py  ← §N.pM / A1:B5 / slide[N]/shape[name] addressing
+│   ├── doc_diff.py          ← paragraph/cell/shape-level diff engine
+│   ├── gitops.py            ← optional auto-commit on every write
+│   └── live_edit.py         ← auto-reload in Word/Excel/LibreOffice after save
+├── tests/
+│   ├── fixtures/            ← real .docx .xlsx .pptx test files
+│   ├── conftest.py
+│   └── test_*.py            ← one test file per server
+├── install/
+│   ├── install.sh           ← Linux / macOS interactive installer
+│   ├── install.bat          ← Windows interactive installer
+│   └── mcp_config_writer.py ← writes LM Studio / Claude Desktop / Cursor config
+└── pyproject.toml           ← uv workspace root
+```
+
+Every server follows the same pattern: `server.py` is a thin MCP wrapper, `engine.py` contains all document logic and has zero MCP imports, making it directly testable with pytest.
+
+---
+
+## Development
+
+### Local setup
+
+```bash
+# Clone
+git clone https://github.com/azzindani/MCP_Microsoft_Office.git
+cd MCP_Microsoft_Office
+
+# Install all dependencies
+uv sync --all-packages
+
+# Generate test fixtures
+uv run python tests/create_fixtures.py
+
+# Run all tests
+uv run pytest tests/ -v --tb=short
+
+# Lint
+uv run ruff check .
+
+# Format check
+uv run ruff format --check .
+```
+
+### Run a single server locally
+
+```bash
+uv run --directory servers/docx_basic docx-basic
+```
+
+### Interactive installer (Linux / macOS)
+
+```bash
+bash install/install.sh
+```
+
+### Interactive installer (Windows)
+
+```cmd
+install\install.bat
+```
+
+---
+
+## License
+
+MIT

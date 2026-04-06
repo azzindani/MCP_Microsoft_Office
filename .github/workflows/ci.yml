@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python 3.11
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --all-packages --frozen
+
+      - name: Generate test fixtures
+        run: uv run python tests/create_fixtures.py
+
+      - name: Lint (ruff)
+        run: uv run ruff check .
+
+      - name: Format check (ruff)
+        run: uv run ruff format --check .
+
+      - name: Run tests
+        run: uv run pytest tests/ -v --tb=short
+
+      - name: Check tool docstring lengths
+        run: |
+          uv run python -c "
+          import ast, pathlib, sys
+          errors = []
+          for f in pathlib.Path('servers').rglob('server.py'):
+              src = f.read_text(encoding='utf-8')
+              tree = ast.parse(src)
+              for node in ast.walk(tree):
+                  if isinstance(node, ast.FunctionDef):
+                      if node.decorator_list:
+                          docstring = ast.get_docstring(node) or ''
+                          if len(docstring) > 80:
+                              errors.append(f'{f}:{node.lineno} {node.name!r} docstring is {len(docstring)} chars (max 80)')
+          if errors:
+              print('Tool docstring violations:')
+              for e in errors:
+                  print(' ', e)
+              sys.exit(1)
+          else:
+              print('All tool docstrings within 80 char limit.')
+          "

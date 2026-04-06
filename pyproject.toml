@@ -1,0 +1,53 @@
+[project]
+name = "office-mcp"
+version = "0.1.0"
+description = "MCP servers for Microsoft Office file formats"
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "MIT" }
+
+[tool.uv.workspace]
+members = [
+    "shared",
+    "servers/docx_basic",
+    "servers/docx_tables",
+    "servers/docx_layout",
+    "servers/docx_new",
+    "servers/xlsx_basic",
+    "servers/xlsx_formulas",
+    "servers/xlsx_charts",
+    "servers/xlsx_new",
+    "servers/pptx_basic",
+    "servers/pptx_design",
+    "servers/pptx_new",
+]
+
+[tool.uv.sources]
+shared = { workspace = true }
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "strict"
+reportMissingImports = true
+reportMissingTypeStubs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.408",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.15.9",
+]
