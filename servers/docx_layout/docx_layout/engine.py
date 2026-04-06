@@ -6,7 +6,7 @@ from typing import Any
 
 from shared.file_utils import resolve_path
 from shared.live_edit import notify_reload
-from shared.platform_utils import get_pdf_converter
+from shared.platform_utils import get_pdf_converter, resolve_output_path
 from shared.progress import fail, info, ok
 from shared.receipt import append_receipt
 from shared.version_control import snapshot
@@ -597,11 +597,8 @@ def export_pdf(file_path: str, output_path: str = "", open_after: bool = True) -
                 progress,
             )
 
-        # Determine output path
-        if output_path:
-            out_path = Path(output_path).resolve()
-        else:
-            out_path = path.with_suffix(".pdf")
+        # Determine output path — default to Downloads directory
+        out_path = resolve_output_path(output_path or path.stem + ".pdf", path.stem + ".pdf")
 
         out_dir = out_path.parent
         out_dir.mkdir(parents=True, exist_ok=True)

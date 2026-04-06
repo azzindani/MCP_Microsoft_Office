@@ -123,6 +123,43 @@ def get_max_search_results() -> int:
     return 10 if is_8gb_mode() else 50
 
 
+def get_downloads_dir() -> Path:
+    """Return the user's Downloads directory, creating it if needed."""
+    if is_windows():
+        # Try USERPROFILE\Downloads first; fall back to home
+        base = Path(os.environ.get("USERPROFILE", str(Path.home())))
+        d = base / "Downloads"
+    else:
+        # macOS and Linux both use ~/Downloads by convention
+        d = Path.home() / "Downloads"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def resolve_output_path(output_path: str, default_name: str) -> Path:
+    """
+    Resolve an output path, defaulting to the Downloads directory.
+
+    Rules:
+    - Empty string or bare filename (no directory) → ~/Downloads/<name>
+    - Relative path (has directory component) → resolved from cwd
+    - Absolute path → used as-is
+
+    Args:
+        output_path: The path string provided by the caller (may be empty).
+        default_name: Filename to use when output_path is empty.
+    """
+    if not output_path:
+        return get_downloads_dir() / default_name
+
+    p = Path(output_path)
+    # Bare filename: no directory separators
+    if p.parent == Path("."):
+        return get_downloads_dir() / p.name
+
+    return p.expanduser().resolve()
+
+
 def open_file(path: Path) -> None:
     """Open file in the default system application. Silently ignored on failure."""
     try:

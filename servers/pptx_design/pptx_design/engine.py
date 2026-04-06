@@ -13,7 +13,7 @@ from pptx.util import Inches, Pt
 
 from shared.file_utils import resolve_path
 from shared.live_edit import notify_reload
-from shared.platform_utils import get_pdf_converter
+from shared.platform_utils import get_pdf_converter, resolve_output_path
 from shared.progress import fail, ok
 from shared.version_control import snapshot
 
@@ -588,7 +588,7 @@ def export_pdf(
                 "token_estimate": 20,
             }
 
-        out = Path(output_path).resolve() if output_path else path.with_suffix(".pdf")
+        out = resolve_output_path(output_path or path.stem + ".pdf", path.stem + ".pdf")
 
         if converter == "libreoffice":
             result_proc = subprocess.run(

@@ -16,7 +16,7 @@ if str(_ROOT) not in sys.path:
 from pptx import Presentation  # noqa: E402
 from pptx.util import Inches, Pt  # noqa: E402,F401
 
-from shared.platform_utils import open_file  # noqa: E402
+from shared.platform_utils import open_file, resolve_output_path  # noqa: E402
 from shared.progress import fail, info, ok  # noqa: E402
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
@@ -74,7 +74,7 @@ def create_presentation(
 ) -> dict[str, Any]:
     """Create a blank presentation with a single title slide."""
     progress: list[dict[str, Any]] = []
-    path = Path(output_path)
+    path = resolve_output_path(output_path, "presentation.pptx")
 
     try:
         _ensure_parent(path)
@@ -122,7 +122,7 @@ def create_from_outline(
 ) -> dict[str, Any]:
     """Create a presentation from a list of slide descriptor dicts."""
     progress: list[dict[str, Any]] = []
-    path = Path(output_path)
+    path = resolve_output_path(output_path, "presentation.pptx")
 
     if not slides:
         return _error(
@@ -202,7 +202,7 @@ def create_deck_from_data(
 ) -> dict[str, Any]:
     """Create a deck with a title slide followed by one content slide per data item."""
     progress: list[dict[str, Any]] = []
-    path = Path(output_path)
+    path = resolve_output_path(output_path, "presentation.pptx")
 
     if not data_slides:
         return _error(
@@ -280,7 +280,7 @@ def create_from_template(
     """Copy an existing .pptx as a new presentation starting point."""
     progress: list[dict[str, Any]] = []
     tmpl = Path(template_path)
-    path = Path(output_path)
+    path = resolve_output_path(output_path, "presentation.pptx")
 
     if not tmpl.exists():
         return _error(
@@ -339,7 +339,7 @@ def create_agenda(
 ) -> dict[str, Any]:
     """Create a meeting agenda presentation with title and agenda slides."""
     progress: list[dict[str, Any]] = []
-    path = Path(output_path)
+    path = resolve_output_path(output_path, "presentation.pptx")
 
     try:
         _ensure_parent(path)
@@ -412,7 +412,7 @@ def create_from_docx(
 ) -> dict[str, Any]:
     """Convert a Word document outline into a PowerPoint presentation."""
     progress: list[dict[str, Any]] = []
-    path = Path(output_path)
+    path = resolve_output_path(output_path, "presentation.pptx")
     docx_file = Path(docx_path)
 
     if not docx_file.exists():
