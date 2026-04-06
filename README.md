@@ -55,6 +55,307 @@ A self-hosted MCP server that gives local LLMs full control over Word, Excel, an
 }
 ```
 
+### All Servers — Complete mcp.json
+
+Copy-paste this to register all 11 servers at once. The first server entry clones the repo and installs dependencies; the rest reuse the same local clone.
+
+```json
+{
+  "mcpServers": {
+    "docx_basic": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\docx_basic') docx-basic"
+      ],
+      "env": { "OFFICE_MCP_8GB_MODE": "0" },
+      "timeout": 600000
+    },
+    "docx_tables": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\docx_tables') docx-tables"
+      ],
+      "env": { "OFFICE_MCP_8GB_MODE": "0" },
+      "timeout": 600000
+    },
+    "docx_layout": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\docx_layout') docx-layout"
+      ],
+      "env": { "OFFICE_MCP_8GB_MODE": "0" },
+      "timeout": 600000
+    },
+    "docx_new": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\docx_new') docx-new"
+      ],
+      "env": { "OFFICE_MCP_8GB_MODE": "0" },
+      "timeout": 600000
+    },
+    "xlsx_basic": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\xlsx_basic') xlsx-basic"
+      ],
+      "env": { "OFFICE_MCP_8GB_MODE": "0" },
+      "timeout": 600000
+    },
+    "xlsx_formulas": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\xlsx_formulas') xlsx-formulas"
+      ],
+      "env": { "OFFICE_MCP_8GB_MODE": "0" },
+      "timeout": 600000
+    },
+    "xlsx_charts": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\xlsx_charts') xlsx-charts"
+      ],
+      "env": { "OFFICE_MCP_8GB_MODE": "0" },
+      "timeout": 600000
+    },
+    "xlsx_new": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\xlsx_new') xlsx-new"
+      ],
+      "env": { "OFFICE_MCP_8GB_MODE": "0" },
+      "timeout": 600000
+    },
+    "pptx_basic": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\pptx_basic') pptx-basic"
+      ],
+      "env": { "OFFICE_MCP_8GB_MODE": "0" },
+      "timeout": 600000
+    },
+    "pptx_design": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\pptx_design') pptx-design"
+      ],
+      "env": { "OFFICE_MCP_8GB_MODE": "0" },
+      "timeout": 600000
+    },
+    "pptx_new": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; Set-Location $d; uv run --directory (Join-Path $d 'servers\\pptx_new') pptx-new"
+      ],
+      "env": { "OFFICE_MCP_8GB_MODE": "0" },
+      "timeout": 600000
+    }
+  }
+}
+```
+
+### Individual Server Configs
+
+Pick only what you need. Each block is standalone — paste it inside the `"mcpServers"` object.
+
+<details>
+<summary><strong>docx_basic</strong> — read, search, edit Word documents (15 tools)</summary>
+
+```json
+"docx_basic": {
+  "command": "powershell",
+  "args": [
+    "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+    "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\docx_basic') docx-basic"
+  ],
+  "env": { "OFFICE_MCP_8GB_MODE": "0" },
+  "timeout": 600000
+}
+```
+
+</details>
+
+<details>
+<summary><strong>docx_tables</strong> — table CRUD in Word documents (9 tools)</summary>
+
+```json
+"docx_tables": {
+  "command": "powershell",
+  "args": [
+    "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+    "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\docx_tables') docx-tables"
+  ],
+  "env": { "OFFICE_MCP_8GB_MODE": "0" },
+  "timeout": 600000
+}
+```
+
+</details>
+
+<details>
+<summary><strong>docx_layout</strong> — styles, fonts, margins, PDF export (7 tools)</summary>
+
+```json
+"docx_layout": {
+  "command": "powershell",
+  "args": [
+    "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+    "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\docx_layout') docx-layout"
+  ],
+  "env": { "OFFICE_MCP_8GB_MODE": "0" },
+  "timeout": 600000
+}
+```
+
+</details>
+
+<details>
+<summary><strong>docx_new</strong> — create Word documents from scratch (7 tools)</summary>
+
+```json
+"docx_new": {
+  "command": "powershell",
+  "args": [
+    "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+    "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\docx_new') docx-new"
+  ],
+  "env": { "OFFICE_MCP_8GB_MODE": "0" },
+  "timeout": 600000
+}
+```
+
+</details>
+
+<details>
+<summary><strong>xlsx_basic</strong> — read, edit, sort Excel spreadsheets (14 tools)</summary>
+
+```json
+"xlsx_basic": {
+  "command": "powershell",
+  "args": [
+    "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+    "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\xlsx_basic') xlsx-basic"
+  ],
+  "env": { "OFFICE_MCP_8GB_MODE": "0" },
+  "timeout": 600000
+}
+```
+
+</details>
+
+<details>
+<summary><strong>xlsx_formulas</strong> — formulas, fill-down, auto-sum (9 tools)</summary>
+
+```json
+"xlsx_formulas": {
+  "command": "powershell",
+  "args": [
+    "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+    "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\xlsx_formulas') xlsx-formulas"
+  ],
+  "env": { "OFFICE_MCP_8GB_MODE": "0" },
+  "timeout": 600000
+}
+```
+
+</details>
+
+<details>
+<summary><strong>xlsx_charts</strong> — charts, pivot tables, cell styles (5 tools)</summary>
+
+```json
+"xlsx_charts": {
+  "command": "powershell",
+  "args": [
+    "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+    "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\xlsx_charts') xlsx-charts"
+  ],
+  "env": { "OFFICE_MCP_8GB_MODE": "0" },
+  "timeout": 600000
+}
+```
+
+</details>
+
+<details>
+<summary><strong>xlsx_new</strong> — create Excel workbooks from scratch (6 tools)</summary>
+
+```json
+"xlsx_new": {
+  "command": "powershell",
+  "args": [
+    "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+    "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\xlsx_new') xlsx-new"
+  ],
+  "env": { "OFFICE_MCP_8GB_MODE": "0" },
+  "timeout": 600000
+}
+```
+
+</details>
+
+<details>
+<summary><strong>pptx_basic</strong> — read, edit, add, reorder slides (10 tools)</summary>
+
+```json
+"pptx_basic": {
+  "command": "powershell",
+  "args": [
+    "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+    "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\pptx_basic') pptx-basic"
+  ],
+  "env": { "OFFICE_MCP_8GB_MODE": "0" },
+  "timeout": 600000
+}
+```
+
+</details>
+
+<details>
+<summary><strong>pptx_design</strong> — backgrounds, fonts, global slide changes (8 tools)</summary>
+
+```json
+"pptx_design": {
+  "command": "powershell",
+  "args": [
+    "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+    "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\pptx_design') pptx-design"
+  ],
+  "env": { "OFFICE_MCP_8GB_MODE": "0" },
+  "timeout": 600000
+}
+```
+
+</details>
+
+<details>
+<summary><strong>pptx_new</strong> — create presentations from scratch (6 tools)</summary>
+
+```json
+"pptx_new": {
+  "command": "powershell",
+  "args": [
+    "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+    "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\pptx_new') pptx-new"
+  ],
+  "env": { "OFFICE_MCP_8GB_MODE": "0" },
+  "timeout": 600000
+}
+```
+
+</details>
+
 ### Full Excel config — read, edit, formulas
 
 ```json
