@@ -3,6 +3,10 @@
 from mcp.server.fastmcp import FastMCP
 
 from docx_basic import engine
+from docx_basic.helpers import diff_versions as _diff_versions
+from docx_basic.helpers import get_history_tool as _get_history_tool
+from docx_basic.helpers import read_receipt_tool as _read_receipt_tool
+from docx_basic.helpers import restore_version as _restore_version
 
 mcp = FastMCP("docx-basic")
 
@@ -91,25 +95,25 @@ def append_text(file_path: str, text: str, style: str = "Body Text") -> dict:
 @mcp.tool()
 def get_history(file_path: str) -> dict:
     """Return version snapshot history for a document."""
-    return engine.get_history_tool(file_path)
+    return _get_history_tool(file_path)
 
 
 @mcp.tool()
 def restore_version(file_path: str, timestamp: str, create_branch: str = "") -> dict:
     """Restore document to a previous snapshot. Optionally create git branch."""
-    return engine.restore_version(file_path, timestamp, create_branch)
+    return _restore_version(file_path, timestamp, create_branch)
 
 
 @mcp.tool()
 def diff_versions(file_path: str, timestamp_a: str, timestamp_b: str = "current") -> dict:
     """Compare two document versions. timestamp_b defaults to current file."""
-    return engine.diff_versions(file_path, timestamp_a, timestamp_b)
+    return _diff_versions(file_path, timestamp_a, timestamp_b)
 
 
 @mcp.tool()
 def read_receipt(file_path: str, last_n: int = 10) -> dict:
     """Show recent tool operations on this file. last_n: how many to show."""
-    return engine.read_receipt_tool(file_path, last_n)
+    return _read_receipt_tool(file_path, last_n)
 
 
 def main() -> None:

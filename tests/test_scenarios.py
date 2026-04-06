@@ -71,7 +71,8 @@ class TestContractFillingScenario:
             assert len(found["matches"]) > 0, f"Value not found after fill: {value}"
 
     def test_snapshot_created_per_replacement(self, tmp_path):
-        from servers.docx_basic.engine import get_history, replace_text
+        from servers.docx_basic.engine import replace_text
+        from shared.version_control import get_history
 
         path = _copy("contract_simple.docx", tmp_path)
 
@@ -90,12 +91,8 @@ class TestContractFillingScenario:
     def test_rollback_after_wrong_replacement(self, tmp_path):
         import time
 
-        from servers.docx_basic.engine import (
-            get_history,
-            replace_text,
-            restore_version,
-            search_paragraphs,
-        )
+        from servers.docx_basic.engine import replace_text, restore_version, search_paragraphs
+        from shared.version_control import get_history
 
         path = _copy("contract_simple.docx", tmp_path)
 

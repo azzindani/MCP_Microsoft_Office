@@ -3,6 +3,10 @@
 from mcp.server.fastmcp import FastMCP
 
 from xlsx_basic import engine
+from xlsx_basic.helpers import copy_sheet as _copy_sheet
+from xlsx_basic.helpers import find_duplicates as _find_duplicates
+from xlsx_basic.helpers import rename_sheet as _rename_sheet
+from xlsx_basic.helpers import sort_sheet as _sort_sheet
 
 mcp = FastMCP("xlsx-basic")
 
@@ -76,13 +80,13 @@ def sort_sheet(
     has_header: bool = True,
 ) -> dict:
     """Sort sheet rows by column. column='A'. has_header skips row 1."""
-    return engine.sort_sheet(file_path, sheet_name, column, ascending, has_header)
+    return _sort_sheet(file_path, sheet_name, column, ascending, has_header)
 
 
 @mcp.tool()
 def rename_sheet(file_path: str, old_name: str, new_name: str) -> dict:
     """Rename a sheet tab from old_name to new_name."""
-    return engine.rename_sheet(file_path, old_name, new_name)
+    return _rename_sheet(file_path, old_name, new_name)
 
 
 @mcp.tool()
@@ -93,13 +97,13 @@ def find_duplicates(
     has_header: bool = True,
 ) -> dict:
     """Find duplicate values in a column. Returns rows where value repeats."""
-    return engine.find_duplicates(file_path, sheet_name, column, has_header)
+    return _find_duplicates(file_path, sheet_name, column, has_header)
 
 
 @mcp.tool()
 def copy_sheet(file_path: str, source_sheet: str, new_sheet_name: str) -> dict:
     """Copy source_sheet to a new sheet named new_sheet_name."""
-    return engine.copy_sheet(file_path, source_sheet, new_sheet_name)
+    return _copy_sheet(file_path, source_sheet, new_sheet_name)
 
 
 def main() -> None:
