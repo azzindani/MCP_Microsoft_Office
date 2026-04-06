@@ -181,6 +181,7 @@ class TestSearchParagraphs:
 class TestReplaceText:
     def test_replaces_text(self, tmp_path):
         from docx import Document
+
         from docx_basic.engine import replace_text
 
         path = _copy("contract_simple.docx", tmp_path)
@@ -203,6 +204,7 @@ class TestReplaceText:
     def test_preserves_bold_formatting(self, tmp_path):
         """Replace text without destroying bold runs in complex doc."""
         from docx import Document
+
         from docx_basic.engine import replace_text
 
         path = _copy("contract_complex.docx", tmp_path)
@@ -233,6 +235,7 @@ class TestReplaceText:
 
     def test_dry_run_makes_no_changes(self, tmp_path):
         from docx import Document
+
         from docx_basic.engine import replace_text
 
         path = _copy("contract_simple.docx", tmp_path)
@@ -260,6 +263,7 @@ class TestReplaceText:
 class TestInsertParagraph:
     def test_inserts_paragraph(self, tmp_path):
         from docx import Document
+
         from docx_basic.engine import insert_paragraph
 
         path = _copy("contract_simple.docx", tmp_path)
@@ -293,6 +297,7 @@ class TestInsertParagraph:
 class TestDeleteParagraph:
     def test_deletes_by_index(self, tmp_path):
         from docx import Document
+
         from docx_basic.engine import delete_paragraph
 
         path = _copy("contract_simple.docx", tmp_path)
@@ -334,6 +339,7 @@ class TestDeleteParagraph:
 class TestAppendText:
     def test_appends_paragraph(self, tmp_path):
         from docx import Document
+
         from docx_basic.engine import append_text
 
         path = _copy("contract_simple.docx", tmp_path)
@@ -371,6 +377,7 @@ class TestVersionControl:
 
     def test_restore_version_reverts_content(self, tmp_path):
         from docx import Document
+
         from docx_basic.engine import get_history_tool, replace_text, restore_version
 
         path = _copy("contract_simple.docx", tmp_path)

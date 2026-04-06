@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from pptx import Presentation
+
 from pptx_design.engine import (
     add_chart,
     add_table,
