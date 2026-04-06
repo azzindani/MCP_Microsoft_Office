@@ -17,31 +17,35 @@ class TestResolvePathFileUtils:
         assert result.is_absolute()
         assert str(Path.home()) in str(result)
 
-    def test_strips_wrapping_double_quotes(self):
+    def test_strips_wrapping_double_quotes(self, tmp_path):
         from shared.file_utils import resolve_path
 
-        result = resolve_path('"/tmp/test.docx"')
-        assert str(result).startswith("/")
+        quoted = f'"{tmp_path}/test.docx"'
+        result = resolve_path(quoted)
+        assert result.is_absolute()
         assert '"' not in str(result)
 
-    def test_strips_wrapping_single_quotes(self):
+    def test_strips_wrapping_single_quotes(self, tmp_path):
         from shared.file_utils import resolve_path
 
-        result = resolve_path("'/tmp/test.docx'")
+        quoted = f"'{tmp_path}/test.docx'"
+        result = resolve_path(quoted)
+        assert result.is_absolute()
         assert '"' not in str(result)
         assert "'" not in str(result)
 
-    def test_rejects_mcp_versions_path(self):
+    def test_rejects_mcp_versions_path(self, tmp_path):
         from shared.file_utils import resolve_path
 
+        bad = str(tmp_path / ".mcp_versions" / "test.bak")
         with pytest.raises(ValueError, match=".mcp_versions"):
-            resolve_path("/tmp/.mcp_versions/test.bak")
+            resolve_path(bad)
 
-    def test_rejects_null_byte(self):
+    def test_rejects_null_byte(self, tmp_path):
         from shared.file_utils import resolve_path
 
         with pytest.raises(ValueError, match="null byte"):
-            resolve_path("/tmp/test\x00.docx")
+            resolve_path(str(tmp_path) + "/test\x00.docx")
 
     def test_expands_env_var(self, tmp_path, monkeypatch):
         from shared.file_utils import resolve_path
