@@ -5,6 +5,7 @@ from pathlib import Path
 
 import openpyxl
 import pytest
+
 from xlsx_charts.engine import (
     add_chart,
     add_pivot_table,

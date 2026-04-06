@@ -5,6 +5,7 @@ from pathlib import Path
 
 import openpyxl
 import pytest
+
 from xlsx_formulas.engine import (
     freeze_panes,
     set_autofilter,

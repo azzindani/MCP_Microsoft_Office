@@ -35,6 +35,7 @@ class TestSetHeading:
 
     def test_heading_style_persisted(self, tmp_path):
         from docx import Document
+
         from docx_layout.engine import set_heading
 
         path = _copy("contract_simple.docx", tmp_path)
@@ -97,6 +98,7 @@ class TestSetHeading:
 class TestSetFont:
     def test_sets_font_name(self, tmp_path):
         from docx import Document
+
         from docx_layout.engine import set_font
 
         path = _copy("contract_complex.docx", tmp_path)
@@ -109,6 +111,7 @@ class TestSetFont:
     def test_sets_font_size(self, tmp_path):
         from docx import Document
         from docx.shared import Pt
+
         from docx_layout.engine import set_font
 
         path = _copy("contract_complex.docx", tmp_path)
@@ -120,6 +123,7 @@ class TestSetFont:
 
     def test_sets_bold(self, tmp_path):
         from docx import Document
+
         from docx_layout.engine import set_font
 
         path = _copy("contract_simple.docx", tmp_path)
@@ -131,6 +135,7 @@ class TestSetFont:
 
     def test_sets_italic(self, tmp_path):
         from docx import Document
+
         from docx_layout.engine import set_font
 
         path = _copy("contract_simple.docx", tmp_path)
@@ -186,6 +191,7 @@ class TestSetParagraphStyle:
 
     def test_style_persisted(self, tmp_path):
         from docx import Document
+
         from docx_layout.engine import set_paragraph_style
 
         path = _copy("contract_simple.docx", tmp_path)
@@ -298,6 +304,7 @@ class TestSetPageMargins:
     def test_sets_margins(self, tmp_path):
         from docx import Document
         from docx.shared import Cm
+
         from docx_layout.engine import set_page_margins
 
         path = _copy("contract_simple.docx", tmp_path)
@@ -341,6 +348,7 @@ class TestSetPageMargins:
 class TestAddHeaderFooter:
     def test_add_header_text(self, tmp_path):
         from docx import Document
+
         from docx_layout.engine import add_header_footer
 
         path = _copy("contract_simple.docx", tmp_path)
@@ -352,6 +360,7 @@ class TestAddHeaderFooter:
 
     def test_add_footer_text(self, tmp_path):
         from docx import Document
+
         from docx_layout.engine import add_header_footer
 
         path = _copy("contract_simple.docx", tmp_path)

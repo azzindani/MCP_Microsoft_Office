@@ -33,6 +33,14 @@ target-version = "py311"
 select = ["E", "F", "I", "UP"]
 ignore = ["E501"]
 
+[tool.ruff.lint.isort]
+known-first-party = [
+    "shared",
+    "docx_basic", "docx_tables", "docx_layout", "docx_new",
+    "xlsx_basic", "xlsx_formulas", "xlsx_charts", "xlsx_new",
+    "pptx_basic", "pptx_design", "pptx_new",
+]
+
 [tool.pyright]
 pythonVersion = "3.11"
 typeCheckingMode = "strict"
