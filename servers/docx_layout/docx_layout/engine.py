@@ -6,7 +6,7 @@ from typing import Any
 
 from shared.file_utils import resolve_path
 from shared.live_edit import notify_reload
-from shared.platform_utils import get_pdf_converter, resolve_output_path
+from shared.platform_utils import get_pdf_converter, open_file, resolve_output_path
 from shared.progress import fail, info, ok
 from shared.receipt import append_receipt
 from shared.version_control import snapshot
@@ -70,7 +70,7 @@ def _out_of_range(
 # ---------------------------------------------------------------------------
 
 
-def set_heading(file_path: str, paragraph_index: int, level: int) -> dict[str, Any]:
+def set_heading(file_path: str, paragraph_index: int, level: int, open_after: bool = False) -> dict[str, Any]:
     """Apply Heading 1-6 style to paragraph N."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -106,6 +106,8 @@ def set_heading(file_path: str, paragraph_index: int, level: int) -> dict[str, A
         progress.append(ok(f"Applied {style_name} to paragraph {paragraph_index}"))
 
         doc.save(str(path))
+        if open_after:
+            open_file(path)
         progress.append(notify_reload(str(path), "docx"))
 
         append_receipt(
@@ -150,6 +152,7 @@ def set_font(
     font_size: float = 0,
     bold: bool = False,
     italic: bool = False,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Set font attributes on all runs in paragraph N."""
     progress: list[dict[str, Any]] = []
@@ -200,6 +203,8 @@ def set_font(
         progress.append(ok(f"Updated font on paragraph {paragraph_index}", detail))
 
         doc.save(str(path))
+        if open_after:
+            open_file(path)
         progress.append(notify_reload(str(path), "docx"))
 
         append_receipt(
@@ -243,7 +248,7 @@ def set_font(
         )
 
 
-def set_paragraph_style(file_path: str, paragraph_index: int, style_name: str) -> dict[str, Any]:
+def set_paragraph_style(file_path: str, paragraph_index: int, style_name: str, open_after: bool = False) -> dict[str, Any]:
     """Apply a named style from the document style gallery to paragraph N."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -281,6 +286,8 @@ def set_paragraph_style(file_path: str, paragraph_index: int, style_name: str) -
         progress.append(ok(f"Applied style '{style_name}' to paragraph {paragraph_index}"))
 
         doc.save(str(path))
+        if open_after:
+            open_file(path)
         progress.append(notify_reload(str(path), "docx"))
 
         append_receipt(
@@ -323,6 +330,7 @@ def add_image(
     paragraph_index: int,
     image_path: str,
     width_inches: float = 4.0,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Insert an image into paragraph N. Supported: PNG, JPG, GIF, BMP, TIFF."""
     progress: list[dict[str, Any]] = []
@@ -375,6 +383,8 @@ def add_image(
         )
 
         doc.save(str(path))
+        if open_after:
+            open_file(path)
         progress.append(notify_reload(str(path), "docx"))
 
         append_receipt(
@@ -423,6 +433,7 @@ def set_page_margins(
     bottom: float = 2.54,
     left: float = 2.54,
     right: float = 2.54,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Set all page margins in cm for every section in the document."""
     progress: list[dict[str, Any]] = []
@@ -454,6 +465,8 @@ def set_page_margins(
         progress.append(ok(f"Set margins on {section_count} section(s)", detail))
 
         doc.save(str(path))
+        if open_after:
+            open_file(path)
         progress.append(notify_reload(str(path), "docx"))
 
         append_receipt(
@@ -498,6 +511,7 @@ def add_header_footer(
     file_path: str,
     text: str,
     location: str = "header",
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Set header or footer text for all sections. location: header or footer."""
     progress: list[dict[str, Any]] = []
@@ -534,6 +548,8 @@ def add_header_footer(
         progress.append(ok(f"Set {location} text on {section_count} section(s)", f'"{text[:60]}"'))
 
         doc.save(str(path))
+        if open_after:
+            open_file(path)
         progress.append(notify_reload(str(path), "docx"))
 
         append_receipt(

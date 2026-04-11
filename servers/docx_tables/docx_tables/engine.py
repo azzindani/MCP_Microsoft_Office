@@ -5,6 +5,7 @@ from typing import Any
 
 from shared.file_utils import resolve_path
 from shared.live_edit import notify_reload
+from shared.platform_utils import open_file
 from shared.progress import fail, ok
 from shared.receipt import append_receipt
 from shared.version_control import snapshot
@@ -303,7 +304,7 @@ def read_table_row(file_path: str, table_index: int, row: int) -> dict[str, Any]
 # ---------------------------------------------------------------------------
 
 
-def set_cell(file_path: str, table_index: int, row: int, col: int, text: str) -> dict[str, Any]:
+def set_cell(file_path: str, table_index: int, row: int, col: int, text: str, open_after: bool = False) -> dict[str, Any]:
     """Write text to a specific table cell. Snapshot taken before write."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -354,6 +355,8 @@ def set_cell(file_path: str, table_index: int, row: int, col: int, text: str) ->
         _set_cell_text(cell, text)
 
         doc.save(str(path))
+        if open_after:
+            open_file(path)
         progress.append(notify_reload(str(path), "docx"))
 
         append_receipt(
@@ -394,7 +397,7 @@ def set_cell(file_path: str, table_index: int, row: int, col: int, text: str) ->
         )
 
 
-def add_row(file_path: str, table_index: int, data: list[str]) -> dict[str, Any]:
+def add_row(file_path: str, table_index: int, data: list[str], open_after: bool = False) -> dict[str, Any]:
     """Append a row to table N. data is a list of cell strings."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -432,6 +435,8 @@ def add_row(file_path: str, table_index: int, data: list[str]) -> dict[str, Any]
             _set_cell_text(cell, cell_text)
 
         doc.save(str(path))
+        if open_after:
+            open_file(path)
         progress.append(
             ok(
                 f"Added row {rows} to table {table_index}",
@@ -476,7 +481,7 @@ def add_row(file_path: str, table_index: int, data: list[str]) -> dict[str, Any]
         )
 
 
-def delete_row(file_path: str, table_index: int, row: int) -> dict[str, Any]:
+def delete_row(file_path: str, table_index: int, row: int, open_after: bool = False) -> dict[str, Any]:
     """Remove a row from table N. Rows below shift up."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -523,6 +528,8 @@ def delete_row(file_path: str, table_index: int, row: int) -> dict[str, Any]:
         row_element.getparent().remove(row_element)
 
         doc.save(str(path))
+        if open_after:
+            open_file(path)
         progress.append(ok(f"Deleted row {row} from table {table_index}"))
         progress.append(notify_reload(str(path), "docx"))
 
@@ -568,6 +575,7 @@ def add_table(
     rows: int,
     cols: int,
     data: list[list[str]] | None = None,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Insert a new table after paragraph N. data is optional rows×cols list."""
     progress: list[dict[str, Any]] = []
@@ -622,6 +630,8 @@ def add_table(
         anchor_para.addnext(tbl_element)
 
         doc.save(str(path))
+        if open_after:
+            open_file(path)
         progress.append(
             ok(
                 f"Inserted {rows}×{cols} table after paragraph {after_paragraph_index}",
@@ -666,7 +676,7 @@ def add_table(
         )
 
 
-def delete_table(file_path: str, table_index: int) -> dict[str, Any]:
+def delete_table(file_path: str, table_index: int, open_after: bool = False) -> dict[str, Any]:
     """Remove table N from the document entirely."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -702,6 +712,8 @@ def delete_table(file_path: str, table_index: int) -> dict[str, Any]:
         tbl_element.getparent().remove(tbl_element)
 
         doc.save(str(path))
+        if open_after:
+            open_file(path)
         progress.append(ok(f"Deleted table {table_index}", f"was {rows} rows × {cols} cols"))
         progress.append(notify_reload(str(path), "docx"))
 

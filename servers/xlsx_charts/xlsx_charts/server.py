@@ -17,10 +17,11 @@ def add_chart(
     anchor_cell: str,
     width: float = 15.0,
     height: float = 10.0,
+    open_after: bool = False,
 ) -> dict:
     """Create chart from data range. type: bar, line, pie, area, scatter."""
     return engine.add_chart(
-        file_path, sheet_name, chart_type, data_range, title, anchor_cell, width, height
+        file_path, sheet_name, chart_type, data_range, title, anchor_cell, width, height, open_after
     )
 
 
@@ -29,9 +30,10 @@ def delete_chart(
     file_path: str,
     sheet_name: str,
     chart_index: int,
+    open_after: bool = False,
 ) -> dict:
     """Remove chart by zero-based index from sheet."""
-    return engine.delete_chart(file_path, sheet_name, chart_index)
+    return engine.delete_chart(file_path, sheet_name, chart_index, open_after)
 
 
 @mcp.tool()
@@ -41,9 +43,10 @@ def update_chart(
     chart_index: int,
     title: str = "",
     data_range: str = "",
+    open_after: bool = False,
 ) -> dict:
     """Update chart title and/or data range by index."""
-    return engine.update_chart(file_path, sheet_name, chart_index, title, data_range)
+    return engine.update_chart(file_path, sheet_name, chart_index, title, data_range, open_after)
 
 
 @mcp.tool()
@@ -55,10 +58,11 @@ def add_pivot_table(
     rows: str,
     cols: str,
     values: str,
+    open_after: bool = False,
 ) -> dict:
     """Create pivot summary table from source range data."""
     return engine.add_pivot_table(
-        file_path, sheet_name, source_range, dest_cell, rows, cols, values
+        file_path, sheet_name, source_range, dest_cell, rows, cols, values, open_after
     )
 
 
@@ -72,10 +76,11 @@ def set_cell_style(
     bold: bool = False,
     fill_color: str = "",
     number_format: str = "",
+    open_after: bool = False,
 ) -> dict:
     """Apply font, fill color, and number format styling to a cell."""
     return engine.set_cell_style(
-        file_path, sheet_name, cell_address, font_name, font_size, bold, fill_color, number_format
+        file_path, sheet_name, cell_address, font_name, font_size, bold, fill_color, number_format, open_after
     )
 
 

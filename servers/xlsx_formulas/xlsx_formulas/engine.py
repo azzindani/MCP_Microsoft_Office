@@ -12,6 +12,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 
 from shared.file_utils import resolve_path
 from shared.live_edit import notify_reload
+from shared.platform_utils import open_file
 from shared.progress import fail, ok
 from shared.version_control import snapshot
 
@@ -92,6 +93,7 @@ def set_formula(
     sheet_name: str,
     cell_address: str,
     formula: str,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Write a formula string to a cell. Formula must start with '='."""
     progress: list[dict[str, Any]] = []
@@ -132,6 +134,8 @@ def set_formula(
         ws[addr] = formula
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         progress.append(notify_reload(str(path), "xlsx"))
         result: dict[str, Any] = {
@@ -163,6 +167,7 @@ def set_named_range(
     sheet_name: str,
     range_name: str,
     range_address: str,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Define a named range in the workbook."""
     progress: list[dict[str, Any]] = []
@@ -202,6 +207,8 @@ def set_named_range(
         wb.defined_names[range_name] = defn
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         progress.append(ok(f"Defined named range '{range_name}'", attr_text))
         result: dict[str, Any] = {
@@ -236,6 +243,7 @@ def set_conditional_format(
     value: float,
     color: str,
     value2: float = 0.0,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Apply a color-based conditional formatting rule to a range."""
     progress: list[dict[str, Any]] = []
@@ -303,6 +311,8 @@ def set_conditional_format(
         ws.conditional_formatting.add(range_address, rule_obj)
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         progress.append(
             ok(
@@ -343,6 +353,7 @@ def set_data_validation(
     validation_type: str,
     formula1: str = "",
     formula2: str = "",
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Add data validation (list, decimal, or whole) to a cell range."""
     progress: list[dict[str, Any]] = []
@@ -382,6 +393,8 @@ def set_data_validation(
 
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         progress.append(
             ok(
@@ -419,6 +432,7 @@ def freeze_panes(
     file_path: str,
     sheet_name: str,
     cell_address: str,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Freeze rows/columns at cell_address. Empty string to unfreeze."""
     progress: list[dict[str, Any]] = []
@@ -450,6 +464,8 @@ def freeze_panes(
         ws.freeze_panes = addr if addr else None
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         action = f"frozen at {addr}" if addr else "unfrozen"
         progress.append(ok(f"Panes {action}", sheet_name))
@@ -481,6 +497,7 @@ def set_autofilter(
     file_path: str,
     sheet_name: str,
     range_address: str,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Enable AutoFilter on the specified range."""
     progress: list[dict[str, Any]] = []
@@ -501,6 +518,8 @@ def set_autofilter(
         ws.auto_filter.ref = range_address
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         progress.append(ok(f"AutoFilter set on {range_address}", sheet_name))
         result: dict[str, Any] = {
@@ -532,6 +551,7 @@ def fill_formula_down(
     formula: str,
     start_cell: str,
     end_row: int,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Fill formula down from start_cell to end_row, adjusting row references."""
     progress: list[dict[str, Any]] = []
@@ -607,6 +627,8 @@ def fill_formula_down(
 
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         progress.append(
             ok(
@@ -647,6 +669,7 @@ def auto_sum(
     data_range: str,
     sum_cell: str,
     function_name: str = "SUM",
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Write a SUM/AVERAGE/COUNT/MAX/MIN formula for data_range into sum_cell."""
     progress: list[dict[str, Any]] = []
@@ -701,6 +724,8 @@ def auto_sum(
         ws[addr] = formula
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         progress.append(ok(f"Set {addr} = {formula}", sheet_name))
         progress.append(notify_reload(str(path), "xlsx"))
@@ -734,6 +759,7 @@ def convert_to_values(
     file_path: str,
     sheet_name: str,
     range_address: str,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Replace formula cells with their calculated values in a range."""
     progress: list[dict[str, Any]] = []
@@ -788,6 +814,8 @@ def convert_to_values(
         wb_values.close()
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         progress.append(
             ok(

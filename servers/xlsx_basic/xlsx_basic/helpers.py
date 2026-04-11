@@ -12,6 +12,7 @@ from openpyxl.utils import column_index_from_string, get_column_letter
 
 from shared.file_utils import resolve_path
 from shared.live_edit import notify_reload
+from shared.platform_utils import open_file
 from shared.progress import fail, info, ok
 from shared.version_control import snapshot
 
@@ -63,6 +64,7 @@ def sort_sheet(
     column: str,
     ascending: bool = True,
     has_header: bool = True,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Sort all rows in a sheet by the values in a given column."""
     progress: list[dict[str, Any]] = []
@@ -145,6 +147,8 @@ def sort_sheet(
 
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         progress.append(notify_reload(str(path), "xlsx"))
         result: dict[str, Any] = {
@@ -176,6 +180,7 @@ def rename_sheet(
     file_path: str,
     old_name: str,
     new_name: str,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Rename a worksheet tab from old_name to new_name."""
     progress: list[dict[str, Any]] = []
@@ -230,6 +235,8 @@ def rename_sheet(
         wb[old_name].title = new_name
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         progress.append(ok(f"Renamed sheet '{old_name}' → '{new_name}'"))
         result: dict[str, Any] = {
@@ -355,6 +362,7 @@ def copy_sheet(
     file_path: str,
     source_sheet: str,
     new_sheet_name: str,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Copy a worksheet within the same workbook to a new sheet name."""
     progress: list[dict[str, Any]] = []
@@ -412,6 +420,8 @@ def copy_sheet(
 
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         progress.append(ok(f"Copied '{source_sheet}' → '{new_sheet_name}'"))
         result: dict[str, Any] = {

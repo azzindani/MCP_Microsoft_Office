@@ -13,7 +13,7 @@ from shared.address_resolver import (
 )
 from shared.file_utils import resolve_path
 from shared.live_edit import notify_reload
-from shared.platform_utils import get_max_paragraphs, get_max_search_results
+from shared.platform_utils import get_max_paragraphs, get_max_search_results, open_file
 from shared.progress import fail, info, ok, warn
 from shared.version_control import snapshot
 
@@ -368,6 +368,7 @@ def replace_text(
     new_text: str,
     preserve_style: bool = True,
     dry_run: bool = False,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Find text and replace in-place, preserving run formatting."""
     progress: list[dict[str, Any]] = []
@@ -440,6 +441,8 @@ def replace_text(
         )
 
         doc.save(str(path))
+        if open_after:
+            open_file(path)
         progress.append(ok(f"Saved {path.name}", f"{para_count} paragraphs"))
         progress.append(notify_reload(str(path), "docx"))
 
@@ -488,6 +491,7 @@ def insert_paragraph(
     after_index: int,
     text: str,
     style: str = "Body Text",
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Insert a paragraph after index N with the given style."""
     progress: list[dict[str, Any]] = []
@@ -547,6 +551,8 @@ def insert_paragraph(
                 pass  # Style doesn't exist — use default
             doc2.save(str(path))
 
+        if open_after:
+            open_file(path)
         progress.append(ok(f"Inserted paragraph at index {after_index + 1}", style))
         progress.append(notify_reload(str(path), "docx"))
 
@@ -585,6 +591,7 @@ def delete_paragraph(
     file_path: str,
     paragraph_index: int = -1,
     match_text: str = "",
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Delete a paragraph by index or matching text."""
     progress: list[dict[str, Any]] = []
@@ -637,6 +644,8 @@ def delete_paragraph(
         para_elem.getparent().remove(para_elem)
 
         doc.save(str(path))
+        if open_after:
+            open_file(path)
         progress.append(ok(f"Deleted paragraph {target_idx}", deleted_text[:40]))
         progress.append(notify_reload(str(path), "docx"))
 
@@ -670,7 +679,7 @@ def delete_paragraph(
         }
 
 
-def append_text(file_path: str, text: str, style: str = "Body Text") -> dict[str, Any]:
+def append_text(file_path: str, text: str, style: str = "Body Text", open_after: bool = False) -> dict[str, Any]:
     """Append a new paragraph at document end."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -697,6 +706,8 @@ def append_text(file_path: str, text: str, style: str = "Body Text") -> dict[str
             pass  # Default style
 
         doc.save(str(path))
+        if open_after:
+            open_file(path)
         progress.append(ok(f"Appended paragraph at index {para_count}", style))
         progress.append(notify_reload(str(path), "docx"))
 

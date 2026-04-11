@@ -12,7 +12,7 @@ from openpyxl.utils import column_index_from_string
 
 from shared.file_utils import resolve_path
 from shared.live_edit import notify_reload
-from shared.platform_utils import get_max_cells, get_max_search_results
+from shared.platform_utils import get_max_cells, get_max_search_results, open_file
 from shared.progress import fail, ok, warn
 from shared.version_control import snapshot
 
@@ -441,7 +441,7 @@ def search_cells(
         }
 
 
-def set_cell(file_path: str, sheet_name: str, cell_address: str, value: Any) -> dict[str, Any]:
+def set_cell(file_path: str, sheet_name: str, cell_address: str, value: Any, open_after: bool = False) -> dict[str, Any]:
     """Write a value to a single cell by address."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -487,6 +487,8 @@ def set_cell(file_path: str, sheet_name: str, cell_address: str, value: Any) -> 
         ws[addr] = value
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         progress.append(notify_reload(str(path), "xlsx"))
         result: dict[str, Any] = {
@@ -514,7 +516,7 @@ def set_cell(file_path: str, sheet_name: str, cell_address: str, value: Any) -> 
 
 
 def set_range(
-    file_path: str, sheet_name: str, start_cell: str, data: list[list[Any]]
+    file_path: str, sheet_name: str, start_cell: str, data: list[list[Any]], open_after: bool = False
 ) -> dict[str, Any]:
     """Write a 2D list of values starting at start_cell."""
     progress: list[dict[str, Any]] = []
@@ -576,6 +578,8 @@ def set_range(
 
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         progress.append(notify_reload(str(path), "xlsx"))
         result: dict[str, Any] = {
@@ -603,7 +607,7 @@ def set_range(
         }
 
 
-def insert_row(file_path: str, sheet_name: str, row_index: int) -> dict[str, Any]:
+def insert_row(file_path: str, sheet_name: str, row_index: int, open_after: bool = False) -> dict[str, Any]:
     """Insert an empty row at row_index (1-based), shifting existing rows down."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -638,6 +642,8 @@ def insert_row(file_path: str, sheet_name: str, row_index: int) -> dict[str, Any
         ws.insert_rows(row_index)
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         progress.append(notify_reload(str(path), "xlsx"))
         result: dict[str, Any] = {
@@ -663,7 +669,7 @@ def insert_row(file_path: str, sheet_name: str, row_index: int) -> dict[str, Any
         }
 
 
-def delete_row(file_path: str, sheet_name: str, row_index: int) -> dict[str, Any]:
+def delete_row(file_path: str, sheet_name: str, row_index: int, open_after: bool = False) -> dict[str, Any]:
     """Remove row at row_index (1-based), shifting remaining rows up."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -710,6 +716,8 @@ def delete_row(file_path: str, sheet_name: str, row_index: int) -> dict[str, Any
         ws.delete_rows(row_index)
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         progress.append(notify_reload(str(path), "xlsx"))
         result: dict[str, Any] = {
@@ -735,7 +743,7 @@ def delete_row(file_path: str, sheet_name: str, row_index: int) -> dict[str, Any
         }
 
 
-def add_sheet(file_path: str, sheet_name: str = "") -> dict[str, Any]:
+def add_sheet(file_path: str, sheet_name: str = "", open_after: bool = False) -> dict[str, Any]:
     """Create a new worksheet, optionally with a given name."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -774,6 +782,8 @@ def add_sheet(file_path: str, sheet_name: str = "") -> dict[str, Any]:
 
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         progress.append(ok(f"Created sheet '{sheet_name}'"))
         result: dict[str, Any] = {

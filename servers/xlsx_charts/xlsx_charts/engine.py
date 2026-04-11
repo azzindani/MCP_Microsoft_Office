@@ -11,6 +11,7 @@ from openpyxl.utils import column_index_from_string
 
 from shared.file_utils import resolve_path
 from shared.live_edit import notify_reload
+from shared.platform_utils import open_file
 from shared.progress import fail, ok
 from shared.version_control import snapshot
 
@@ -112,6 +113,7 @@ def add_chart(
     anchor_cell: str,
     width: float = 15.0,
     height: float = 10.0,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Create a chart from a data range and place it on the sheet."""
     progress: list[dict[str, Any]] = []
@@ -155,6 +157,8 @@ def add_chart(
 
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         progress.append(notify_reload(str(path), "xlsx"))
         progress.append(ok(f"Created {chart_type} chart '{title}'", f"anchored at {anchor}"))
@@ -189,6 +193,7 @@ def delete_chart(
     file_path: str,
     sheet_name: str,
     chart_index: int,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Remove a chart from a sheet by its zero-based index."""
     progress: list[dict[str, Any]] = []
@@ -227,6 +232,8 @@ def delete_chart(
 
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         progress.append(ok(f"Deleted chart '{deleted_title}'", sheet_name))
         result: dict[str, Any] = {
@@ -258,6 +265,7 @@ def update_chart(
     chart_index: int,
     title: str = "",
     data_range: str = "",
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Update chart title and/or data range. Uses delete-then-add for data changes."""
     progress: list[dict[str, Any]] = []
@@ -305,6 +313,8 @@ def update_chart(
 
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         result: dict[str, Any] = {
             "success": True,
@@ -339,6 +349,7 @@ def add_pivot_table(
     rows: str,
     cols: str,
     values: str,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Create a summary pivot-style table from source data.
 
@@ -443,6 +454,8 @@ def add_pivot_table(
 
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         progress.append(
             ok(
@@ -484,6 +497,7 @@ def set_cell_style(
     bold: bool = False,
     fill_color: str = "",
     number_format: str = "",
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Apply font, fill color, and number format to a cell."""
     progress: list[dict[str, Any]] = []
@@ -541,6 +555,8 @@ def set_cell_style(
 
         wb.save(str(path))
         wb.close()
+        if open_after:
+            open_file(path)
 
         progress.append(ok(f"Styled cell {addr}", sheet_name))
         result: dict[str, Any] = {

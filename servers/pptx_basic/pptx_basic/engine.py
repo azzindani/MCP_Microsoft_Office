@@ -7,6 +7,7 @@ from shared.address_resolver import build_pptx_index
 from shared.doc_diff import diff_pptx
 from shared.file_utils import resolve_path
 from shared.live_edit import notify_reload
+from shared.platform_utils import open_file
 from shared.progress import fail, info, ok
 from shared.receipt import append_receipt
 from shared.version_control import get_history, snapshot
@@ -292,7 +293,7 @@ def read_slide_text(file_path: str, slide_index: int) -> dict[str, Any]:
         return _error(str(e), "Check slide_index is valid.", progress)
 
 
-def set_text(file_path: str, slide_index: int, shape_name: str, new_text: str) -> dict[str, Any]:
+def set_text(file_path: str, slide_index: int, shape_name: str, new_text: str, open_after: bool = False) -> dict[str, Any]:
     """Replace text in a shape using run-level editing."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -347,6 +348,8 @@ def set_text(file_path: str, slide_index: int, shape_name: str, new_text: str) -
 
         _set_shape_text(target_shape, new_text)
         prs.save(str(path))
+        if open_after:
+            open_file(path)
         reload_step = notify_reload(str(path), "pptx")
         progress.append(reload_step)
 
@@ -397,7 +400,7 @@ def set_text(file_path: str, slide_index: int, shape_name: str, new_text: str) -
         )
 
 
-def add_slide(file_path: str, layout_name: str, title: str = "", body: str = "") -> dict[str, Any]:
+def add_slide(file_path: str, layout_name: str, title: str = "", body: str = "", open_after: bool = False) -> dict[str, Any]:
     """Append a new slide with layout, title, and body text."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -447,6 +450,8 @@ def add_slide(file_path: str, layout_name: str, title: str = "", body: str = "")
                     break
 
         prs.save(str(path))
+        if open_after:
+            open_file(path)
         reload_step = notify_reload(str(path), "pptx")
         progress.append(reload_step)
         progress.append(ok(f"Added slide {new_index} '{title}'", layout_name))
@@ -490,7 +495,7 @@ def add_slide(file_path: str, layout_name: str, title: str = "", body: str = "")
         )
 
 
-def delete_slide(file_path: str, slide_index: int) -> dict[str, Any]:
+def delete_slide(file_path: str, slide_index: int, open_after: bool = False) -> dict[str, Any]:
     """Remove a slide by index."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -531,6 +536,8 @@ def delete_slide(file_path: str, slide_index: int) -> dict[str, Any]:
         sldIdLst.remove(sldIdLst[slide_index])
 
         prs.save(str(path))
+        if open_after:
+            open_file(path)
         reload_step = notify_reload(str(path), "pptx")
         progress.append(reload_step)
         progress.append(ok(f"Deleted slide {slide_index}", deleted_title[:40]))
@@ -574,7 +581,7 @@ def delete_slide(file_path: str, slide_index: int) -> dict[str, Any]:
         )
 
 
-def reorder_slide(file_path: str, from_index: int, to_index: int) -> dict[str, Any]:
+def reorder_slide(file_path: str, from_index: int, to_index: int, open_after: bool = False) -> dict[str, Any]:
     """Move a slide from one position to another."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -621,6 +628,8 @@ def reorder_slide(file_path: str, from_index: int, to_index: int) -> dict[str, A
         sldIdLst.insert(to_index, slide_id)
 
         prs.save(str(path))
+        if open_after:
+            open_file(path)
         reload_step = notify_reload(str(path), "pptx")
         progress.append(reload_step)
         progress.append(ok(f"Moved slide {from_index} → {to_index}"))
@@ -671,6 +680,7 @@ def add_text_box(
     top: float = 1.0,
     width: float = 5.0,
     height: float = 1.0,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Add a text box to a slide at the specified position (inches)."""
     progress: list[dict[str, Any]] = []
@@ -706,6 +716,8 @@ def add_text_box(
         tf.text = text
 
         prs.save(str(path))
+        if open_after:
+            open_file(path)
         reload_step = notify_reload(str(path), "pptx")
         progress.append(reload_step)
         progress.append(

@@ -7,7 +7,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import webbrowser
 from pathlib import Path
 
 
@@ -163,14 +162,11 @@ def resolve_output_path(output_path: str, default_name: str) -> Path:
 def open_file(path: Path) -> None:
     """Open file in the default system application. Silently ignored on failure."""
     try:
-        webbrowser.open(f"file://{path.resolve()}")
+        if is_windows():
+            os.startfile(str(path.resolve()))
+        elif is_macos():
+            subprocess.Popen(["open", str(path.resolve())])
+        else:
+            subprocess.Popen(["xdg-open", str(path.resolve())])
     except Exception:
-        try:
-            if is_windows():
-                subprocess.Popen(["start", str(path.resolve())], shell=True)
-            elif is_macos():
-                subprocess.Popen(["open", str(path.resolve())])
-            else:
-                subprocess.Popen(["xdg-open", str(path.resolve())])
-        except Exception:
-            pass
+        pass

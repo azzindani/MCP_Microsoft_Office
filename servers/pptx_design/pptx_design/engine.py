@@ -13,7 +13,7 @@ from pptx.util import Inches, Pt
 
 from shared.file_utils import resolve_path
 from shared.live_edit import notify_reload
-from shared.platform_utils import get_pdf_converter, resolve_output_path
+from shared.platform_utils import get_pdf_converter, open_file, resolve_output_path
 from shared.progress import fail, ok
 from shared.version_control import snapshot
 
@@ -106,6 +106,7 @@ def set_background(
     slide_index: int,
     color_hex: str = "",
     image_path: str = "",
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Set slide background to a solid color or image."""
     progress: list[dict[str, Any]] = []
@@ -170,6 +171,8 @@ def set_background(
             progress.append(ok("Set background image", img_path.name))
 
         prs.save(str(path))
+        if open_after:
+            open_file(path)
         progress.append(notify_reload(str(path), "pptx"))
 
         result: dict[str, Any] = {
@@ -204,6 +207,7 @@ def set_font_style(
     font_size: float = 0,
     bold: bool = False,
     color_hex: str = "",
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Apply font name, size, bold, and/or color to all runs in a shape."""
     progress: list[dict[str, Any]] = []
@@ -261,6 +265,8 @@ def set_font_style(
                 runs_updated += 1
 
         prs.save(str(path))
+        if open_after:
+            open_file(path)
         progress.append(notify_reload(str(path), "pptx"))
         progress.append(ok(f"Updated font style in '{shape_name}'", f"{runs_updated} runs"))
 
@@ -302,6 +308,7 @@ def add_table(
     top: float = 2.0,
     width: float = 8.0,
     height: float = 3.0,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Insert a table with data on a slide."""
     progress: list[dict[str, Any]] = []
@@ -350,6 +357,8 @@ def add_table(
                 table.cell(ri, ci).text = str(cell_text)
 
         prs.save(str(path))
+        if open_after:
+            open_file(path)
         progress.append(notify_reload(str(path), "pptx"))
         progress.append(ok(f"Added {rows}×{cols} table", f"slide {slide_index}"))
 
@@ -387,6 +396,7 @@ def add_chart(
     top: float = 2.0,
     width: float = 6.0,
     height: float = 4.5,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Add a bar, line, or pie chart to a slide."""
     progress: list[dict[str, Any]] = []
@@ -438,6 +448,8 @@ def add_chart(
             chart_shape.chart.chart_title.text_frame.text = title
 
         prs.save(str(path))
+        if open_after:
+            open_file(path)
         progress.append(notify_reload(str(path), "pptx"))
         progress.append(ok(f"Added {chart_type} chart", f"slide {slide_index}"))
 
@@ -469,6 +481,7 @@ def duplicate_slide(
     file_path: str,
     slide_index: int,
     insert_at: int = -1,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Copy a slide and insert it at the specified position (-1 = end)."""
     progress: list[dict[str, Any]] = []
@@ -512,6 +525,8 @@ def duplicate_slide(
             new_idx = insert_at
 
         prs.save(str(path))
+        if open_after:
+            open_file(path)
         progress.append(notify_reload(str(path), "pptx"))
         progress.append(
             ok(
@@ -639,8 +654,6 @@ def export_pdf(
         progress.append(ok("Exported to PDF", out.name))
 
         if open_after:
-            from shared.platform_utils import open_file
-
             open_file(out)
             progress.append(ok("Opened PDF in default viewer"))
 
@@ -674,6 +687,7 @@ def add_image_to_all_slides(
     top: float = 0.1,
     width: float = 1.0,
     height: float = 0.5,
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Add the same image to every slide at a fixed position."""
     progress: list[dict[str, Any]] = []
@@ -722,6 +736,8 @@ def add_image_to_all_slides(
             )
 
         prs.save(str(path))
+        if open_after:
+            open_file(path)
         progress.append(notify_reload(str(path), "pptx"))
         progress.append(ok(f"Added image to {slide_count} slides", img_path.name))
 
@@ -754,6 +770,7 @@ def set_font_all_slides(
     font_size: float = 0,
     bold: bool = False,
     color_hex: str = "",
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Apply font settings to every text run across all slides."""
     progress: list[dict[str, Any]] = []
@@ -797,6 +814,8 @@ def set_font_all_slides(
                 slides_modified += 1
 
         prs.save(str(path))
+        if open_after:
+            open_file(path)
         progress.append(notify_reload(str(path), "pptx"))
         progress.append(
             ok(

@@ -60,9 +60,10 @@ def replace_text(
     new_text: str,
     preserve_style: bool = True,
     dry_run: bool = False,
+    open_after: bool = False,
 ) -> dict:
     """Find text and replace in-place, preserving run formatting."""
-    return engine.replace_text(file_path, match_text, new_text, preserve_style, dry_run)
+    return engine.replace_text(file_path, match_text, new_text, preserve_style, dry_run, open_after)
 
 
 @mcp.tool()
@@ -71,9 +72,10 @@ def insert_paragraph(
     after_index: int,
     text: str,
     style: str = "Body Text",
+    open_after: bool = False,
 ) -> dict:
     """Insert paragraph after index N with the given style."""
-    return engine.insert_paragraph(file_path, after_index, text, style)
+    return engine.insert_paragraph(file_path, after_index, text, style, open_after)
 
 
 @mcp.tool()
@@ -81,15 +83,16 @@ def delete_paragraph(
     file_path: str,
     paragraph_index: int = -1,
     match_text: str = "",
+    open_after: bool = False,
 ) -> dict:
     """Delete a paragraph by index or by matching text content."""
-    return engine.delete_paragraph(file_path, paragraph_index, match_text)
+    return engine.delete_paragraph(file_path, paragraph_index, match_text, open_after)
 
 
 @mcp.tool()
-def append_text(file_path: str, text: str, style: str = "Body Text") -> dict:
+def append_text(file_path: str, text: str, style: str = "Body Text", open_after: bool = False) -> dict:
     """Append a new paragraph at the end of the document."""
-    return engine.append_text(file_path, text, style)
+    return engine.append_text(file_path, text, style, open_after)
 
 
 @mcp.tool()
