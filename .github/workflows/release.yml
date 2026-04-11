@@ -20,7 +20,7 @@ jobs:
             artifact: office-mcp-linux.tar.gz
           - os: windows-latest
             artifact: office-mcp-windows-x64.zip
-          - os: macos-13
+          - os: macos-latest
             artifact: office-mcp-macos.tar.gz
 
     steps:
