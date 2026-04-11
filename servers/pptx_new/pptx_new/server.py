@@ -16,7 +16,7 @@ def create_presentation(
     subtitle: str = "",
 ) -> dict:
     """Create a blank PowerPoint with a title slide."""
-    return engine.create_presentation(output_path, title, subtitle, open_after=True)
+    return engine.create_presentation(output_path, title, subtitle, open_after=False)
 
 
 @mcp.tool()

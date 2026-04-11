@@ -11,7 +11,7 @@ from pptx.dml.color import RGBColor
 from pptx.enum.chart import XL_CHART_TYPE  # type: ignore[attr-defined]
 from pptx.util import Inches, Pt
 
-from shared.file_utils import resolve_path
+from shared.file_utils import hint_for_error, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_pdf_converter, open_file, resolve_output_path
 from shared.progress import fail, ok
@@ -192,7 +192,7 @@ def set_background(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
@@ -291,7 +291,7 @@ def set_font_style(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
@@ -379,7 +379,7 @@ def add_table(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
@@ -470,7 +470,7 @@ def add_chart(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
@@ -552,7 +552,7 @@ def duplicate_slide(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
@@ -757,7 +757,7 @@ def add_image_to_all_slides(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
@@ -844,7 +844,7 @@ def set_font_all_slides(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,

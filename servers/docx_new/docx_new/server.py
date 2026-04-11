@@ -12,7 +12,7 @@ mcp = FastMCP("docx-new")
 @mcp.tool()
 def create_document(output_path: str) -> dict:
     """Create a blank Word document and save to output_path."""
-    return engine.create_document(output_path, open_after=True)
+    return engine.create_document(output_path, open_after=False)
 
 
 @mcp.tool()

@@ -5,7 +5,7 @@ from typing import Any
 
 from shared.address_resolver import build_pptx_index
 from shared.doc_diff import diff_pptx
-from shared.file_utils import resolve_path
+from shared.file_utils import hint_for_error, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import open_file
 from shared.progress import fail, info, ok
@@ -396,7 +396,7 @@ def set_text(
         )
         return _error(
             str(e),
-            "Use restore_version to undo if a snapshot was taken.",
+            hint_for_error(e, path),
             progress,
             backup,
         )
@@ -493,7 +493,7 @@ def add_slide(
         )
         return _error(
             str(e),
-            "Use restore_version to undo if a snapshot was taken.",
+            hint_for_error(e, path),
             progress,
             backup,
         )
@@ -579,7 +579,7 @@ def delete_slide(file_path: str, slide_index: int, open_after: bool = False) -> 
         )
         return _error(
             str(e),
-            "Use restore_version to undo if a snapshot was taken.",
+            hint_for_error(e, path),
             progress,
             backup,
         )
@@ -672,7 +672,7 @@ def reorder_slide(
         )
         return _error(
             str(e),
-            "Use restore_version to undo if a snapshot was taken.",
+            hint_for_error(e, path),
             progress,
             backup,
         )
@@ -766,7 +766,7 @@ def add_text_box(
         )
         return _error(
             str(e),
-            "Use restore_version to undo if a snapshot was taken.",
+            hint_for_error(e, path),
             progress,
             backup,
         )

@@ -90,6 +90,14 @@ def resolve_path(raw: str) -> Path:
     return path
 
 
+def hint_for_error(e: Exception, path: Path | None = None) -> str:
+    """Return a user-facing hint appropriate for the exception type."""
+    if isinstance(e, PermissionError):
+        name = path.name if path else "the file"
+        return f"'{name}' is open in Word, Excel, or PowerPoint. Close it and try again."
+    return "Use restore_version to undo if a snapshot was taken."
+
+
 def safe_copy(src: str, dst: str) -> None:
     """Copy src to dst, creating parent directories as needed."""
     dst_path = Path(dst)

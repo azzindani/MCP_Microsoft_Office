@@ -11,7 +11,7 @@ from shared.address_resolver import (
     build_docx_index,
     fetch_section_content,
 )
-from shared.file_utils import resolve_path
+from shared.file_utils import hint_for_error, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_max_paragraphs, get_max_search_results, open_file
 from shared.progress import fail, info, ok, warn
@@ -480,7 +480,7 @@ def replace_text(
             "success": False,
             "error": str(e),
             "backup": backup,
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "progress": progress,
             "token_estimate": 20,
         }
@@ -581,7 +581,7 @@ def insert_paragraph(
             "success": False,
             "error": str(e),
             "backup": backup,
-            "hint": "Use restore_version to undo.",
+            "hint": hint_for_error(e, path),
             "progress": progress,
             "token_estimate": 20,
         }
@@ -673,7 +673,7 @@ def delete_paragraph(
             "success": False,
             "error": str(e),
             "backup": backup,
-            "hint": "Use restore_version to undo.",
+            "hint": hint_for_error(e, path),
             "progress": progress,
             "token_estimate": 20,
         }
@@ -729,7 +729,7 @@ def append_text(
             "success": False,
             "error": str(e),
             "backup": backup,
-            "hint": "Use restore_version to undo.",
+            "hint": hint_for_error(e, path),
             "progress": progress,
             "token_estimate": 20,
         }

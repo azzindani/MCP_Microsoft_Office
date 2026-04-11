@@ -10,7 +10,7 @@ from typing import Any
 import openpyxl
 from openpyxl.utils import column_index_from_string
 
-from shared.file_utils import resolve_path
+from shared.file_utils import hint_for_error, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_max_cells, get_max_search_results, open_file
 from shared.progress import fail, ok, warn
@@ -510,7 +510,7 @@ def set_cell(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
@@ -606,7 +606,7 @@ def set_range(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
@@ -670,7 +670,7 @@ def insert_row(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
@@ -746,7 +746,7 @@ def delete_row(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
@@ -811,7 +811,7 @@ def add_sheet(file_path: str, sheet_name: str = "", open_after: bool = False) ->
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,

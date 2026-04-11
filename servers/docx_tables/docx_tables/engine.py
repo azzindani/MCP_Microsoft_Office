@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from shared.file_utils import resolve_path
+from shared.file_utils import hint_for_error, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import open_file
 from shared.progress import fail, ok
@@ -394,9 +394,7 @@ def set_cell(
             backup=backup,
             success=False,
         )
-        return _error(
-            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
-        )
+        return _error(str(e), hint_for_error(e, path), progress, backup)
 
 
 def add_row(
@@ -480,9 +478,7 @@ def add_row(
             backup=backup,
             success=False,
         )
-        return _error(
-            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
-        )
+        return _error(str(e), hint_for_error(e, path), progress, backup)
 
 
 def delete_row(
@@ -570,9 +566,7 @@ def delete_row(
             backup=backup,
             success=False,
         )
-        return _error(
-            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
-        )
+        return _error(str(e), hint_for_error(e, path), progress, backup)
 
 
 def add_table(
@@ -677,9 +671,7 @@ def add_table(
             backup=backup,
             success=False,
         )
-        return _error(
-            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
-        )
+        return _error(str(e), hint_for_error(e, path), progress, backup)
 
 
 def delete_table(file_path: str, table_index: int, open_after: bool = False) -> dict[str, Any]:
@@ -754,6 +746,4 @@ def delete_table(file_path: str, table_index: int, open_after: bool = False) -> 
             backup=backup,
             success=False,
         )
-        return _error(
-            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
-        )
+        return _error(str(e), hint_for_error(e, path), progress, backup)

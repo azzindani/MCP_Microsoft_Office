@@ -4,7 +4,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from shared.file_utils import resolve_path
+from shared.file_utils import hint_for_error, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_pdf_converter, open_file, resolve_output_path
 from shared.progress import fail, info, ok
@@ -142,9 +142,7 @@ def set_heading(
             backup,
             False,
         )
-        return _error(
-            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
-        )
+        return _error(str(e), hint_for_error(e, path), progress, backup)
 
 
 def set_font(
@@ -245,9 +243,7 @@ def set_font(
             backup,
             False,
         )
-        return _error(
-            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
-        )
+        return _error(str(e), hint_for_error(e, path), progress, backup)
 
 
 def set_paragraph_style(
@@ -324,9 +320,7 @@ def set_paragraph_style(
             backup,
             False,
         )
-        return _error(
-            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
-        )
+        return _error(str(e), hint_for_error(e, path), progress, backup)
 
 
 def add_image(
@@ -426,9 +420,7 @@ def add_image(
             backup,
             False,
         )
-        return _error(
-            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
-        )
+        return _error(str(e), hint_for_error(e, path), progress, backup)
 
 
 def set_page_margins(
@@ -506,9 +498,7 @@ def set_page_margins(
             backup,
             False,
         )
-        return _error(
-            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
-        )
+        return _error(str(e), hint_for_error(e, path), progress, backup)
 
 
 def add_header_footer(
@@ -587,9 +577,7 @@ def add_header_footer(
             backup,
             False,
         )
-        return _error(
-            str(e), "Use restore_version to undo if a snapshot was taken.", progress, backup
-        )
+        return _error(str(e), hint_for_error(e, path), progress, backup)
 
 
 def export_pdf(file_path: str, output_path: str = "", open_after: bool = True) -> dict[str, Any]:

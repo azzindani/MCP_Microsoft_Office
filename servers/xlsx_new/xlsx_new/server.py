@@ -15,7 +15,7 @@ def create_workbook(
     sheet_name: str = "Sheet1",
 ) -> dict:
     """Create a blank Excel workbook with one sheet."""
-    return engine.create_workbook(output_path, sheet_name, open_after=True)
+    return engine.create_workbook(output_path, sheet_name, open_after=False)
 
 
 @mcp.tool()

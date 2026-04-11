@@ -10,7 +10,7 @@ from typing import Any
 import openpyxl
 from openpyxl.utils import column_index_from_string, get_column_letter
 
-from shared.file_utils import resolve_path
+from shared.file_utils import hint_for_error, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import open_file
 from shared.progress import fail, info, ok
@@ -169,7 +169,7 @@ def sort_sheet(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
@@ -255,7 +255,7 @@ def rename_sheet(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
@@ -440,7 +440,7 @@ def copy_sheet(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,

@@ -10,7 +10,7 @@ from openpyxl.styles import PatternFill
 from openpyxl.workbook.defined_name import DefinedName
 from openpyxl.worksheet.datavalidation import DataValidation
 
-from shared.file_utils import resolve_path
+from shared.file_utils import hint_for_error, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import open_file
 from shared.progress import fail, ok
@@ -155,7 +155,7 @@ def set_formula(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
@@ -228,7 +228,7 @@ def set_named_range(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
@@ -339,7 +339,7 @@ def set_conditional_format(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
@@ -421,7 +421,7 @@ def set_data_validation(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
@@ -486,7 +486,7 @@ def freeze_panes(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
@@ -538,7 +538,7 @@ def set_autofilter(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
@@ -656,7 +656,7 @@ def fill_formula_down(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
@@ -748,7 +748,7 @@ def auto_sum(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
@@ -841,7 +841,7 @@ def convert_to_values(
         return {
             "success": False,
             "error": str(e),
-            "hint": "Use restore_version to undo if a snapshot was taken.",
+            "hint": hint_for_error(e, path),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
