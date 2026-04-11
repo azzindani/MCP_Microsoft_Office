@@ -13,20 +13,50 @@ A self-hosted MCP server that gives local LLMs full control over Word, Excel, an
 - **LOCATE → INSPECT → PATCH → VERIFY** workflow for surgical document edits
 - **Automatic version control** — every write is snapshotted and fully restorable
 - **Operation receipt logging** — full audit trail of all modifications per file
-- **8GB VRAM mode** — safe for machines with constrained local hardware
+- **Constrained mode** — reduces response sizes for low-memory machines (CPU or GPU)
 - **Works with any local model** — Qwen, Llama, Mistral, Phi — any model that supports tool calling
 - **Zero cloud dependency** — no OneDrive, no Microsoft 365 subscription required
 
-## Quick Install (LM Studio — Windows)
+## Quick Install (LM Studio)
 
-> **Tested on Windows 11** with LM Studio 0.3.x / 0.4.x and uv 0.5+.
+> **Tested on Windows 11** with LM Studio 0.4.x and uv 0.5+.
 
-1. Open LM Studio → **Developer** tab (`</>` icon)
-2. Scroll to **MCP Servers** → click **Add Server**
+### Requirements
+
+- **Git** — `git --version`
+- **uv** — `uv --version` ([install guide](https://docs.astral.sh/uv/getting-started/installation/))
+- **Python 3.12 or higher** — `python --version`
+- **LM Studio** with a model that supports tool calling (Gemma 4, Qwen 3.5, etc.)
+- **Microsoft Office** installed is optional — only required for PDF export (`export_pdf`)
+
+### Platform Support
+
+| Platform | Status |
+|---|---|
+| Windows | Tested — real-world verified (Windows 11) |
+| macOS | Untested — CI/CD pipeline passes |
+| Linux | Untested — CI/CD pipeline passes |
+
+> Real-world usage has only been verified on Windows. macOS and Linux are supported by design and pass the automated CI pipeline, but have not been tested by hand. Reports from non-Windows users are welcome.
+
+### First Run
+
+The first launch clones the repo and installs all dependencies (~2–5 minutes). Subsequent launches are instant.
+
+> **Pre-install recommended:** To avoid the 60-second LM Studio connection timeout on first launch, run this once in PowerShell before connecting:
+> ```powershell
+> $d = Join-Path $env:USERPROFILE '.mcp_servers\MCP_Microsoft_Office'
+> Set-Location $d; uv sync --all-packages
+> ```
+> If you skip this step and LM Studio times out, press **Restart** in the MCP Servers panel — it will reconnect and complete the install immediately.
+
+### Steps
+
+1. Open LM Studio → **Developer** tab (`</>` icon) or you can find via **Integrations**
+2. Find **mcp.json** or **Edit mcp.json** → click to open
 3. Paste the config for the servers you want (see combinations below)
-4. Restart LM Studio
-5. Wait for the green dot next to each server
-6. Start chatting — the model will see the tools immediately
+4. Wait for the blue dot next to each server
+5. Start chatting — the model will see all tools
 
 ### Recommended starting config — Word + Create
 
@@ -356,56 +386,6 @@ Pick only what you need. Each block is standalone — paste it inside the `"mcpS
 
 </details>
 
-### Full Excel config — read, edit, formulas
-
-```json
-{
-  "mcpServers": {
-    "xlsx_basic": {
-      "command": "powershell",
-      "args": [
-        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; $g = Join-Path $d '.git'; if (!(Test-Path $g)) { if (Test-Path $d) { Remove-Item -Recurse -Force $d }; git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d --quiet } else { Set-Location $d; git fetch origin --quiet; git reset --hard FETCH_HEAD --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\xlsx_basic') xlsx-basic"
-      ],
-      "env": { "OFFICE_MCP_8GB_MODE": "0" },
-      "timeout": 600000
-    },
-    "xlsx_formulas": {
-      "command": "powershell",
-      "args": [
-        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\xlsx_formulas') xlsx-formulas"
-      ],
-      "env": { "OFFICE_MCP_8GB_MODE": "0" },
-      "timeout": 600000
-    },
-    "xlsx_new": {
-      "command": "powershell",
-      "args": [
-        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-        "$d = Join-Path $env:USERPROFILE '.mcp_servers\\MCP_Microsoft_Office'; if (!(Test-Path $d)) { git clone https://github.com/azzindani/MCP_Microsoft_Office.git $d } else { Set-Location $d; git pull --quiet }; Set-Location $d; uv sync --all-packages --quiet; uv run --directory (Join-Path $d 'servers\\xlsx_new') xlsx-new"
-      ],
-      "env": { "OFFICE_MCP_8GB_MODE": "0" },
-      "timeout": 600000
-    }
-  }
-}
-```
-
-### First Run
-
-The first launch clones the repo and installs all dependencies (~2–5 minutes). Subsequent launches are instant.
-
-### Requirements
-
-- **Git** — `git --version`
-- **uv** — `uv --version` ([install guide](https://docs.astral.sh/uv/getting-started/installation/))
-- **Python 3.11** (auto-managed by uv)
-- **LM Studio** with a model that supports tool calling (Qwen 2.5 7B+, Llama 3.1 8B+, etc.)
-- **Microsoft Office** installed is optional — only required for PDF export (`export_pdf`)
-
----
-
 ## Available Tools
 
 ### Word — docx_basic (15 tools)
@@ -543,7 +523,7 @@ Create new Excel workbooks from scratch. Every tool accepts `open_after=True`.
 | `delete_slide` | Remove slide by index |
 | `reorder_slide` | Move slide from index A to index B |
 | `add_text_box` | Insert text box at x/y (inches) position |
-| `add_image` | Insert image at x/y/width/height on a slide |
+| `diff_versions` | Compare two presentation versions by snapshot timestamp |
 
 ### PowerPoint — pptx_design (8 tools)
 
@@ -571,8 +551,6 @@ Create new presentations from scratch. Every tool accepts `open_after=True`.
 | `create_agenda` | Meeting agenda deck: title slide + agenda slide from `[{topic, duration, owner}]` |
 | `create_from_docx` | Convert Word document outline → PowerPoint draft (H1=slide, H2=bullets) |
 
----
-
 ## Recommended Server Combinations
 
 Load only what the task requires — fewer tools in context means better model reliability.
@@ -591,8 +569,6 @@ Load only what the task requires — fewer tools in context means better model r
 | Style and brand a deck | `pptx_basic` + `pptx_design` | 18 |
 | Create a presentation from scratch | `pptx_new` | 6 |
 | Full office workflow | Any 2 servers per format | ≤24 |
-
----
 
 ## Usage Examples
 
@@ -676,15 +652,13 @@ Place it in the top-right corner, 1 inch wide, 0.5 inch tall.
 Restore budget.xlsx to the previous version
 ```
 
----
-
 ## Configuration
 
-### 8GB VRAM Mode
+### Constrained Mode
 
-For machines with ≤8 GB VRAM, set `OFFICE_MCP_8GB_MODE=1` in the `env` section of your MCP config. This reduces response sizes to keep tool results within the model's effective context window:
+For lower-memory machines, set `OFFICE_MCP_8GB_MODE=1` in the `env` section of your MCP config. This reduces response sizes to keep tool results within the model's effective context window:
 
-| Limit | Normal | 8GB Mode |
+| Limit | Normal | Constrained |
 |---|---|---|
 | Max paragraphs returned | 50 | 20 |
 | Max cells returned | 200 | 100 |
@@ -694,20 +668,8 @@ For machines with ≤8 GB VRAM, set `OFFICE_MCP_8GB_MODE=1` in the `env` section
 
 | Variable | Default | Description |
 |---|---|---|
-| `OFFICE_MCP_8GB_MODE` | `0` | Set to `1` for ≤8 GB VRAM machines |
+| `OFFICE_MCP_8GB_MODE` | `0` | Set to `1` for low-memory machines |
 | `GIT_INTEGRATION` | `true` | Set to `false` to disable auto Git commits on edits |
-
-### Model Recommendations by VRAM
-
-| VRAM | Recommended model | Effective context |
-|---|---|---|
-| 6 GB | Qwen 2.5 7B Q4_K_M | ~8,000 tokens |
-| 8 GB | Qwen 2.5 9B Q3_K_S | ~12,000 tokens |
-| 12 GB | Qwen 2.5 9B Q8_0 | ~20,000 tokens |
-| 16 GB | Qwen 2.5 14B Q4_K_M | ~24,000 tokens |
-| 24 GB+ | Qwen 2.5 32B Q4_K_M | ~32,000 tokens |
-
----
 
 ## Uninstall
 
@@ -721,8 +683,6 @@ For machines with ≤8 GB VRAM, set `OFFICE_MCP_8GB_MODE=1` in the `env` section
 ```cmd
 rmdir /s /q %USERPROFILE%\.mcp_servers\MCP_Microsoft_Office
 ```
-
----
 
 ## Architecture
 
@@ -767,8 +727,6 @@ MCP_Microsoft_Office/
 
 Every server follows the same pattern: `server.py` is a thin MCP wrapper, `engine.py` contains all document logic and has zero MCP imports, making it directly testable with pytest.
 
----
-
 ## Development
 
 ### Local setup
@@ -811,8 +769,6 @@ bash install/install.sh
 ```cmd
 install\install.bat
 ```
-
----
 
 ## License
 
