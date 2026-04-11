@@ -42,7 +42,8 @@ jobs:
         run: |
           tar --exclude='.git' --exclude='.venv' --exclude='__pycache__' \
               --exclude='*.pyc' --exclude='.mcp_versions' \
-              -czf "${{ matrix.artifact }}" .
+              -czf "$RUNNER_TEMP/${{ matrix.artifact }}" .
+          mv "$RUNNER_TEMP/${{ matrix.artifact }}" "${{ matrix.artifact }}"
 
       - name: Build Windows archive
         if: runner.os == 'Windows'
