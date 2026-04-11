@@ -32,13 +32,17 @@ def read_slide_text(file_path: str, slide_index: int) -> dict:
 
 
 @mcp.tool()
-def set_text(file_path: str, slide_index: int, shape_name: str, new_text: str, open_after: bool = False) -> dict:
+def set_text(
+    file_path: str, slide_index: int, shape_name: str, new_text: str, open_after: bool = False
+) -> dict:
     """Replace shape text using run-level editing."""
     return engine.set_text(file_path, slide_index, shape_name, new_text, open_after)
 
 
 @mcp.tool()
-def add_slide(file_path: str, layout_name: str, title: str = "", body: str = "", open_after: bool = False) -> dict:
+def add_slide(
+    file_path: str, layout_name: str, title: str = "", body: str = "", open_after: bool = False
+) -> dict:
     """Append a slide with given layout, title, and body text."""
     return engine.add_slide(file_path, layout_name, title, body, open_after)
 

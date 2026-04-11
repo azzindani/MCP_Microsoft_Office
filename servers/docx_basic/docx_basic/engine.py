@@ -679,7 +679,9 @@ def delete_paragraph(
         }
 
 
-def append_text(file_path: str, text: str, style: str = "Body Text", open_after: bool = False) -> dict[str, Any]:
+def append_text(
+    file_path: str, text: str, style: str = "Body Text", open_after: bool = False
+) -> dict[str, Any]:
     """Append a new paragraph at document end."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None

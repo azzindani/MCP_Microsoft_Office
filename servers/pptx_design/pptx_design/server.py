@@ -50,7 +50,9 @@ def add_table(
     open_after: bool = False,
 ) -> dict:
     """Insert a table with row/col data on a slide."""
-    return engine.add_table(file_path, slide_index, rows, cols, data, left, top, width, height, open_after)
+    return engine.add_table(
+        file_path, slide_index, rows, cols, data, left, top, width, height, open_after
+    )
 
 
 @mcp.tool()
@@ -104,7 +106,9 @@ def add_image_to_all_slides(
     open_after: bool = False,
 ) -> dict:
     """Add the same image (logo/watermark) to every slide at given position."""
-    return engine.add_image_to_all_slides(file_path, image_path, left, top, width, height, open_after)
+    return engine.add_image_to_all_slides(
+        file_path, image_path, left, top, width, height, open_after
+    )
 
 
 @mcp.tool()

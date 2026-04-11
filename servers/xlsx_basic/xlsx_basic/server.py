@@ -42,13 +42,17 @@ def search_cells(file_path: str, sheet_name: str, query: str, max_results: int =
 
 
 @mcp.tool()
-def set_cell(file_path: str, sheet_name: str, cell_address: str, value: str, open_after: bool = False) -> dict:
+def set_cell(
+    file_path: str, sheet_name: str, cell_address: str, value: str, open_after: bool = False
+) -> dict:
     """Write a value to a single cell by address."""
     return engine.set_cell(file_path, sheet_name, cell_address, value, open_after)
 
 
 @mcp.tool()
-def set_range(file_path: str, sheet_name: str, start_cell: str, data: list[list], open_after: bool = False) -> dict:
+def set_range(
+    file_path: str, sheet_name: str, start_cell: str, data: list[list], open_after: bool = False
+) -> dict:
     """Write a 2D list of values starting at start_cell."""
     return engine.set_range(file_path, sheet_name, start_cell, data, open_after)
 
@@ -102,7 +106,9 @@ def find_duplicates(
 
 
 @mcp.tool()
-def copy_sheet(file_path: str, source_sheet: str, new_sheet_name: str, open_after: bool = False) -> dict:
+def copy_sheet(
+    file_path: str, source_sheet: str, new_sheet_name: str, open_after: bool = False
+) -> dict:
     """Copy source_sheet to a new sheet named new_sheet_name."""
     return _copy_sheet(file_path, source_sheet, new_sheet_name, open_after)
 

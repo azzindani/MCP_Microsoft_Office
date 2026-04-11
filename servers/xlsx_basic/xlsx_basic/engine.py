@@ -441,7 +441,9 @@ def search_cells(
         }
 
 
-def set_cell(file_path: str, sheet_name: str, cell_address: str, value: Any, open_after: bool = False) -> dict[str, Any]:
+def set_cell(
+    file_path: str, sheet_name: str, cell_address: str, value: Any, open_after: bool = False
+) -> dict[str, Any]:
     """Write a value to a single cell by address."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -516,7 +518,11 @@ def set_cell(file_path: str, sheet_name: str, cell_address: str, value: Any, ope
 
 
 def set_range(
-    file_path: str, sheet_name: str, start_cell: str, data: list[list[Any]], open_after: bool = False
+    file_path: str,
+    sheet_name: str,
+    start_cell: str,
+    data: list[list[Any]],
+    open_after: bool = False,
 ) -> dict[str, Any]:
     """Write a 2D list of values starting at start_cell."""
     progress: list[dict[str, Any]] = []
@@ -607,7 +613,9 @@ def set_range(
         }
 
 
-def insert_row(file_path: str, sheet_name: str, row_index: int, open_after: bool = False) -> dict[str, Any]:
+def insert_row(
+    file_path: str, sheet_name: str, row_index: int, open_after: bool = False
+) -> dict[str, Any]:
     """Insert an empty row at row_index (1-based), shifting existing rows down."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -669,7 +677,9 @@ def insert_row(file_path: str, sheet_name: str, row_index: int, open_after: bool
         }
 
 
-def delete_row(file_path: str, sheet_name: str, row_index: int, open_after: bool = False) -> dict[str, Any]:
+def delete_row(
+    file_path: str, sheet_name: str, row_index: int, open_after: bool = False
+) -> dict[str, Any]:
     """Remove row at row_index (1-based), shifting remaining rows up."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None

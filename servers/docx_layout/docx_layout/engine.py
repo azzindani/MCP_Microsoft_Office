@@ -70,7 +70,9 @@ def _out_of_range(
 # ---------------------------------------------------------------------------
 
 
-def set_heading(file_path: str, paragraph_index: int, level: int, open_after: bool = False) -> dict[str, Any]:
+def set_heading(
+    file_path: str, paragraph_index: int, level: int, open_after: bool = False
+) -> dict[str, Any]:
     """Apply Heading 1-6 style to paragraph N."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -248,7 +250,9 @@ def set_font(
         )
 
 
-def set_paragraph_style(file_path: str, paragraph_index: int, style_name: str, open_after: bool = False) -> dict[str, Any]:
+def set_paragraph_style(
+    file_path: str, paragraph_index: int, style_name: str, open_after: bool = False
+) -> dict[str, Any]:
     """Apply a named style from the document style gallery to paragraph N."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None

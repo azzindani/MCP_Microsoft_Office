@@ -24,11 +24,15 @@ def set_font(
     open_after: bool = False,
 ) -> dict:
     """Set font name/size/bold/italic on all runs in paragraph N."""
-    return engine.set_font(file_path, paragraph_index, font_name, font_size, bold, italic, open_after)
+    return engine.set_font(
+        file_path, paragraph_index, font_name, font_size, bold, italic, open_after
+    )
 
 
 @mcp.tool()
-def set_paragraph_style(file_path: str, paragraph_index: int, style_name: str, open_after: bool = False) -> dict:
+def set_paragraph_style(
+    file_path: str, paragraph_index: int, style_name: str, open_after: bool = False
+) -> dict:
     """Apply named style from document gallery to paragraph N."""
     return engine.set_paragraph_style(file_path, paragraph_index, style_name, open_after)
 

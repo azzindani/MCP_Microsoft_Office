@@ -304,7 +304,9 @@ def read_table_row(file_path: str, table_index: int, row: int) -> dict[str, Any]
 # ---------------------------------------------------------------------------
 
 
-def set_cell(file_path: str, table_index: int, row: int, col: int, text: str, open_after: bool = False) -> dict[str, Any]:
+def set_cell(
+    file_path: str, table_index: int, row: int, col: int, text: str, open_after: bool = False
+) -> dict[str, Any]:
     """Write text to a specific table cell. Snapshot taken before write."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -397,7 +399,9 @@ def set_cell(file_path: str, table_index: int, row: int, col: int, text: str, op
         )
 
 
-def add_row(file_path: str, table_index: int, data: list[str], open_after: bool = False) -> dict[str, Any]:
+def add_row(
+    file_path: str, table_index: int, data: list[str], open_after: bool = False
+) -> dict[str, Any]:
     """Append a row to table N. data is a list of cell strings."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -481,7 +485,9 @@ def add_row(file_path: str, table_index: int, data: list[str], open_after: bool 
         )
 
 
-def delete_row(file_path: str, table_index: int, row: int, open_after: bool = False) -> dict[str, Any]:
+def delete_row(
+    file_path: str, table_index: int, row: int, open_after: bool = False
+) -> dict[str, Any]:
     """Remove a row from table N. Rows below shift up."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None

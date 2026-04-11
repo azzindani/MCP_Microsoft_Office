@@ -32,7 +32,9 @@ def read_table_row(file_path: str, table_index: int, row: int) -> dict:
 
 
 @mcp.tool()
-def set_cell(file_path: str, table_index: int, row: int, col: int, text: str, open_after: bool = False) -> dict:
+def set_cell(
+    file_path: str, table_index: int, row: int, col: int, text: str, open_after: bool = False
+) -> dict:
     """Write text to a specific table cell. Snapshot taken before write."""
     return engine.set_cell(file_path, table_index, row, col, text, open_after)
 

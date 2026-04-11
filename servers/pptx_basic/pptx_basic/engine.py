@@ -293,7 +293,9 @@ def read_slide_text(file_path: str, slide_index: int) -> dict[str, Any]:
         return _error(str(e), "Check slide_index is valid.", progress)
 
 
-def set_text(file_path: str, slide_index: int, shape_name: str, new_text: str, open_after: bool = False) -> dict[str, Any]:
+def set_text(
+    file_path: str, slide_index: int, shape_name: str, new_text: str, open_after: bool = False
+) -> dict[str, Any]:
     """Replace text in a shape using run-level editing."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -400,7 +402,9 @@ def set_text(file_path: str, slide_index: int, shape_name: str, new_text: str, o
         )
 
 
-def add_slide(file_path: str, layout_name: str, title: str = "", body: str = "", open_after: bool = False) -> dict[str, Any]:
+def add_slide(
+    file_path: str, layout_name: str, title: str = "", body: str = "", open_after: bool = False
+) -> dict[str, Any]:
     """Append a new slide with layout, title, and body text."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -581,7 +585,9 @@ def delete_slide(file_path: str, slide_index: int, open_after: bool = False) -> 
         )
 
 
-def reorder_slide(file_path: str, from_index: int, to_index: int, open_after: bool = False) -> dict[str, Any]:
+def reorder_slide(
+    file_path: str, from_index: int, to_index: int, open_after: bool = False
+) -> dict[str, Any]:
     """Move a slide from one position to another."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None

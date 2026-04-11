@@ -90,7 +90,9 @@ def delete_paragraph(
 
 
 @mcp.tool()
-def append_text(file_path: str, text: str, style: str = "Body Text", open_after: bool = False) -> dict:
+def append_text(
+    file_path: str, text: str, style: str = "Body Text", open_after: bool = False
+) -> dict:
     """Append a new paragraph at the end of the document."""
     return engine.append_text(file_path, text, style, open_after)
 

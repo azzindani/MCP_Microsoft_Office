@@ -80,7 +80,15 @@ def set_cell_style(
 ) -> dict:
     """Apply font, fill color, and number format styling to a cell."""
     return engine.set_cell_style(
-        file_path, sheet_name, cell_address, font_name, font_size, bold, fill_color, number_format, open_after
+        file_path,
+        sheet_name,
+        cell_address,
+        font_name,
+        font_size,
+        bold,
+        fill_color,
+        number_format,
+        open_after,
     )
 
 
