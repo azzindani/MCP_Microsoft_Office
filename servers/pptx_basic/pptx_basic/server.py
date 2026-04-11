@@ -32,31 +32,27 @@ def read_slide_text(file_path: str, slide_index: int) -> dict:
 
 
 @mcp.tool()
-def set_text(
-    file_path: str, slide_index: int, shape_name: str, new_text: str, open_after: bool = False
-) -> dict:
+def set_text(file_path: str, slide_index: int, shape_name: str, new_text: str) -> dict:
     """Replace shape text using run-level editing."""
-    return engine.set_text(file_path, slide_index, shape_name, new_text, open_after)
+    return engine.set_text(file_path, slide_index, shape_name, new_text, open_after=True)
 
 
 @mcp.tool()
-def add_slide(
-    file_path: str, layout_name: str, title: str = "", body: str = "", open_after: bool = False
-) -> dict:
+def add_slide(file_path: str, layout_name: str, title: str = "", body: str = "") -> dict:
     """Append a slide with given layout, title, and body text."""
-    return engine.add_slide(file_path, layout_name, title, body, open_after)
+    return engine.add_slide(file_path, layout_name, title, body, open_after=True)
 
 
 @mcp.tool()
-def delete_slide(file_path: str, slide_index: int, open_after: bool = False) -> dict:
+def delete_slide(file_path: str, slide_index: int) -> dict:
     """Remove a slide by index."""
-    return engine.delete_slide(file_path, slide_index, open_after)
+    return engine.delete_slide(file_path, slide_index, open_after=True)
 
 
 @mcp.tool()
-def reorder_slide(file_path: str, from_index: int, to_index: int, open_after: bool = False) -> dict:
+def reorder_slide(file_path: str, from_index: int, to_index: int) -> dict:
     """Move a slide from one position to another."""
-    return engine.reorder_slide(file_path, from_index, to_index, open_after)
+    return engine.reorder_slide(file_path, from_index, to_index, open_after=True)
 
 
 @mcp.tool()
@@ -68,10 +64,11 @@ def add_text_box(
     top: float = 1.0,
     width: float = 5.0,
     height: float = 1.0,
-    open_after: bool = False,
 ) -> dict:
     """Add a text box to a slide at given position in inches."""
-    return engine.add_text_box(file_path, slide_index, text, left, top, width, height, open_after)
+    return engine.add_text_box(
+        file_path, slide_index, text, left, top, width, height, open_after=True
+    )
 
 
 @mcp.tool()

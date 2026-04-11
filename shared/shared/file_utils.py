@@ -8,6 +8,16 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+
+def _downloads_dir() -> Path:
+    """Return the user's Downloads directory."""
+    if sys.platform == "win32":
+        base = Path(os.environ.get("USERPROFILE", str(Path.home())))
+    else:
+        base = Path.home()
+    return base / "Downloads"
+
+
 try:
     import json5  # type: ignore[import-untyped]
 
@@ -55,7 +65,16 @@ def resolve_path(raw: str) -> Path:
     if sys.platform == "win32":
         s = s.replace("\\", "/")
 
-    path = Path(s).resolve()
+    p = Path(s)
+
+    # Bare filename (no directory component): check Downloads before falling back to CWD.
+    # This lets tools find files that were created by _new servers (which default to Downloads).
+    if p.parent == Path(".") and not p.is_absolute():
+        downloads_candidate = _downloads_dir() / p.name
+        if downloads_candidate.exists():
+            p = downloads_candidate
+
+    path = p.resolve()
 
     # Reject paths inside .mcp_versions/ to prevent snapshot-of-snapshot loops
     if ".mcp_versions" in path.parts:

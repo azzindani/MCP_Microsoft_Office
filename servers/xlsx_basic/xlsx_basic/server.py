@@ -42,37 +42,33 @@ def search_cells(file_path: str, sheet_name: str, query: str, max_results: int =
 
 
 @mcp.tool()
-def set_cell(
-    file_path: str, sheet_name: str, cell_address: str, value: str, open_after: bool = False
-) -> dict:
+def set_cell(file_path: str, sheet_name: str, cell_address: str, value: str) -> dict:
     """Write a value to a single cell by address."""
-    return engine.set_cell(file_path, sheet_name, cell_address, value, open_after)
+    return engine.set_cell(file_path, sheet_name, cell_address, value, open_after=True)
 
 
 @mcp.tool()
-def set_range(
-    file_path: str, sheet_name: str, start_cell: str, data: list[list], open_after: bool = False
-) -> dict:
+def set_range(file_path: str, sheet_name: str, start_cell: str, data: list[list]) -> dict:
     """Write a 2D list of values starting at start_cell."""
-    return engine.set_range(file_path, sheet_name, start_cell, data, open_after)
+    return engine.set_range(file_path, sheet_name, start_cell, data, open_after=True)
 
 
 @mcp.tool()
-def insert_row(file_path: str, sheet_name: str, row_index: int, open_after: bool = False) -> dict:
+def insert_row(file_path: str, sheet_name: str, row_index: int) -> dict:
     """Insert empty row at row_index (1-based), shifting rows down."""
-    return engine.insert_row(file_path, sheet_name, row_index, open_after)
+    return engine.insert_row(file_path, sheet_name, row_index, open_after=True)
 
 
 @mcp.tool()
-def delete_row(file_path: str, sheet_name: str, row_index: int, open_after: bool = False) -> dict:
+def delete_row(file_path: str, sheet_name: str, row_index: int) -> dict:
     """Remove row at row_index (1-based), shifting remaining rows up."""
-    return engine.delete_row(file_path, sheet_name, row_index, open_after)
+    return engine.delete_row(file_path, sheet_name, row_index, open_after=True)
 
 
 @mcp.tool()
-def add_sheet(file_path: str, sheet_name: str = "", open_after: bool = False) -> dict:
+def add_sheet(file_path: str, sheet_name: str = "") -> dict:
     """Create a new worksheet with an optional name."""
-    return engine.add_sheet(file_path, sheet_name, open_after)
+    return engine.add_sheet(file_path, sheet_name, open_after=True)
 
 
 @mcp.tool()
@@ -82,16 +78,15 @@ def sort_sheet(
     column: str,
     ascending: bool = True,
     has_header: bool = True,
-    open_after: bool = False,
 ) -> dict:
     """Sort sheet rows by column. column='A'. has_header skips row 1."""
-    return _sort_sheet(file_path, sheet_name, column, ascending, has_header, open_after)
+    return _sort_sheet(file_path, sheet_name, column, ascending, has_header, open_after=True)
 
 
 @mcp.tool()
-def rename_sheet(file_path: str, old_name: str, new_name: str, open_after: bool = False) -> dict:
+def rename_sheet(file_path: str, old_name: str, new_name: str) -> dict:
     """Rename a sheet tab from old_name to new_name."""
-    return _rename_sheet(file_path, old_name, new_name, open_after)
+    return _rename_sheet(file_path, old_name, new_name, open_after=True)
 
 
 @mcp.tool()
@@ -106,11 +101,9 @@ def find_duplicates(
 
 
 @mcp.tool()
-def copy_sheet(
-    file_path: str, source_sheet: str, new_sheet_name: str, open_after: bool = False
-) -> dict:
+def copy_sheet(file_path: str, source_sheet: str, new_sheet_name: str) -> dict:
     """Copy source_sheet to a new sheet named new_sheet_name."""
-    return _copy_sheet(file_path, source_sheet, new_sheet_name, open_after)
+    return _copy_sheet(file_path, source_sheet, new_sheet_name, open_after=True)
 
 
 def main() -> None:

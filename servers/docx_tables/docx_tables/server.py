@@ -32,23 +32,21 @@ def read_table_row(file_path: str, table_index: int, row: int) -> dict:
 
 
 @mcp.tool()
-def set_cell(
-    file_path: str, table_index: int, row: int, col: int, text: str, open_after: bool = False
-) -> dict:
+def set_cell(file_path: str, table_index: int, row: int, col: int, text: str) -> dict:
     """Write text to a specific table cell. Snapshot taken before write."""
-    return engine.set_cell(file_path, table_index, row, col, text, open_after)
+    return engine.set_cell(file_path, table_index, row, col, text, open_after=True)
 
 
 @mcp.tool()
-def add_row(file_path: str, table_index: int, data: list[str], open_after: bool = False) -> dict:
+def add_row(file_path: str, table_index: int, data: list[str]) -> dict:
     """Append a row to table N. data is a list of cell text strings."""
-    return engine.add_row(file_path, table_index, data, open_after)
+    return engine.add_row(file_path, table_index, data, open_after=True)
 
 
 @mcp.tool()
-def delete_row(file_path: str, table_index: int, row: int, open_after: bool = False) -> dict:
+def delete_row(file_path: str, table_index: int, row: int) -> dict:
     """Remove row R from table N. Rows below shift up."""
-    return engine.delete_row(file_path, table_index, row, open_after)
+    return engine.delete_row(file_path, table_index, row, open_after=True)
 
 
 @mcp.tool()
@@ -58,16 +56,15 @@ def add_table(
     rows: int,
     cols: int,
     data: list[list[str]] | None = None,
-    open_after: bool = False,
 ) -> dict:
     """Insert new table after paragraph N. data is optional rows×cols list."""
-    return engine.add_table(file_path, after_paragraph_index, rows, cols, data, open_after)
+    return engine.add_table(file_path, after_paragraph_index, rows, cols, data, open_after=True)
 
 
 @mcp.tool()
-def delete_table(file_path: str, table_index: int, open_after: bool = False) -> dict:
+def delete_table(file_path: str, table_index: int) -> dict:
     """Remove table N from the document entirely."""
-    return engine.delete_table(file_path, table_index, open_after)
+    return engine.delete_table(file_path, table_index, open_after=True)
 
 
 def main() -> None:
