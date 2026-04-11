@@ -11,8 +11,8 @@ mcp = FastMCP("xlsx-new")
 
 @mcp.tool()
 def create_workbook(
-    output_path: str,
     sheet_name: str = "Sheet1",
+    output_path: str = "",
 ) -> dict:
     """Create a blank Excel workbook with one sheet."""
     return engine.create_workbook(output_path, sheet_name, open_after=False)
@@ -20,10 +20,10 @@ def create_workbook(
 
 @mcp.tool()
 def create_from_data(
-    output_path: str,
     sheet_name: str,
     headers: list,
     rows: list,
+    output_path: str = "",
 ) -> dict:
     """Create .xlsx from headers list and rows (list of lists)."""
     return engine.create_from_data(output_path, sheet_name, headers, rows, open_after=True)
@@ -31,9 +31,9 @@ def create_from_data(
 
 @mcp.tool()
 def create_report(
-    output_path: str,
     title: str,
     sheets: list,
+    output_path: str = "",
 ) -> dict:
     """Create multi-sheet .xlsx report from [{name,headers,rows}] list."""
     return engine.create_report(output_path, title, sheets, open_after=True)
@@ -42,8 +42,8 @@ def create_report(
 @mcp.tool()
 def create_from_template(
     template_path: str,
-    output_path: str,
     replacements: dict,
+    output_path: str = "",
 ) -> dict:
     """Copy .xlsx template, replace cell values, save to output_path."""
     return engine.create_from_template(template_path, output_path, replacements, open_after=True)
@@ -52,10 +52,10 @@ def create_from_template(
 @mcp.tool()
 def create_from_csv(
     csv_path: str,
-    output_path: str,
     sheet_name: str = "Data",
     delimiter: str = ",",
     has_header: bool = True,
+    output_path: str = "",
 ) -> dict:
     """Import a CSV file into a new Excel workbook."""
     return engine.create_from_csv(
@@ -65,13 +65,13 @@ def create_from_csv(
 
 @mcp.tool()
 def create_invoice(
-    output_path: str,
     company_name: str,
     client_name: str,
     invoice_number: str,
     items: list,
     tax_rate: float = 0.0,
     currency: str = "USD",
+    output_path: str = "",
 ) -> dict:
     """Create a formatted invoice .xlsx with items, totals, and tax formula."""
     return engine.create_invoice(

@@ -10,15 +10,15 @@ mcp = FastMCP("docx-new")
 
 
 @mcp.tool()
-def create_document(output_path: str) -> dict:
+def create_document(output_path: str = "") -> dict:
     """Create a blank Word document and save to output_path."""
     return engine.create_document(output_path, open_after=False)
 
 
 @mcp.tool()
 def create_from_text(
-    output_path: str,
     paragraphs: list[dict],
+    output_path: str = "",
 ) -> dict:
     """Create .docx from list of {text, style} paragraph dicts."""
     return engine.create_from_text(output_path, paragraphs, open_after=True)
@@ -26,9 +26,9 @@ def create_from_text(
 
 @mcp.tool()
 def create_from_sections(
-    output_path: str,
     title: str,
     sections: list[dict],
+    output_path: str = "",
 ) -> dict:
     """Create structured .docx from title + [{heading, body}] sections."""
     return engine.create_from_sections(output_path, title, sections, open_after=True)
@@ -37,8 +37,8 @@ def create_from_sections(
 @mcp.tool()
 def create_from_template(
     template_path: str,
-    output_path: str,
     substitutions: dict,
+    output_path: str = "",
 ) -> dict:
     """Copy template .docx, fill {key: value} substitutions, save."""
     return engine.create_from_template(template_path, output_path, substitutions, open_after=True)
@@ -46,11 +46,11 @@ def create_from_template(
 
 @mcp.tool()
 def create_letter(
-    output_path: str,
     from_name: str,
     to_name: str,
     subject: str,
     body: str,
+    output_path: str = "",
 ) -> dict:
     """Create a formatted business letter .docx."""
     return engine.create_letter(output_path, from_name, to_name, subject, body, open_after=True)
@@ -59,7 +59,7 @@ def create_letter(
 @mcp.tool()
 def merge_documents(
     file_paths: list,
-    output_path: str,
+    output_path: str = "",
     add_page_break: bool = True,
 ) -> dict:
     """Merge multiple .docx files into one document."""
