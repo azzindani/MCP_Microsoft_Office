@@ -32,7 +32,7 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install libomp
 
-      - run: uv sync --frozen
+      - run: uv sync --all-packages --frozen
 
       - run: uv run python tests/create_fixtures.py
 
