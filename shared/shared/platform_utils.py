@@ -162,7 +162,7 @@ def open_file(path: Path) -> None:
     """Open file in the default system application. Silently ignored on failure."""
     try:
         if is_windows():
-            os.startfile(str(path.resolve()))
+            getattr(os, "startfile")(str(path.resolve()))
         elif is_macos():
             subprocess.Popen(["open", str(path.resolve())])
         else:
