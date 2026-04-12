@@ -50,6 +50,7 @@ pythonVersion = "3.12"
 typeCheckingMode = "basic"
 reportMissingImports = true
 reportMissingTypeStubs = false
+extraPaths = ["shared"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

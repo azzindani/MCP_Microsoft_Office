@@ -286,8 +286,8 @@ def read_paragraph_range(file_path: str, start_index: int, end_index: int) -> di
         end = min(end_index, total - 1)
 
         result_paras = [
-            {"index": i, "text": paras[i].text, "style": paras[i].style.name}
-            for i in range(start, end + 1)  # type: ignore[reportOptionalMemberAccess]
+            {"index": i, "text": paras[i].text, "style": paras[i].style.name}  # type: ignore[reportOptionalMemberAccess]
+            for i in range(start, end + 1)
         ]
         progress.append(ok(f"Read paragraphs {start}-{end}", f"{len(result_paras)} paragraphs"))
 
