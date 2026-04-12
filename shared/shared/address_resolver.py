@@ -121,19 +121,14 @@ def resolve_docx_address(doc: Any, address: str) -> DocxNode:
     # Section address
     section_match = re.match(r"^§(\d+)(?:\.(\d+))?(?:\.(p\d+|t\d+))?$", address)
     if not section_match:
-        raise AddressError(
-            f"Invalid address format: '{address}'. "
-            "Use §N, §N.pM, pN, or slide[N]/shape[name] notation."
-        )
+        raise AddressError(f"Invalid address format: '{address}'. Use §N, §N.pM, pN, or slide[N]/shape[name] notation.")
 
     index_data = build_docx_index(doc)
     sections = index_data.get("sections", [])
 
     section_num = int(section_match.group(1))
     if section_num < 1 or section_num > len(sections):
-        raise AddressError(
-            f"Section §{section_num} not found. Document has {len(sections)} sections."
-        )
+        raise AddressError(f"Section §{section_num} not found. Document has {len(sections)} sections.")
 
     section = sections[section_num - 1]
     para_start, para_end = section["para_range"]
@@ -149,8 +144,7 @@ def resolve_docx_address(doc: Any, address: str) -> DocxNode:
         abs_idx = para_start + rel_idx
         if abs_idx > para_end:
             raise AddressError(
-                f"Paragraph §{section_num}.p{rel_idx} out of range. "
-                f"Section has {para_end - para_start + 1} paragraphs."
+                f"Paragraph §{section_num}.p{rel_idx} out of range. Section has {para_end - para_start + 1} paragraphs."
             )
         return DocxNode(paragraph=paragraphs[abs_idx], para_index=abs_idx)
 
@@ -190,9 +184,7 @@ def fetch_section_content(doc: Any, address: str) -> dict[str, Any]:
     sections = index_data["sections"]
     section_num = int(section_match.group(1))
     if section_num < 1 or section_num > len(sections):
-        raise AddressError(
-            f"Section §{section_num} not found. Document has {len(sections)} sections."
-        )
+        raise AddressError(f"Section §{section_num} not found. Document has {len(sections)} sections.")
 
     section = sections[section_num - 1]
     para_start, para_end = section["para_range"]
@@ -313,19 +305,14 @@ def resolve_pptx_address(prs: Any, address: str) -> PptxNode:
     """
     pattern = re.match(r"^slide\[(\d+)\]/shape\[(.+?)\](?:/p(\d+))?$", address)
     if not pattern:
-        raise AddressError(
-            f"Invalid PPTX address: '{address}'. "
-            "Use slide[N]/shape[name] or slide[N]/shape[name]/pN"
-        )
+        raise AddressError(f"Invalid PPTX address: '{address}'. Use slide[N]/shape[name] or slide[N]/shape[name]/pN")
 
     slide_idx = int(pattern.group(1))
     shape_name = pattern.group(2)
     para_idx = int(pattern.group(3)) if pattern.group(3) else None
 
     if slide_idx >= len(prs.slides):
-        raise AddressError(
-            f"Slide index {slide_idx} out of range. Presentation has {len(prs.slides)} slides."
-        )
+        raise AddressError(f"Slide index {slide_idx} out of range. Presentation has {len(prs.slides)} slides.")
 
     slide = prs.slides[slide_idx]
     shape = None
@@ -336,18 +323,14 @@ def resolve_pptx_address(prs: Any, address: str) -> PptxNode:
 
     if shape is None:
         available = [s.name for s in slide.shapes]
-        raise AddressError(
-            f"Shape '{shape_name}' not found on slide {slide_idx}. Available: {available}"
-        )
+        raise AddressError(f"Shape '{shape_name}' not found on slide {slide_idx}. Available: {available}")
 
     if para_idx is not None:
         if not shape.has_text_frame:
             raise AddressError(f"Shape '{shape_name}' has no text frame.")
         paras = shape.text_frame.paragraphs
         if para_idx >= len(paras):
-            raise AddressError(
-                f"Paragraph index {para_idx} out of range. Shape has {len(paras)} paragraphs."
-            )
+            raise AddressError(f"Paragraph index {para_idx} out of range. Shape has {len(paras)} paragraphs.")
         return PptxNode(
             slide=slide,
             shape=shape,

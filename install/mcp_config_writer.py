@@ -126,16 +126,11 @@ def write_cline_config(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Register office-mcp servers in AI platform config files."
-    )
+    parser = argparse.ArgumentParser(description="Register office-mcp servers in AI platform config files.")
     parser.add_argument(
         "--servers",
         default="all",
-        help=(
-            "Comma-separated server names to register, or 'all'. "
-            f"Available: {', '.join(ALL_SERVERS)}"
-        ),
+        help=(f"Comma-separated server names to register, or 'all'. Available: {', '.join(ALL_SERVERS)}"),
     )
     parser.add_argument(
         "--platform",

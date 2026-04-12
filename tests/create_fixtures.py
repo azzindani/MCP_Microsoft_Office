@@ -22,19 +22,13 @@ def create_docx_fixtures() -> None:
     p.add_run(") is entered into as of EFFECTIVE_DATE.")
 
     doc.add_heading("1. Parties", level=2)
-    doc.add_paragraph(
-        'PARTY_A_NAME ("Client") and PARTY_B_NAME ("Service Provider") '
-        "agree to the following terms."
-    )
+    doc.add_paragraph('PARTY_A_NAME ("Client") and PARTY_B_NAME ("Service Provider") agree to the following terms.')
 
     doc.add_heading("2. Scope of Work", level=2)
     doc.add_paragraph(
-        "Service Provider shall deliver software development services as described "
-        "in Exhibit A attached hereto."
+        "Service Provider shall deliver software development services as described in Exhibit A attached hereto."
     )
-    doc.add_paragraph(
-        "All deliverables shall conform to the specifications agreed upon in writing."
-    )
+    doc.add_paragraph("All deliverables shall conform to the specifications agreed upon in writing.")
 
     doc.add_heading("3. Payment Terms", level=2)
     p2 = doc.add_paragraph()
@@ -42,9 +36,7 @@ def create_docx_fixtures() -> None:
     run2 = p2.add_run("30 days")
     run2.bold = True
     p2.add_run(" of invoice receipt.")
-    doc.add_paragraph(
-        "Contract value is CONTRACT_VALUE USD. Late payments incur a 1.5% monthly fee."
-    )
+    doc.add_paragraph("Contract value is CONTRACT_VALUE USD. Late payments incur a 1.5% monthly fee.")
 
     doc.add_heading("4. Termination", level=2)
     doc.add_paragraph("Either party may terminate this Agreement with 30 days written notice.")
@@ -75,9 +67,7 @@ def create_docx_fixtures() -> None:
 
     doc2.add_heading("1. Services", level=2)
     for i in range(1, 6):
-        doc2.add_paragraph(
-            f"Section 1.{i}: Lorem ipsum dolor sit amet, clause {i}.", style="Body Text"
-        )
+        doc2.add_paragraph(f"Section 1.{i}: Lorem ipsum dolor sit amet, clause {i}.", style="Body Text")
 
     doc2.add_heading("2. Fees and Payment", level=2)
     p3 = doc2.add_paragraph()

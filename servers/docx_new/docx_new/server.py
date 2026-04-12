@@ -74,9 +74,7 @@ def batch_create_from_template(
     filename_key: str = "",
 ) -> dict:
     """Generate N .docx files from a template + list of {key:value} dicts."""
-    return engine.batch_create_from_template(
-        template_path, data_list, output_dir, filename_key, open_after=True
-    )
+    return engine.batch_create_from_template(template_path, data_list, output_dir, filename_key, open_after=True)
 
 
 def main() -> None:

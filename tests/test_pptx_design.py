@@ -76,9 +76,7 @@ def test_set_background_image(deck: Path, tmp_path: Path) -> None:
         raw = b"\x00\xff\x00\x00"  # filter byte + RGB
         compressed = zlib.compress(raw)
         idat_crc = zlib.crc32(b"IDAT" + compressed) & 0xFFFFFFFF
-        idat = (
-            struct.pack(">I", len(compressed)) + b"IDAT" + compressed + struct.pack(">I", idat_crc)
-        )
+        idat = struct.pack(">I", len(compressed)) + b"IDAT" + compressed + struct.pack(">I", idat_crc)
         iend_crc = zlib.crc32(b"IEND") & 0xFFFFFFFF
         iend = struct.pack(">I", 0) + b"IEND" + struct.pack(">I", iend_crc)
         return sig + ihdr + idat + iend

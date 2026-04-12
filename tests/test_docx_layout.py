@@ -275,12 +275,7 @@ class TestAddImage:
             ihdr = struct.pack(">I", 13) + b"IHDR" + ihdr_data + struct.pack(">I", ihdr_crc)
             idat_data = zlib.compress(b"\x00\xff\xff\xff")
             idat_crc = zlib.crc32(b"IDAT" + idat_data)
-            idat = (
-                struct.pack(">I", len(idat_data))
-                + b"IDAT"
-                + idat_data
-                + struct.pack(">I", idat_crc)
-            )
+            idat = struct.pack(">I", len(idat_data)) + b"IDAT" + idat_data + struct.pack(">I", idat_crc)
             iend_crc = zlib.crc32(b"IEND")
             iend = struct.pack(">I", 0) + b"IEND" + struct.pack(">I", iend_crc)
             return sig + ihdr + idat + iend

@@ -118,9 +118,7 @@ def test_set_conditional_format_greater_than(workbook: Path) -> None:
     sheet_name = wb.sheetnames[0]
     wb.close()
 
-    result = set_conditional_format(
-        str(workbook), sheet_name, "A1:A10", "greater_than", 100.0, "green"
-    )
+    result = set_conditional_format(str(workbook), sheet_name, "A1:A10", "greater_than", 100.0, "green")
     assert result["success"] is True
     assert result["rule"] == "greater_than"
     assert result["color"] == "green"
@@ -141,9 +139,7 @@ def test_set_conditional_format_between(workbook: Path) -> None:
     sheet_name = wb.sheetnames[0]
     wb.close()
 
-    result = set_conditional_format(
-        str(workbook), sheet_name, "A1:A10", "between", 10.0, "yellow", value2=50.0
-    )
+    result = set_conditional_format(str(workbook), sheet_name, "A1:A10", "between", 10.0, "yellow", value2=50.0)
     assert result["success"] is True
 
 
@@ -152,9 +148,7 @@ def test_set_conditional_format_invalid_rule(workbook: Path) -> None:
     sheet_name = wb.sheetnames[0]
     wb.close()
 
-    result = set_conditional_format(
-        str(workbook), sheet_name, "A1:A10", "not_a_rule", 10.0, "green"
-    )
+    result = set_conditional_format(str(workbook), sheet_name, "A1:A10", "not_a_rule", 10.0, "green")
     assert result["success"] is False
     assert "hint" in result
 
@@ -164,9 +158,7 @@ def test_set_conditional_format_invalid_color(workbook: Path) -> None:
     sheet_name = wb.sheetnames[0]
     wb.close()
 
-    result = set_conditional_format(
-        str(workbook), sheet_name, "A1:A10", "greater_than", 10.0, "purple"
-    )
+    result = set_conditional_format(str(workbook), sheet_name, "A1:A10", "greater_than", 10.0, "purple")
     assert result["success"] is False
     assert "hint" in result
 
@@ -181,9 +173,7 @@ def test_set_data_validation_list(workbook: Path) -> None:
     sheet_name = wb.sheetnames[0]
     wb.close()
 
-    result = set_data_validation(
-        str(workbook), sheet_name, "A1:A10", "list", '"Option1,Option2,Option3"'
-    )
+    result = set_data_validation(str(workbook), sheet_name, "A1:A10", "list", '"Option1,Option2,Option3"')
     assert result["success"] is True
     assert result["validation_type"] == "list"
     assert "backup" in result

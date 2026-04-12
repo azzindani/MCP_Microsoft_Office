@@ -380,9 +380,7 @@ def test_add_text_box_has_progress(tmp_deck: Path) -> None:
 
 
 def test_add_text_box_custom_position(tmp_deck: Path) -> None:
-    result = add_text_box(
-        str(tmp_deck), 1, "positioned box", left=2.0, top=3.0, width=4.0, height=0.5
-    )
+    result = add_text_box(str(tmp_deck), 1, "positioned box", left=2.0, top=3.0, width=4.0, height=0.5)
     assert result["success"] is True
     assert result["position"]["left"] == 2.0
     assert result["position"]["top"] == 3.0

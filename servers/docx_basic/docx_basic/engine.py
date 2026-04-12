@@ -64,10 +64,10 @@ def get_document_outline(file_path: str) -> dict[str, Any]:
 
         outline: list[dict[str, Any]] = []
         for i, p in enumerate(paragraphs):
-            name = p.style.name
-            if name.startswith("Heading "):
+            name = p.style.name  # type: ignore[reportOptionalMemberAccess]
+            if name and name.startswith("Heading "):  # type: ignore[reportOptionalMemberAccess]
                 try:
-                    level = int(name.split()[-1])
+                    level = int(name.split()[-1])  # type: ignore[reportOptionalMemberAccess]
                     if 1 <= level <= 6:
                         outline.append({"index": i, "level": level, "text": p.text})
                 except (ValueError, IndexError):
@@ -178,9 +178,7 @@ def read_document(file_path: str) -> dict[str, Any]:
         truncated = total > max_p
         para_list = all_paras[:max_p]
 
-        paragraphs = [
-            {"index": i, "text": p.text, "style": p.style.name} for i, p in enumerate(para_list)
-        ]
+        paragraphs = [{"index": i, "text": p.text, "style": p.style.name} for i, p in enumerate(para_list)]  # type: ignore[reportOptionalMemberAccess]
 
         result: dict[str, Any] = {
             "success": True,
@@ -194,9 +192,7 @@ def read_document(file_path: str) -> dict[str, Any]:
         if truncated:
             result["truncated"] = True
             result["truncated_at"] = max_p
-            result["warning"] = (
-                "Large document. Use get_document_index + fetch_section for targeted access."
-            )
+            result["warning"] = "Large document. Use get_document_index + fetch_section for targeted access."
             progress.append(
                 warn(
                     f"Document truncated at {max_p} paragraphs",
@@ -252,7 +248,7 @@ def read_paragraph(file_path: str, index: int) -> dict[str, Any]:
             "success": True,
             "index": index,
             "text": p.text,
-            "style": p.style.name,
+            "style": p.style.name,  # type: ignore[reportOptionalMemberAccess]
             "runs": runs,
             "progress": progress,
             "token_estimate": len(str(runs)) // 4,
@@ -291,7 +287,7 @@ def read_paragraph_range(file_path: str, start_index: int, end_index: int) -> di
 
         result_paras = [
             {"index": i, "text": paras[i].text, "style": paras[i].style.name}
-            for i in range(start, end + 1)
+            for i in range(start, end + 1)  # type: ignore[reportOptionalMemberAccess]
         ]
         progress.append(ok(f"Read paragraphs {start}-{end}", f"{len(result_paras)} paragraphs"))
 
@@ -337,7 +333,7 @@ def search_paragraphs(file_path: str, query: str, max_results: int = 10) -> dict
         q_lower = query.lower()
         for i, p in enumerate(paras):
             if q_lower in p.text.lower():
-                matches.append({"index": i, "text": p.text, "style": p.style.name})
+                matches.append({"index": i, "text": p.text, "style": p.style.name})  # type: ignore[reportOptionalMemberAccess]
                 if len(matches) >= max_results:
                     break
 
@@ -546,7 +542,7 @@ def insert_paragraph(
         target_idx = after_index + 1 if after_index >= 0 else 0
         if target_idx < len(doc2.paragraphs):
             try:
-                doc2.paragraphs[target_idx].style = doc2.styles[style]
+                doc2.paragraphs[target_idx].style = doc2.styles[style]  # type: ignore[reportAttributeAccessIssue]
             except KeyError:
                 pass  # Style doesn't exist — use default
             doc2.save(str(path))
@@ -679,9 +675,7 @@ def delete_paragraph(
         }
 
 
-def append_text(
-    file_path: str, text: str, style: str = "Body Text", open_after: bool = False
-) -> dict[str, Any]:
+def append_text(file_path: str, text: str, style: str = "Body Text", open_after: bool = False) -> dict[str, Any]:
     """Append a new paragraph at document end."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -703,7 +697,7 @@ def append_text(
 
         new_para = doc.add_paragraph(text)
         try:
-            new_para.style = doc.styles[style]
+            new_para.style = doc.styles[style]  # type: ignore[reportAttributeAccessIssue]
         except KeyError:
             pass  # Default style
 

@@ -51,9 +51,7 @@ def update_chart(
     data_range: str = "",
 ) -> dict:
     """Update chart title and/or data range by index."""
-    return engine.update_chart(
-        file_path, sheet_name, chart_index, title, data_range, open_after=True
-    )
+    return engine.update_chart(file_path, sheet_name, chart_index, title, data_range, open_after=True)
 
 
 @mcp.tool()
@@ -67,9 +65,7 @@ def add_pivot_table(
     values: str,
 ) -> dict:
     """Create pivot summary table from source range data."""
-    return engine.add_pivot_table(
-        file_path, sheet_name, source_range, dest_cell, rows, cols, values, open_after=True
-    )
+    return engine.add_pivot_table(file_path, sheet_name, source_range, dest_cell, rows, cols, values, open_after=True)
 
 
 @mcp.tool()

@@ -4,59 +4,78 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build release (${{ matrix.os }})
+  ci:
+    name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-22.04
-            artifact: office-mcp-linux.tar.gz
-          - os: windows-latest
-            artifact: office-mcp-windows-x64.zip
-          - os: macos-latest
-            artifact: office-mcp-macos.tar.gz
+        os: [ubuntu-22.04, macos-latest, windows-latest]
+
+    env:
+      MCP_CONSTRAINED_MODE: "1"
+      PYTHONPATH: "."
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v4
         with:
-          version: "latest"
+          python-version: "3.12"
 
-      - name: Set up Python 3.12
-        run: uv python install 3.12
+      - name: Install native dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install libomp
 
-      - name: Install dependencies
-        run: uv sync --all-packages --frozen
+      - run: uv sync --frozen
 
-      - name: Build Linux/macOS archive
-        if: runner.os != 'Windows'
+      - run: uv run python tests/create_fixtures.py
+
+      - run: uv run ruff check .
+
+      - run: uv run ruff format --check .
+
+      - run: uv run pyright servers/ shared/
+
+      - run: uv run python tests/verify_tool_docstrings.py
+
+      - run: uv run python -m pytest tests/ -q --tb=short
+
+  release:
+    name: Create Release
+    needs: ci
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract tag
+        id: tag
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate changelog
+        id: changelog
         run: |
-          tar --exclude='.git' --exclude='.venv' --exclude='__pycache__' \
-              --exclude='*.pyc' --exclude='.mcp_versions' \
-              -czf "$RUNNER_TEMP/${{ matrix.artifact }}" .
-          mv "$RUNNER_TEMP/${{ matrix.artifact }}" "${{ matrix.artifact }}"
+          PREV_TAG=$(git tag --sort=-creatordate | head -2 | tail -1)
+          if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "${{ steps.tag.outputs.version }}" ]; then
+            LOG=$(git log --oneline --no-decorate | head -50)
+          else
+            LOG=$(git log --oneline --no-decorate "${PREV_TAG}..HEAD" | head -50)
+          fi
+          echo "$LOG" > /tmp/changelog.txt
 
-      - name: Build Windows archive
-        if: runner.os == 'Windows'
-        run: |
-          $dest = Join-Path $env:RUNNER_TEMP "${{ matrix.artifact }}"
-          $src = Get-Location
-          Set-Location ..
-          Compress-Archive -Path (Split-Path $src -Leaf) -DestinationPath $dest -Force
-          Set-Location $src
-          Move-Item $dest "${{ matrix.artifact }}"
-        shell: pwsh
-
-      - name: Upload release asset
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ matrix.artifact }}
+          tag_name: ${{ steps.tag.outputs.version }}
+          name: ${{ steps.tag.outputs.version }}
+          body_path: /tmp/changelog.txt
+          draft: false
+          prerelease: ${{ contains(steps.tag.outputs.version, '-rc') || contains(steps.tag.outputs.version, '-beta') || contains(steps.tag.outputs.version, '-alpha') }}
+          generate_release_notes: true

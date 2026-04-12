@@ -63,9 +63,7 @@ def _check_slide(
     """Return (slide, None) or (None, error_dict) if index out of range."""
     count = len(prs.slides)
     if slide_index < 0 or slide_index >= count:
-        progress.append(
-            fail(f"Slide index {slide_index} out of range", f"Presentation has {count} slide(s)")
-        )
+        progress.append(fail(f"Slide index {slide_index} out of range", f"Presentation has {count} slide(s)"))
         return None, {
             "success": False,
             "error": f"slide_index {slide_index} out of range (0-{count - 1})",
@@ -625,9 +623,7 @@ def export_pdf(
                 return {
                     "success": False,
                     "error": "LibreOffice PDF conversion failed",
-                    "hint": result_proc.stderr[:200]
-                    if result_proc.stderr
-                    else "Check LibreOffice installation.",
+                    "hint": result_proc.stderr[:200] if result_proc.stderr else "Check LibreOffice installation.",
                     "progress": progress,
                     "token_estimate": 15,
                 }

@@ -89,9 +89,7 @@ def fill_formula_down(
     end_row: int,
 ) -> dict:
     """Fill formula down from start_cell to end_row, adjusting row refs."""
-    return engine.fill_formula_down(
-        file_path, sheet_name, formula, start_cell, end_row, open_after=True
-    )
+    return engine.fill_formula_down(file_path, sheet_name, formula, start_cell, end_row, open_after=True)
 
 
 @mcp.tool()
@@ -103,9 +101,7 @@ def auto_sum(
     function_name: str = "SUM",
 ) -> dict:
     """Add SUM/AVERAGE/COUNT/MAX/MIN formula for a range into sum_cell."""
-    return engine.auto_sum(
-        file_path, sheet_name, data_range, sum_cell, function_name, open_after=True
-    )
+    return engine.auto_sum(file_path, sheet_name, data_range, sum_cell, function_name, open_after=True)
 
 
 @mcp.tool()

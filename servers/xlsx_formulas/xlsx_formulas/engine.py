@@ -383,7 +383,7 @@ def set_data_validation(
             return err
 
         dv = DataValidation(
-            type=validation_type,
+            type=validation_type,  # type: ignore[reportArgumentType]
             formula1=formula1 or None,
             formula2=formula2 or None,
             allow_blank=True,

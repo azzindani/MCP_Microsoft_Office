@@ -44,9 +44,7 @@ def resolve_path(raw: str) -> Path:
     s = raw.strip()
 
     # Strip wrapping quotes (drag-and-drop artifact)
-    if len(s) >= 2 and (
-        (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'"))
-    ):
+    if len(s) >= 2 and ((s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'"))):
         s = s[1:-1].strip()
 
     # Strip Windows long-path prefix
@@ -78,10 +76,7 @@ def resolve_path(raw: str) -> Path:
 
     # Reject paths inside .mcp_versions/ to prevent snapshot-of-snapshot loops
     if ".mcp_versions" in path.parts:
-        raise ValueError(
-            f"Path '{path}' is inside .mcp_versions/. "
-            "Pass the original document path, not a backup path."
-        )
+        raise ValueError(f"Path '{path}' is inside .mcp_versions/. Pass the original document path, not a backup path.")
 
     # Add Windows long-path prefix if needed
     if sys.platform == "win32" and len(str(path)) > 200:

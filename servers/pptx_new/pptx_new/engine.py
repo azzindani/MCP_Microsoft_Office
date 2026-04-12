@@ -158,7 +158,7 @@ def create_from_outline(
                 if content:
                     # Acceptable here: creating new content with no prior formatting
                     try:
-                        tf = slide.placeholders[1].text_frame
+                        tf = slide.placeholders[1].text_frame  # type: ignore[reportAttributeAccessIssue]
                         tf.clear()
                         tf.text = content
                     except (IndexError, KeyError, AttributeError):
@@ -236,7 +236,7 @@ def create_deck_from_data(
             if body_text:
                 # Acceptable here: creating new content, no prior formatting to preserve
                 try:
-                    tf = slide.placeholders[1].text_frame
+                    tf = slide.placeholders[1].text_frame  # type: ignore[reportAttributeAccessIssue]
                     tf.clear()
                     tf.text = body_text
                 except (IndexError, KeyError, AttributeError):
@@ -371,7 +371,7 @@ def create_agenda(
         agenda_text = "\n".join(agenda_lines)
 
         try:
-            tf = agenda_slide.placeholders[1].text_frame
+            tf = agenda_slide.placeholders[1].text_frame  # type: ignore[reportAttributeAccessIssue]
             tf.clear()
             tf.text = agenda_text
         except (IndexError, KeyError, AttributeError):
@@ -399,9 +399,7 @@ def create_agenda(
 
     except Exception as exc:
         logger.exception("create_agenda failed")
-        return _error(
-            str(exc), "Check output_path is writable and items is a valid list.", progress
-        )
+        return _error(str(exc), "Check output_path is writable and items is a valid list.", progress)
 
 
 def create_from_docx(
@@ -442,11 +440,11 @@ def create_from_docx(
         # Extract slide structure from headings
         slides_data: list[dict[str, Any]] = []
         current_slide: dict[str, Any] | None = None
-        has_headings = any(p.style.name.startswith("Heading") for p in paragraphs)
+        has_headings = any(p.style.name.startswith("Heading") for p in paragraphs)  # type: ignore[reportOptionalMemberAccess]
 
         if has_headings:
             for para in paragraphs:
-                style = para.style.name
+                style = para.style.name  # type: ignore[reportOptionalMemberAccess]
                 text = para.text.strip()
                 if not text:
                     continue
@@ -499,7 +497,7 @@ def create_from_docx(
                 _set_placeholder_text(slide, 0, title_text)
                 if content_text:
                     try:
-                        tf = slide.placeholders[1].text_frame
+                        tf = slide.placeholders[1].text_frame  # type: ignore[reportAttributeAccessIssue]
                         tf.clear()
                         tf.text = content_text
                     except (IndexError, KeyError, AttributeError):

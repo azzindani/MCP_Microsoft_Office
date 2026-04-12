@@ -62,9 +62,7 @@ def replace_text(
     dry_run: bool = False,
 ) -> dict:
     """Find text and replace in-place, preserving run formatting."""
-    return engine.replace_text(
-        file_path, match_text, new_text, preserve_style, dry_run, open_after=True
-    )
+    return engine.replace_text(file_path, match_text, new_text, preserve_style, dry_run, open_after=True)
 
 
 @mcp.tool()

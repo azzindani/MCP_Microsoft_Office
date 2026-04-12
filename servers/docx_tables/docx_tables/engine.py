@@ -40,9 +40,7 @@ def _wrong_type(path: Path, expected: str, progress: list[dict[str, Any]]) -> di
     }
 
 
-def _error(
-    msg: str, hint: str, progress: list[dict[str, Any]], backup: str | None = None
-) -> dict[str, Any]:
+def _error(msg: str, hint: str, progress: list[dict[str, Any]], backup: str | None = None) -> dict[str, Any]:
     result: dict[str, Any] = {
         "success": False,
         "error": msg,
@@ -281,9 +279,7 @@ def read_table_row(file_path: str, table_index: int, row: int) -> dict[str, Any]
                 progress,
             )
 
-        cells = [
-            {"col": c_idx, "text": cell.text} for c_idx, cell in enumerate(tbl.rows[row].cells)
-        ]
+        cells = [{"col": c_idx, "text": cell.text} for c_idx, cell in enumerate(tbl.rows[row].cells)]
         progress.append(ok(f"Read row {row} of table {table_index}", f"{len(cells)} cells"))
 
         return {
@@ -397,9 +393,7 @@ def set_cell(
         return _error(str(e), hint_for_error(e, path), progress, backup)
 
 
-def add_row(
-    file_path: str, table_index: int, data: list[str], open_after: bool = False
-) -> dict[str, Any]:
+def add_row(file_path: str, table_index: int, data: list[str], open_after: bool = False) -> dict[str, Any]:
     """Append a row to table N. data is a list of cell strings."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -481,9 +475,7 @@ def add_row(
         return _error(str(e), hint_for_error(e, path), progress, backup)
 
 
-def delete_row(
-    file_path: str, table_index: int, row: int, open_after: bool = False
-) -> dict[str, Any]:
+def delete_row(file_path: str, table_index: int, row: int, open_after: bool = False) -> dict[str, Any]:
     """Remove a row from table N. Rows below shift up."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None

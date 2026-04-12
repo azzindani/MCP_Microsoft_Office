@@ -39,13 +39,7 @@ def get_claude_desktop_config_path() -> Path:
         base = Path(os.environ.get("APPDATA", "~")).expanduser()
         return base / "Claude" / "claude_desktop_config.json"
     elif is_macos():
-        return (
-            Path.home()
-            / "Library"
-            / "Application Support"
-            / "Claude"
-            / "claude_desktop_config.json"
-        )
+        return Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
     else:
         return Path.home() / ".config" / "Claude" / "claude_desktop_config.json"
 
@@ -102,24 +96,29 @@ def get_temp_dir() -> Path:
     return d
 
 
+def is_constrained_mode() -> bool:
+    """Return True when MCP_CONSTRAINED_MODE=1 or OFFICE_MCP_8GB_MODE=1 is set."""
+    return os.environ.get("MCP_CONSTRAINED_MODE", "0") == "1" or os.environ.get("OFFICE_MCP_8GB_MODE", "0") == "1"
+
+
 def is_8gb_mode() -> bool:
-    """Return True when OFFICE_MCP_8GB_MODE=1 is set."""
-    return os.environ.get("OFFICE_MCP_8GB_MODE", "0") == "1"
+    """Alias for is_constrained_mode(). Kept for backward compatibility."""
+    return is_constrained_mode()
 
 
 def get_max_paragraphs() -> int:
     """Maximum paragraphs to return in a range read."""
-    return 20 if is_8gb_mode() else 50
+    return 20 if is_constrained_mode() else 50
 
 
 def get_max_cells() -> int:
     """Maximum cells to return in a range read."""
-    return 100 if is_8gb_mode() else 200
+    return 100 if is_constrained_mode() else 200
 
 
 def get_max_search_results() -> int:
     """Maximum search results to return."""
-    return 10 if is_8gb_mode() else 50
+    return 10 if is_constrained_mode() else 50
 
 
 def get_downloads_dir() -> Path:

@@ -285,6 +285,7 @@ class TestPlatformUtils:
 
     def test_8gb_mode_off_by_default(self, monkeypatch):
         monkeypatch.delenv("OFFICE_MCP_8GB_MODE", raising=False)
+        monkeypatch.delenv("MCP_CONSTRAINED_MODE", raising=False)
         from shared.platform_utils import is_8gb_mode
 
         assert is_8gb_mode() is False

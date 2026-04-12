@@ -18,14 +18,8 @@ def diff_docx(path_a: str, path_b: str) -> dict[str, Any]:
         doc_a = Document(path_a)
         doc_b = Document(path_b)
 
-        paras_a = [
-            {"index": i, "text": p.text, "style": p.style.name}
-            for i, p in enumerate(doc_a.paragraphs)
-        ]
-        paras_b = [
-            {"index": i, "text": p.text, "style": p.style.name}
-            for i, p in enumerate(doc_b.paragraphs)
-        ]
+        paras_a = [{"index": i, "text": p.text, "style": p.style.name} for i, p in enumerate(doc_a.paragraphs)]  # type: ignore[reportOptionalMemberAccess]
+        paras_b = [{"index": i, "text": p.text, "style": p.style.name} for i, p in enumerate(doc_b.paragraphs)]  # type: ignore[reportOptionalMemberAccess]
 
         texts_a = [p["text"] for p in paras_a]
         texts_b = [p["text"] for p in paras_b]
@@ -111,8 +105,8 @@ def diff_xlsx(path_a: str, path_b: str, sheet_name: str | None = None) -> dict[s
                     all_coords.add(cell.coordinate)
 
             for coord in sorted(all_coords):
-                val_a = ws_a[coord].value if coord in ws_a else None
-                val_b = ws_b[coord].value if coord in ws_b else None
+                val_a = ws_a[coord].value if coord in ws_a else None  # type: ignore[reportOperatorIssue]
+                val_b = ws_b[coord].value if coord in ws_b else None  # type: ignore[reportOperatorIssue]
                 if val_a != val_b:
                     changed_cells.append({"cell": coord, "old": val_a, "new": val_b})
                     total_changes += 1
@@ -160,8 +154,8 @@ def diff_pptx(path_a: str, path_b: str) -> dict[str, Any]:
 
         changes: list[dict[str, Any]] = []
         for i, (slide_a, slide_b) in enumerate(zip(prs_a.slides, prs_b.slides)):
-            shapes_a = {s.name: s.text_frame.text for s in slide_a.shapes if s.has_text_frame}
-            shapes_b = {s.name: s.text_frame.text for s in slide_b.shapes if s.has_text_frame}
+            shapes_a = {s.name: s.text_frame.text for s in slide_a.shapes if s.has_text_frame}  # type: ignore[reportAttributeAccessIssue]
+            shapes_b = {s.name: s.text_frame.text for s in slide_b.shapes if s.has_text_frame}  # type: ignore[reportAttributeAccessIssue]
 
             all_names = set(shapes_a) | set(shapes_b)
             for name in sorted(all_names):
@@ -276,8 +270,5 @@ def _summarise_pptx_diff(changes: list[dict[str, Any]], count_a: int, count_b: i
         parts.append(f"{len(changes)} shape text{'s' if len(changes) != 1 else ''} changed")
     if count_a != count_b:
         diff = count_b - count_a
-        parts.append(
-            f"Slide count changed: {count_a} → {count_b} "
-            f"({'added' if diff > 0 else 'removed'} {abs(diff)})"
-        )
+        parts.append(f"Slide count changed: {count_a} → {count_b} ({'added' if diff > 0 else 'removed'} {abs(diff)})")
     return ". ".join(parts) + "."

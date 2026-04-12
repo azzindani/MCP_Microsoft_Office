@@ -47,9 +47,7 @@ def add_table(
     height: float = 3.0,
 ) -> dict:
     """Insert a table with row/col data on a slide."""
-    return engine.add_table(
-        file_path, slide_index, rows, cols, data, left, top, width, height, open_after=True
-    )
+    return engine.add_table(file_path, slide_index, rows, cols, data, left, top, width, height, open_after=True)
 
 
 @mcp.tool()
@@ -65,9 +63,7 @@ def add_chart(
     height: float = 4.5,
 ) -> dict:
     """Add chart to slide. type: bar, line, pie. data: {categories, series}."""
-    return engine.add_chart(
-        file_path, slide_index, chart_type, data, title, left, top, width, height, open_after=True
-    )
+    return engine.add_chart(file_path, slide_index, chart_type, data, title, left, top, width, height, open_after=True)
 
 
 @mcp.tool()
@@ -99,9 +95,7 @@ def add_image_to_all_slides(
     height: float = 0.5,
 ) -> dict:
     """Add the same image (logo/watermark) to every slide at given position."""
-    return engine.add_image_to_all_slides(
-        file_path, image_path, left, top, width, height, open_after=True
-    )
+    return engine.add_image_to_all_slides(file_path, image_path, left, top, width, height, open_after=True)
 
 
 @mcp.tool()
@@ -113,9 +107,7 @@ def set_font_all_slides(
     color_hex: str = "",
 ) -> dict:
     """Apply font name/size/bold/color to every text run on all slides."""
-    return engine.set_font_all_slides(
-        file_path, font_name, font_size, bold, color_hex, open_after=True
-    )
+    return engine.set_font_all_slides(file_path, font_name, font_size, bold, color_hex, open_after=True)
 
 
 def main() -> None:

@@ -23,9 +23,7 @@ def set_font(
     italic: bool = False,
 ) -> dict:
     """Set font name/size/bold/italic on all runs in paragraph N."""
-    return engine.set_font(
-        file_path, paragraph_index, font_name, font_size, bold, italic, open_after=True
-    )
+    return engine.set_font(file_path, paragraph_index, font_name, font_size, bold, italic, open_after=True)
 
 
 @mcp.tool()

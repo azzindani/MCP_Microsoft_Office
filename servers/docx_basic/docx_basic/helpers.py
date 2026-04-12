@@ -137,9 +137,7 @@ def replace_at(file_path: str, address: str, new_text: str) -> dict[str, Any]:
         }
 
 
-def insert_at(
-    file_path: str, address: str, new_text: str, style: str = "Body Text"
-) -> dict[str, Any]:
+def insert_at(file_path: str, address: str, new_text: str, style: str = "Body Text") -> dict[str, Any]:
     """Insert new paragraph after address. Snapshot taken before write."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None

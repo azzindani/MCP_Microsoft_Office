@@ -58,9 +58,7 @@ def create_from_csv(
     output_path: str = "",
 ) -> dict:
     """Import a CSV file into a new Excel workbook."""
-    return engine.create_from_csv(
-        csv_path, output_path, sheet_name, delimiter, has_header, open_after=True
-    )
+    return engine.create_from_csv(csv_path, output_path, sheet_name, delimiter, has_header, open_after=True)
 
 
 @mcp.tool()

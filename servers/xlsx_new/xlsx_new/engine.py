@@ -166,8 +166,7 @@ def create_from_data(
             "success": False,
             "error": str(exc),
             "hint": (
-                "Ensure headers is a list of strings and rows is a list of lists. "
-                "Check that output_path is writable."
+                "Ensure headers is a list of strings and rows is a list of lists. Check that output_path is writable."
             ),
             "progress": progress,
             "token_estimate": _token_estimate(progress),
@@ -293,7 +292,7 @@ def create_from_template(
             for row in sheet.iter_rows():
                 for cell in row:
                     if cell.value is not None and cell.value in replacements:
-                        cell.value = replacements[cell.value]
+                        cell.value = replacements[cell.value]  # type: ignore[reportArgumentType]
                         replaced_count += 1
 
         progress.append(
@@ -327,10 +326,7 @@ def create_from_template(
         return {
             "success": False,
             "error": str(exc),
-            "hint": (
-                "Ensure template_path points to a valid .xlsx file and "
-                "output_path is a writable destination."
-            ),
+            "hint": ("Ensure template_path points to a valid .xlsx file and output_path is a writable destination."),
             "progress": progress,
             "token_estimate": _token_estimate(progress),
         }
@@ -414,8 +410,7 @@ def create_from_csv(
             "success": False,
             "error": str(exc),
             "hint": (
-                "Check that csv_path points to a readable CSV file and "
-                "output_path is a writable .xlsx destination."
+                "Check that csv_path points to a readable CSV file and output_path is a writable .xlsx destination."
             ),
             "progress": progress,
             "token_estimate": _token_estimate(progress),
@@ -442,9 +437,7 @@ def create_invoice(
             return {
                 "success": False,
                 "error": "items must be a non-empty list",
-                "hint": (
-                    'Pass a list like [{"description":"Widget","quantity":2,"unit_price":50.0}].'
-                ),
+                "hint": ('Pass a list like [{"description":"Widget","quantity":2,"unit_price":50.0}].'),
                 "progress": progress,
                 "token_estimate": _token_estimate(progress),
             }

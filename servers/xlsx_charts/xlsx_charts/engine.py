@@ -81,7 +81,7 @@ def _parse_range_ref(ws: Any, data_range: str) -> Reference:
         _, cell_range = data_range.split("!", 1)
     else:
         cell_range = data_range
-    return Reference(ws, range_string=f"'{ws.title}'!{cell_range}")
+    return Reference(ws, range_string=f"'{ws.title}'!{cell_range}")  # type: ignore[reportCallIssue]
 
 
 def _parse_cell_range(range_str: str) -> tuple[int, int, int, int]:
@@ -215,9 +215,7 @@ def delete_chart(
 
         charts = ws._charts  # type: ignore[attr-defined]
         if chart_index < 0 or chart_index >= len(charts):
-            progress.append(
-                fail(f"Chart index {chart_index} out of range", f"Sheet has {len(charts)} chart(s)")
-            )
+            progress.append(fail(f"Chart index {chart_index} out of range", f"Sheet has {len(charts)} chart(s)"))
             return {
                 "success": False,
                 "error": f"chart_index {chart_index} out of range (0-{len(charts) - 1})",
@@ -287,9 +285,7 @@ def update_chart(
 
         charts = ws._charts  # type: ignore[attr-defined]
         if chart_index < 0 or chart_index >= len(charts):
-            progress.append(
-                fail(f"Chart index {chart_index} out of range", f"Sheet has {len(charts)} chart(s)")
-            )
+            progress.append(fail(f"Chart index {chart_index} out of range", f"Sheet has {len(charts)} chart(s)"))
             return {
                 "success": False,
                 "error": f"chart_index {chart_index} out of range (0-{len(charts) - 1})",
@@ -448,9 +444,7 @@ def add_pivot_table(
         for ri, (rk, col_data) in enumerate(aggregated.items()):
             ws.cell(row=dest_row + 1 + ri, column=dest_col).value = rk
             for ci, ck in enumerate(col_keys):
-                ws.cell(row=dest_row + 1 + ri, column=dest_col + 1 + ci).value = col_data.get(
-                    ck, 0.0
-                )
+                ws.cell(row=dest_row + 1 + ri, column=dest_col + 1 + ci).value = col_data.get(ck, 0.0)
 
         wb.save(str(path))
         wb.close()

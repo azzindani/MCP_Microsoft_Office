@@ -131,9 +131,7 @@ def get_sheet_summary(file_path: str, sheet_name: str) -> dict[str, Any]:
                 if sample_count < 5 and row:
                     first_cell = row[0]
                     if first_cell.value is not None:
-                        first_col_sample.append(
-                            {"cell": first_cell.coordinate, "value": first_cell.value}
-                        )
+                        first_col_sample.append({"cell": first_cell.coordinate, "value": first_cell.value})
                         sample_count += 1
 
         wb.close()
@@ -613,9 +611,7 @@ def set_range(
         }
 
 
-def insert_row(
-    file_path: str, sheet_name: str, row_index: int, open_after: bool = False
-) -> dict[str, Any]:
+def insert_row(file_path: str, sheet_name: str, row_index: int, open_after: bool = False) -> dict[str, Any]:
     """Insert an empty row at row_index (1-based), shifting existing rows down."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -677,9 +673,7 @@ def insert_row(
         }
 
 
-def delete_row(
-    file_path: str, sheet_name: str, row_index: int, open_after: bool = False
-) -> dict[str, Any]:
+def delete_row(file_path: str, sheet_name: str, row_index: int, open_after: bool = False) -> dict[str, Any]:
     """Remove row at row_index (1-based), shifting remaining rows up."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None

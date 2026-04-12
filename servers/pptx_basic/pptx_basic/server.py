@@ -66,9 +66,7 @@ def add_text_box(
     height: float = 1.0,
 ) -> dict:
     """Add a text box to a slide at given position in inches."""
-    return engine.add_text_box(
-        file_path, slide_index, text, left, top, width, height, open_after=True
-    )
+    return engine.add_text_box(file_path, slide_index, text, left, top, width, height, open_after=True)
 
 
 @mcp.tool()

@@ -37,9 +37,7 @@ def _wrong_type(path: Path, expected: str, progress: list[dict[str, Any]]) -> di
     }
 
 
-def _error(
-    msg: str, hint: str, progress: list[dict[str, Any]], backup: str | None = None
-) -> dict[str, Any]:
+def _error(msg: str, hint: str, progress: list[dict[str, Any]], backup: str | None = None) -> dict[str, Any]:
     result: dict[str, Any] = {
         "success": False,
         "progress": progress,
@@ -155,7 +153,7 @@ def read_slide(file_path: str, slide_index: int) -> dict[str, Any]:
                 "type": _shape_type_str(shape),
             }
             if shape.has_text_frame:
-                shape_dict["text"] = shape.text_frame.text
+                shape_dict["text"] = shape.text_frame.text  # type: ignore[reportAttributeAccessIssue]
                 shape_dict["paragraphs"] = [
                     {
                         "index": p_idx,
@@ -169,7 +167,7 @@ def read_slide(file_path: str, slide_index: int) -> dict[str, Any]:
                             for run in para.runs
                         ],
                     }
-                    for p_idx, para in enumerate(shape.text_frame.paragraphs)
+                    for p_idx, para in enumerate(shape.text_frame.paragraphs)  # type: ignore[reportAttributeAccessIssue]
                 ]
             shapes.append(shape_dict)
 
@@ -218,7 +216,7 @@ def search_slides(file_path: str, query: str) -> dict[str, Any]:
         for slide_idx, slide in enumerate(prs.slides):
             for shape in slide.shapes:
                 if shape.has_text_frame:
-                    text = shape.text_frame.text
+                    text = shape.text_frame.text  # type: ignore[reportAttributeAccessIssue]
                     if q_lower in text.lower():
                         matches.append(
                             {
@@ -273,11 +271,7 @@ def read_slide_text(file_path: str, slide_index: int) -> dict[str, Any]:
             )
 
         slide = prs.slides[slide_index]
-        shapes = [
-            {"name": shape.name, "text": shape.text_frame.text}
-            for shape in slide.shapes
-            if shape.has_text_frame
-        ]
+        shapes = [{"name": shape.name, "text": shape.text_frame.text} for shape in slide.shapes if shape.has_text_frame]  # type: ignore[reportAttributeAccessIssue]
 
         progress.append(ok(f"Read slide {slide_index} text", f"{len(shapes)} shapes"))
 
@@ -344,7 +338,7 @@ def set_text(
                 progress,
             )
 
-        old_text = target_shape.text_frame.text
+        old_text = target_shape.text_frame.text  # type: ignore[reportAttributeAccessIssue]
         backup = snapshot(str(path))
         progress.append(ok("Snapshot saved", Path(backup).name))
 
@@ -529,7 +523,7 @@ def delete_slide(file_path: str, slide_index: int, open_after: bool = False) -> 
         deleted_title = ""
         for shape in slide.shapes:
             if shape.has_text_frame and shape.name.startswith("Title"):
-                deleted_title = shape.text_frame.text
+                deleted_title = shape.text_frame.text  # type: ignore[reportAttributeAccessIssue]
                 break
 
         backup = snapshot(str(path))
@@ -585,9 +579,7 @@ def delete_slide(file_path: str, slide_index: int, open_after: bool = False) -> 
         )
 
 
-def reorder_slide(
-    file_path: str, from_index: int, to_index: int, open_after: bool = False
-) -> dict[str, Any]:
+def reorder_slide(file_path: str, from_index: int, to_index: int, open_after: bool = False) -> dict[str, Any]:
     """Move a slide from one position to another."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None

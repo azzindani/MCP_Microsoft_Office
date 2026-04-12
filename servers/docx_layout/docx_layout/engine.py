@@ -38,9 +38,7 @@ def _wrong_type(path: Path, expected: str, progress: list[dict[str, Any]]) -> di
     }
 
 
-def _error(
-    msg: str, hint: str, progress: list[dict[str, Any]], backup: str | None = None
-) -> dict[str, Any]:
+def _error(msg: str, hint: str, progress: list[dict[str, Any]], backup: str | None = None) -> dict[str, Any]:
     result: dict[str, Any] = {
         "success": False,
         "error": msg,
@@ -53,9 +51,7 @@ def _error(
     return result
 
 
-def _out_of_range(
-    idx: int, total: int, progress: list[dict[str, Any]], backup: str | None = None
-) -> dict[str, Any]:
+def _out_of_range(idx: int, total: int, progress: list[dict[str, Any]], backup: str | None = None) -> dict[str, Any]:
     progress.append(fail(f"Paragraph index {idx} out of range", f"0-{total - 1}"))
     return _error(
         f"paragraph_index {idx} out of range (0-{total - 1})",
@@ -70,9 +66,7 @@ def _out_of_range(
 # ---------------------------------------------------------------------------
 
 
-def set_heading(
-    file_path: str, paragraph_index: int, level: int, open_after: bool = False
-) -> dict[str, Any]:
+def set_heading(file_path: str, paragraph_index: int, level: int, open_after: bool = False) -> dict[str, Any]:
     """Apply Heading 1-6 style to paragraph N."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -104,7 +98,7 @@ def set_heading(
 
         para = doc.paragraphs[paragraph_index]
         style_name = f"Heading {level}"
-        para.style = doc.styles[style_name]
+        para.style = doc.styles[style_name]  # type: ignore[reportAttributeAccessIssue]
         progress.append(ok(f"Applied {style_name} to paragraph {paragraph_index}"))
 
         doc.save(str(path))
@@ -282,7 +276,7 @@ def set_paragraph_style(
         progress.append(ok("Snapshot saved", Path(backup).name))
 
         para = doc.paragraphs[paragraph_index]
-        para.style = doc.styles[style_name]
+        para.style = doc.styles[style_name]  # type: ignore[reportAttributeAccessIssue]
         progress.append(ok(f"Applied style '{style_name}' to paragraph {paragraph_index}"))
 
         doc.save(str(path))

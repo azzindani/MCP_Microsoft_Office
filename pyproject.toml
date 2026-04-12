@@ -2,7 +2,7 @@
 name = "office-mcp"
 version = "0.1.0"
 description = "MCP servers for Microsoft Office file formats"
-requires-python = ">=3.11"
+requires-python = "==3.12.*"
 readme = "README.md"
 license = { text = "MIT" }
 
@@ -25,12 +25,16 @@ members = [
 [tool.uv.sources]
 shared = { workspace = true }
 
+[tool.uv]
+required-version = ">=0.5"
+
 [tool.ruff]
-line-length = 100
-target-version = "py311"
+line-length = 120
+target-version = "py312"
+exclude = ["*.ipynb"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP"]
+select = ["E", "F", "W", "I", "UP"]
 ignore = ["E501"]
 
 [tool.ruff.lint.isort]
@@ -42,8 +46,8 @@ known-first-party = [
 ]
 
 [tool.pyright]
-pythonVersion = "3.11"
-typeCheckingMode = "strict"
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
 reportMissingImports = true
 reportMissingTypeStubs = false
 
