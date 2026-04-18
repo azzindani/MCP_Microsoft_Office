@@ -1,6 +1,8 @@
 """Snapshot, patch log, and rollback for document version control."""
 
+import os
 import shutil
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -17,11 +19,15 @@ def _backup_name(file_path: str, timestamp: str) -> str:
 
 
 def snapshot(file_path: str) -> str:
-    """
-    Copy file_path to .mcp_versions/{stem}_{iso_timestamp}.bak.
+    """Copy file_path to .mcp_versions/{stem}_{iso_timestamp}.bak.
 
     Returns the backup path as a string.
     Raises FileNotFoundError if file_path does not exist.
+
+    Uses microsecond-precision timestamps and a collision counter so that
+    two snapshots taken within the same second produce distinct filenames
+    (important on Windows where datetime resolution can be coarse).
+    Write is atomic: temp-file + rename so a partial copy is never visible.
     """
     src = Path(file_path).resolve()
     if not src.exists():
@@ -30,11 +36,30 @@ def snapshot(file_path: str) -> str:
     versions_dir = _versions_dir(file_path)
     versions_dir.mkdir(parents=True, exist_ok=True)
 
-    timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%SZ")
-    backup_name = _backup_name(file_path, timestamp)
-    backup_path = versions_dir / backup_name
+    # Microsecond-precision timestamp avoids same-second collisions
+    timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%S-%fZ")
+    backup_path = versions_dir / _backup_name(file_path, timestamp)
 
-    shutil.copy2(str(src), str(backup_path))
+    # Collision counter: append _N if the path already exists
+    counter = 1
+    while backup_path.exists():
+        stem = Path(file_path).stem
+        backup_path = versions_dir / f"{stem}_{timestamp}_{counter}.bak"
+        counter += 1
+
+    # Atomic write: copy to a temp file then rename
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=versions_dir)
+    try:
+        os.close(tmp_fd)
+        shutil.copy2(str(src), tmp_path)
+        shutil.move(tmp_path, str(backup_path))
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
     return str(backup_path)
 
 

@@ -27,10 +27,10 @@ except ImportError:
 
 
 def resolve_path(raw: str) -> Path:
-    """
-    Normalise any user-provided file path to an absolute resolved Path.
+    """Normalise any user-provided file path to an absolute resolved Path.
 
     Handles:
+    - workspace:name/alias and project:name/alias prefixes (DA interop)
     - Leading/trailing whitespace and wrapping quotes
     - ~ home directory expansion
     - Environment variable expansion ($HOME, %USERPROFILE%)
@@ -42,6 +42,14 @@ def resolve_path(raw: str) -> Path:
         ValueError: if path is inside .mcp_versions/ or contains null bytes
     """
     s = raw.strip()
+
+    # Resolve workspace: / project: aliases produced by MCP_Data_Analyst handover
+    if s.startswith("workspace:") or s.startswith("project:"):
+        try:
+            from shared.workspace_utils import resolve_alias  # type: ignore[import]
+            return resolve_alias(s)
+        except Exception as exc:
+            raise ValueError(f"Cannot resolve workspace alias '{s}': {exc}") from exc
 
     # Strip wrapping quotes (drag-and-drop artifact)
     if len(s) >= 2 and ((s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'"))):

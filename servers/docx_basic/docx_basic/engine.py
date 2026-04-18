@@ -12,6 +12,7 @@ from shared.address_resolver import (
     fetch_section_content,
 )
 from shared.file_utils import hint_for_error, resolve_path
+from shared.handover import make_context, make_handover
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_max_paragraphs, get_max_search_results, open_file
 from shared.progress import fail, info, ok, warn
@@ -80,6 +81,17 @@ def get_document_outline(file_path: str) -> dict[str, Any]:
             "file": str(path),
             "total_paragraphs": total,
             "outline": outline,
+            "hint": "Pass an outline heading index to read_paragraph() or use get_document_index() for full section addresses.",
+            "handover": make_handover(
+                workflow_step="COLLECT",
+                suggested_next=[
+                    {"tool": "get_document_index", "server": "docx_basic", "domain": "office",
+                     "reason": "get addressable section tree for surgical edits"},
+                    {"tool": "search_paragraphs", "server": "docx_basic", "domain": "office",
+                     "reason": "find specific text within the document"},
+                ],
+                carry_forward={"file_path": str(path)},
+            ),
             "progress": progress,
             "token_estimate": len(str(outline)) // 4,
         }
@@ -111,6 +123,17 @@ def get_document_index(file_path: str) -> dict[str, Any]:
             "total_paragraphs": total,
             "address_scheme": index_data["address_scheme"],
             "sections": index_data["sections"],
+            "hint": "Use an address like '§2' or '§2.p4' with fetch_section() to read targeted content.",
+            "handover": make_handover(
+                workflow_step="INSPECT",
+                suggested_next=[
+                    {"tool": "fetch_section", "server": "docx_basic", "domain": "office",
+                     "reason": "read content of a specific section by address"},
+                    {"tool": "search_paragraphs", "server": "docx_basic", "domain": "office",
+                     "reason": "find paragraphs matching a query"},
+                ],
+                carry_forward={"file_path": str(path)},
+            ),
             "progress": progress,
             "token_estimate": len(str(index_data["sections"])) // 4,
         }
@@ -140,6 +163,17 @@ def fetch_section(file_path: str, address: str) -> dict[str, Any]:
             "success": True,
             "file": str(path),
             **content,
+            "hint": "Call replace_text() or apply_patch() to edit the paragraphs you found.",
+            "handover": make_handover(
+                workflow_step="INSPECT",
+                suggested_next=[
+                    {"tool": "replace_text", "server": "docx_basic", "domain": "office",
+                     "reason": "replace text in this section"},
+                    {"tool": "search_paragraphs", "server": "docx_basic", "domain": "office",
+                     "reason": "narrow down to a specific paragraph"},
+                ],
+                carry_forward={"file_path": str(path), "address": address},
+            ),
             "progress": progress,
             "token_estimate": len(str(content)) // 4,
         }
@@ -185,6 +219,24 @@ def read_document(file_path: str) -> dict[str, Any]:
             "file": str(path),
             "paragraph_count": total,
             "paragraphs": paragraphs,
+            "hint": "Call search_paragraphs() or get_document_index() to locate text before editing.",
+            "context": make_context(
+                op="read_document",
+                summary=f"Opened {path.name} — {total} paragraphs",
+                artifacts=[{"type": "docx", "path": str(path), "role": "input"}],
+            ),
+            "handover": make_handover(
+                workflow_step="INSPECT",
+                suggested_next=[
+                    {"tool": "search_paragraphs", "server": "docx_basic", "domain": "office",
+                     "reason": "locate specific text before editing"},
+                    {"tool": "get_document_index", "server": "docx_basic", "domain": "office",
+                     "reason": "get section tree for large documents"},
+                    {"tool": "replace_text", "server": "docx_basic", "domain": "office",
+                     "reason": "make a targeted text replacement"},
+                ],
+                carry_forward={"file_path": str(path)},
+            ),
             "progress": progress,
             "token_estimate": len(str(paragraphs)) // 4,
         }

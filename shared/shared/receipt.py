@@ -11,17 +11,19 @@ from typing import Any
 def append_receipt(
     file_path: str,
     tool: str,
-    server: str,
-    args: dict[str, Any],
-    result: str,
-    backup: str | None,
-    success: bool,
+    server: str = "",
+    args: dict[str, Any] | None = None,
+    result: str = "",
+    backup: str | None = None,
+    success: bool = True,
 ) -> None:
-    """
-    Append one entry to the receipt log for this file.
+    """Append one entry to the receipt log for this file.
 
     Creates the log if it does not exist.
     Never raises — receipt failures must not abort the main operation.
+
+    ``server`` and ``success`` default to "" / True so that callers using
+    the MCP_Data_Analyst 5-arg signature also work without changes.
     """
     try:
         path = Path(file_path).resolve()
@@ -37,7 +39,7 @@ def append_receipt(
                 "ts": datetime.now(UTC).isoformat(),
                 "tool": tool,
                 "server": server,
-                "args": _sanitise_args(args),
+                "args": _sanitise_args(args or {}),
                 "result": result,
                 "backup": backup,
                 "success": success,
