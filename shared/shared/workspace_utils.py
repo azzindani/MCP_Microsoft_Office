@@ -165,7 +165,7 @@ def resolve_alias(alias_str: str, base_dir: str = "") -> Path:
     if prefix is None:
         return Path(alias_str).expanduser().resolve()
 
-    rest = alias_str[len(prefix):]
+    rest = alias_str[len(prefix) :]
     if "/" not in rest:
         raise ValueError(
             f"Invalid alias format '{alias_str}'. Expected 'workspace:name/alias' or 'project:name/alias'."
@@ -175,9 +175,7 @@ def resolve_alias(alias_str: str, base_dir: str = "") -> Path:
     files = manifest.get("files", {})
     if file_alias not in files:
         available = list(files.keys())
-        raise ValueError(
-            f"Alias '{file_alias}' not found in workspace '{workspace_name}'. Available: {available}"
-        )
+        raise ValueError(f"Alias '{file_alias}' not found in workspace '{workspace_name}'. Available: {available}")
     stored_path = files[file_alias]["path"]
     ws_dir = get_workspace_dir(workspace_name, base_dir)
     candidate = Path(stored_path)

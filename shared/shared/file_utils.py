@@ -47,6 +47,7 @@ def resolve_path(raw: str) -> Path:
     if s.startswith("workspace:") or s.startswith("project:"):
         try:
             from shared.workspace_utils import resolve_alias  # type: ignore[import]
+
             return resolve_alias(s)
         except Exception as exc:
             raise ValueError(f"Cannot resolve workspace alias '{s}': {exc}") from exc

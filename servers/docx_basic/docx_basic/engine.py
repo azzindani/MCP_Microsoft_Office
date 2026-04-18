@@ -85,10 +85,18 @@ def get_document_outline(file_path: str) -> dict[str, Any]:
             "handover": make_handover(
                 workflow_step="COLLECT",
                 suggested_next=[
-                    {"tool": "get_document_index", "server": "docx_basic", "domain": "office",
-                     "reason": "get addressable section tree for surgical edits"},
-                    {"tool": "search_paragraphs", "server": "docx_basic", "domain": "office",
-                     "reason": "find specific text within the document"},
+                    {
+                        "tool": "get_document_index",
+                        "server": "docx_basic",
+                        "domain": "office",
+                        "reason": "get addressable section tree for surgical edits",
+                    },
+                    {
+                        "tool": "search_paragraphs",
+                        "server": "docx_basic",
+                        "domain": "office",
+                        "reason": "find specific text within the document",
+                    },
                 ],
                 carry_forward={"file_path": str(path)},
             ),
@@ -127,10 +135,18 @@ def get_document_index(file_path: str) -> dict[str, Any]:
             "handover": make_handover(
                 workflow_step="INSPECT",
                 suggested_next=[
-                    {"tool": "fetch_section", "server": "docx_basic", "domain": "office",
-                     "reason": "read content of a specific section by address"},
-                    {"tool": "search_paragraphs", "server": "docx_basic", "domain": "office",
-                     "reason": "find paragraphs matching a query"},
+                    {
+                        "tool": "fetch_section",
+                        "server": "docx_basic",
+                        "domain": "office",
+                        "reason": "read content of a specific section by address",
+                    },
+                    {
+                        "tool": "search_paragraphs",
+                        "server": "docx_basic",
+                        "domain": "office",
+                        "reason": "find paragraphs matching a query",
+                    },
                 ],
                 carry_forward={"file_path": str(path)},
             ),
@@ -167,10 +183,18 @@ def fetch_section(file_path: str, address: str) -> dict[str, Any]:
             "handover": make_handover(
                 workflow_step="INSPECT",
                 suggested_next=[
-                    {"tool": "replace_text", "server": "docx_basic", "domain": "office",
-                     "reason": "replace text in this section"},
-                    {"tool": "search_paragraphs", "server": "docx_basic", "domain": "office",
-                     "reason": "narrow down to a specific paragraph"},
+                    {
+                        "tool": "replace_text",
+                        "server": "docx_basic",
+                        "domain": "office",
+                        "reason": "replace text in this section",
+                    },
+                    {
+                        "tool": "search_paragraphs",
+                        "server": "docx_basic",
+                        "domain": "office",
+                        "reason": "narrow down to a specific paragraph",
+                    },
                 ],
                 carry_forward={"file_path": str(path), "address": address},
             ),
@@ -228,12 +252,24 @@ def read_document(file_path: str) -> dict[str, Any]:
             "handover": make_handover(
                 workflow_step="INSPECT",
                 suggested_next=[
-                    {"tool": "search_paragraphs", "server": "docx_basic", "domain": "office",
-                     "reason": "locate specific text before editing"},
-                    {"tool": "get_document_index", "server": "docx_basic", "domain": "office",
-                     "reason": "get section tree for large documents"},
-                    {"tool": "replace_text", "server": "docx_basic", "domain": "office",
-                     "reason": "make a targeted text replacement"},
+                    {
+                        "tool": "search_paragraphs",
+                        "server": "docx_basic",
+                        "domain": "office",
+                        "reason": "locate specific text before editing",
+                    },
+                    {
+                        "tool": "get_document_index",
+                        "server": "docx_basic",
+                        "domain": "office",
+                        "reason": "get section tree for large documents",
+                    },
+                    {
+                        "tool": "replace_text",
+                        "server": "docx_basic",
+                        "domain": "office",
+                        "reason": "make a targeted text replacement",
+                    },
                 ],
                 carry_forward={"file_path": str(path)},
             ),
