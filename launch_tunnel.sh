@@ -87,7 +87,7 @@ for entry in "${PORTS[@]}"; do
   log="$LOG_DIR/${name}.log"
   url=""
   for i in $(seq 1 30); do
-    url=$(grep -oP 'https://[a-z0-9\-]+\.trycloudflare\.com' "$log" 2>/dev/null | head -1)
+    url=$(grep -oP 'https://[a-z0-9\-]+\.trycloudflare\.com' "$log" 2>/dev/null | head -1 || true)
     [ -n "$url" ] && break
     sleep 1
   done
