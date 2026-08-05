@@ -70,3 +70,6 @@ Desktop.ini
 *.zip
 *.tar.gz
 *.whl
+
+# Deployment secrets
+tokens.json

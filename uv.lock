@@ -202,7 +202,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "docxedit", specifier = ">=1.2.0" },
-    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0,<2.0" },
     { name = "python-docx", specifier = ">=1.1.0" },
     { name = "shared", editable = "shared" },
 ]
@@ -221,7 +221,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "docx2pdf", specifier = ">=0.1.8" },
-    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0,<2.0" },
     { name = "python-docx", specifier = ">=1.1.0" },
     { name = "shared", editable = "shared" },
 ]
@@ -240,7 +240,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "docxedit", specifier = ">=1.2.0" },
-    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0,<2.0" },
     { name = "python-docx", specifier = ">=1.1.0" },
     { name = "shared", editable = "shared" },
 ]
@@ -257,7 +257,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0,<2.0" },
     { name = "python-docx", specifier = ">=1.1.0" },
     { name = "shared", editable = "shared" },
 ]
@@ -568,7 +568,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0,<2.0" },
     { name = "python-pptx", specifier = ">=0.6.23" },
     { name = "shared", editable = "shared" },
 ]
@@ -587,7 +587,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "docx2pdf", specifier = ">=0.1.8" },
-    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0,<2.0" },
     { name = "python-pptx", specifier = ">=0.6.23" },
     { name = "shared", editable = "shared" },
 ]
@@ -604,7 +604,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0,<2.0" },
     { name = "python-pptx", specifier = ">=0.6.23" },
     { name = "shared", editable = "shared" },
 ]
@@ -879,10 +879,14 @@ version = "0.1.0"
 source = { editable = "shared" }
 dependencies = [
     { name = "json5" },
+    { name = "mcp", extra = ["cli"] },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "json5", specifier = ">=0.9.0" }]
+requires-dist = [
+    { name = "json5", specifier = ">=0.9.0" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0,<2.0" },
+]
 
 [[package]]
 name = "shellingham"
@@ -992,7 +996,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0,<2.0" },
     { name = "openpyxl", specifier = ">=3.1.0" },
     { name = "shared", editable = "shared" },
 ]
@@ -1010,7 +1014,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0,<2.0" },
     { name = "openpyxl", specifier = ">=3.1.0" },
     { name = "shared", editable = "shared" },
     { name = "xlsxwriter", specifier = ">=3.2.0" },
@@ -1028,7 +1032,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0,<2.0" },
     { name = "openpyxl", specifier = ">=3.1.0" },
     { name = "shared", editable = "shared" },
 ]
@@ -1045,7 +1049,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.2.0,<2.0" },
     { name = "openpyxl", specifier = ">=3.1.0" },
     { name = "shared", editable = "shared" },
 ]

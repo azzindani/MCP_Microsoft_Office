@@ -1,14 +1,43 @@
 """XLSX Basic MCP server — thin wrapper over engine.py."""
 
-from mcp.server.fastmcp import FastMCP
+import argparse
+import os
 
+from mcp.server.fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+
+from shared.deploy_auth import build_auth
 from xlsx_basic import engine
 from xlsx_basic.helpers import copy_sheet as _copy_sheet
 from xlsx_basic.helpers import find_duplicates as _find_duplicates
 from xlsx_basic.helpers import rename_sheet as _rename_sheet
 from xlsx_basic.helpers import sort_sheet as _sort_sheet
 
-mcp = FastMCP("xlsx-basic")
+_VERSION = "0.1.0"  # keep in sync with pyproject.toml [project].version
+_HOST = os.environ.get("OFFICE_XLSX_BASIC_HOST", "127.0.0.1")
+_PORT = int(os.environ.get("OFFICE_XLSX_BASIC_PORT", "8834"))
+_token_verifier, _auth_settings = build_auth("OFFICE", _HOST, _PORT)
+
+mcp = FastMCP(
+    "xlsx-basic",
+    host=_HOST,
+    port=_PORT,
+    token_verifier=_token_verifier,
+    auth=_auth_settings,
+)
+
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health(request: Request) -> JSONResponse:
+    """Liveness check. Unauthenticated."""
+    return JSONResponse({"status": "ok", "version": _VERSION})
+
+
+@mcp.custom_route("/version", methods=["GET"])
+async def version(request: Request) -> JSONResponse:
+    """Report running version. Unauthenticated."""
+    return JSONResponse({"current": _VERSION})
 
 
 @mcp.tool()
@@ -107,7 +136,18 @@ def copy_sheet(file_path: str, source_sheet: str, new_sheet_name: str) -> dict:
 
 
 def main() -> None:
-    mcp.run()
+    parser = argparse.ArgumentParser(description="xlsx_basic MCP Server")
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "http"],
+        default=os.environ.get("OFFICE_XLSX_BASIC_TRANSPORT", "stdio"),
+    )
+    args = parser.parse_args()
+
+    if args.transport == "http":
+        mcp.run(transport="streamable-http")
+    else:
+        mcp.run(transport="stdio")
 
 
 if __name__ == "__main__":

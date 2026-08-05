@@ -46,6 +46,28 @@ jobs:
 
       - run: uv run python -m pytest tests/ -q --tb=short
 
+  # Publishes ghcr.io/<owner>/mcp-microsoft-office:<version> + :latest. Uses
+  # the shared composite action hosted in MCP_Math so build/push mechanics
+  # stay in one place across all azzindani MCP_* repos.
+  docker:
+    name: Publish Docker image (GHCR)
+    needs: ci
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and push
+        uses: azzindani/MCP_Math/.github/actions/docker-ghcr-publish@main
+        with:
+          image-name: mcp-microsoft-office
+          push: "true"
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+
   release:
     name: Create Release
     needs: ci

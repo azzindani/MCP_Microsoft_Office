@@ -1,5 +1,8 @@
 # CLAUDE.md — office-mcp
 
+> Standards reference: https://github.com/azzindani/Standards/blob/main/local_mcp/STANDARDS.md
+> When this file conflicts with the general STANDARDS.md, this file takes precedence.
+
 This file is the authoritative guide for Claude Code (and any AI coding agent) working
 in this repository. Read it fully before writing, editing, or deleting any code.
 Every architectural decision, naming rule, constraint, and workflow is documented here.
@@ -1102,6 +1105,37 @@ show users what has been done to a file without opening any external log.
 Every write tool supports `dry_run: bool = False`. When `True`, the tool shows what
 would change — including the progress output — without modifying the file. No snapshot
 is taken and no receipt entry is written.
+
+---
+
+## Transport and Deployment (STANDARDS.md §30, §31)
+
+Each of the 11 servers supports `--transport {stdio,http}` via `main()`'s argparse,
+defaulting from `OFFICE_<NAME>_TRANSPORT` env vars (e.g. `OFFICE_DOCX_BASIC_TRANSPORT`).
+HTTP mode uses `transport="streamable-http"` (raw `mcp` SDK) and exposes
+unauthenticated `/health` and `/version` routes plus the authenticated `/mcp`
+endpoint. Host/port are constructor args on `FastMCP(...)`, read from
+`OFFICE_<NAME>_HOST` / `OFFICE_<NAME>_PORT` env vars at import time (ports 8830-8840,
+one per server — docx_basic/tables/layout/new, xlsx_basic/formulas/charts/new,
+pptx_basic/design/new).
+
+Bearer auth (`shared/shared/deploy_auth.py`, `build_auth("OFFICE", host, port)`) is
+shared across all 11 servers via the `shared` workspace package — one token set
+governs the whole repo:
+
+- `OFFICE_TOKENS_FILE` (named tokens, JSON `{name: token}`) — highest priority
+- `OFFICE_TOKENS` (inline `"name:token,name2:token2"`)
+- `OFFICE_API_KEY` (single shared token)
+- unset = open mode (no auth) — localhost/private-network use only
+
+`Dockerfile` + `docker-compose.yml` build one image — **`uv sync --frozen --all-packages`**
+is required (this is a true `[tool.uv.workspace]`; plain `uv sync` only installs the
+root project's own deps, which are empty, not the 11 members' runtime deps like
+`python-docx`/`python-pptx`/`openpyxl`) — and run one container per server via
+`SERVER_MODULE` (path to that server's `server.py`). CI builds the image on every
+push (`docker-build` job, no push); `release.yml` publishes
+`ghcr.io/<owner>/mcp-microsoft-office:<version>` on tag via the shared
+`azzindani/MCP_Math` composite action.
 
 ---
 

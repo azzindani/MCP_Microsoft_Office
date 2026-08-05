@@ -707,6 +707,71 @@ For lower-memory machines, set `MCP_CONSTRAINED_MODE=1` in the `env` section of 
 | `MCP_CONSTRAINED_MODE` | `0` | Set to `1` for low-memory machines |
 | `GIT_INTEGRATION` | `true` | Set to `false` to disable auto Git commits on edits |
 
+## Deployment
+
+| Mode | Best for | Transport | Auth |
+|---|---|---|---|
+| **Local stdio** (default, above) | LM Studio / Claude Code on your machine | stdio | none |
+| **Local Docker / HTTP** | Testing, or one other machine on your LAN | HTTP | optional |
+| **VPS Docker** | Remote MCP clients (claude.ai, hosted harnesses) | HTTP | **required** |
+
+All 11 servers deploy — each its own port (8830-8840) — and share one bearer-token set.
+
+### HTTP transport (no Docker)
+
+```bash
+OFFICE_DOCX_BASIC_TRANSPORT=http uv run --package docx-basic python servers/docx_basic/docx_basic/server.py
+curl http://localhost:8830/health   # {"status":"ok","version":"0.1.0"}
+```
+
+### Docker
+
+Requires `uv sync --frozen --all-packages` (a true uv workspace — plain `uv sync`
+only installs the root project's own deps, not the 11 members' runtime deps),
+already wired into the Dockerfile:
+
+```bash
+docker compose up -d --build
+curl http://localhost:8830/health   # docx-basic
+curl http://localhost:8840/health   # pptx-new
+```
+
+With auth (recommended for any network-reachable deploy):
+
+```bash
+cp tokens.example.json tokens.json   # edit: replace placeholders with `openssl rand -hex 32`
+docker compose up -d --build
+```
+
+`/mcp` requires `Authorization: Bearer <token>` once any of `OFFICE_TOKENS_FILE` /
+`OFFICE_TOKENS` / `OFFICE_API_KEY` is set; `/health` and `/version` stay unauthenticated.
+
+### Deployment environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `OFFICE_<NAME>_TRANSPORT` | `stdio` | `stdio` or `http`, per server (e.g. `OFFICE_DOCX_BASIC_TRANSPORT`) |
+| `OFFICE_<NAME>_HOST` / `OFFICE_<NAME>_PORT` | `127.0.0.1` / 8830-8840 | Bind address / port per server, HTTP mode |
+| `OFFICE_TOKENS_FILE` | unset | JSON file of named bearer tokens (`{"name": "token"}`) — highest priority, shared across all 11 servers |
+| `OFFICE_TOKENS` | unset | Inline `"name:token,name2:token2"` |
+| `OFFICE_API_KEY` | unset | Single shared bearer token |
+
+### Remote testing (Cloudflare Quick Tunnel)
+
+Same idea as `azzindani/Folio`'s `launch.sh`: bring the Docker deployment up
+and expose each of the 11 sub-servers at its own ephemeral
+`*.trycloudflare.com` URL — no VPS, no DNS, no account — so they're reachable
+from any MCP-compatible harness for a quick remote smoke test.
+
+```bash
+./launch_tunnel.sh          # docker compose up -d --build, then tunnel all 11
+./launch_tunnel.sh stop     # tear the tunnels down (containers keep running)
+```
+
+Not for production: Quick Tunnels are unauthenticated at the transport layer.
+Set `OFFICE_API_KEY` or `OFFICE_TOKENS_FILE` before tunneling so `/mcp` still
+requires a bearer token even while it's publicly reachable.
+
 ## Uninstall
 
 **Step 1:** Remove from LM Studio
