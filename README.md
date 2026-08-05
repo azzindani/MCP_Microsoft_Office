@@ -787,6 +787,25 @@ Not for production: Quick Tunnels are unauthenticated at the transport layer.
 Set `OFFICE_API_KEY` or `OFFICE_TOKENS_FILE` before tunneling so `/<name>/mcp`
 still requires a bearer token even while it's publicly reachable.
 
+### Remote smoke test (`remote_smoke_test.sh`)
+
+Not part of pytest/CI — the separate, manual/on-demand check that exercises
+the real deployed HTTP endpoint: auth enforcement plus a real
+handwritten-prompt-style call for **all 96 tools** across all 11 sub-servers
+(docx-new/basic/tables/layout, xlsx-new/basic/formulas/charts,
+pptx-new/basic/design), producing real `.docx`/`.xlsx`/`.pptx` files from a
+real generated logo image and CSV, chaining real outputs (paragraph indices,
+shape names, snapshot timestamps) between calls. This is what caught
+`export_pdf` always failing because LibreOffice wasn't installed in the
+runtime image — exactly the kind of deployment-only gap pytest alone can't
+catch.
+
+```bash
+./remote_smoke_test.sh                          # reads OFFICE_API_KEY from .env, targets office.casava.space
+DOMAIN=http://localhost:8830 ./remote_smoke_test.sh   # test a different target
+CONTAINER=mcp-office ./remote_smoke_test.sh      # override container name
+```
+
 ## Uninstall
 
 **Step 1:** Remove from LM Studio
