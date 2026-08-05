@@ -73,6 +73,17 @@ tier so the user loads only the tools their task requires.
 - This project does not render documents visually or provide a document viewer UI.
 - This project does not integrate with cloud storage in the core servers.
 
+**Deployment scope:** local-first is the default and the goals above always
+hold for the core servers — every tool runs on the user's CPU with no cloud
+dependency. On top of that, this project can also run in HTTP mode,
+self-hosted behind a reverse proxy, so it can be connected as a remote
+endpoint by AI platforms and harnesses (Claude Desktop, claude.ai remote MCP,
+other MCP clients) rather than only as a local LM Studio stdio process — see
+"Transport and Deployment" at the end of this file. Remote mode is opt-in,
+bearer-token authenticated, and still runs on infrastructure you control.
+This is one of six sibling `MCP_*` repos brought to this same deployment
+model.
+
 ---
 
 ## 2. Repository layout
@@ -711,6 +722,18 @@ Never regenerate fixtures in tests — use `tmp_path` to copy and modify within 
 6. Wrong file type failure case
 7. Formatting preservation (for DOCX operations on styled text)
 
+### Remote smoke tests (not part of pytest / CI)
+
+The tests above stay offline-only per STANDARDS.md — never spin up an MCP
+process, never touch the network. Verifying the deployed HTTP endpoint (auth
+enforcement, real tool calls against the real public domain, producing real
+`.docx`/`.xlsx`/`.pptx` files) is a separate, manual/on-demand check —
+hand-authored `curl` sessions or a `remote_smoke_test.sh`, run after `docker
+compose up`, never wired into CI, never storing the live API key in the
+repo. This is exactly how the `Invalid Host header` regression (see
+"Transport and Deployment" below) was actually caught — `pytest` alone could
+not have found it.
+
 ---
 
 ## 16. MCP tool schema rules
@@ -1110,6 +1133,11 @@ is taken and no receipt entry is written.
 
 ## Transport and Deployment (STANDARDS.md §30, §31)
 
+This section covers connecting the server as a remote, hosted endpoint for AI
+platforms and harnesses (Claude Desktop, claude.ai remote MCP, other MCP
+clients) — additive to, and independent of, the local LM Studio stdio path
+above; nothing about local/offline use changes.
+
 Each of the 11 servers still supports `--transport {stdio,http}` via its own
 `server.py::main()` for local/individual use (LM Studio "add one server"
 installs) — that per-server code is unchanged.
@@ -1138,7 +1166,27 @@ governs the whole repo:
 - `OFFICE_TOKENS_FILE` (named tokens, JSON `{name: token}`) — highest priority
 - `OFFICE_TOKENS` (inline `"name:token,name2:token2"`)
 - `OFFICE_API_KEY` (single shared token)
-- unset = open mode (no auth) — localhost/private-network use only
+- unset = open mode (no auth) — localhost/private-network use only, never for
+  a publicly reachable deployment
+
+The production deployment runs `OFFICE_API_KEY` set from a local `.env` file
+(gitignored, never committed) behind a reverse proxy; a request without a
+valid `Authorization: Bearer <token>` header is rejected with `401` before it
+reaches any tool.
+
+**Known gotcha — DNS-rebinding protection vs. reverse proxies:** each
+sub-server's `FastMCP` defaults to `host="127.0.0.1"`, which auto-enables
+Host-header validation restricted to `localhost`. Consolidation dropped the
+per-sub-server `OFFICE_<NAME>_HOST=0.0.0.0` env vars (no longer needed for
+binding once `unified_server.py` owns the single listen socket), which
+silently re-triggered that localhost-only allowlist against every mounted
+sub-app — every real remote request failed with `Invalid Host header` even
+though `/health` worked fine. Fixed in `unified_server.py` by explicitly
+setting `mcp.settings.transport_security = TransportSecuritySettings
+(enable_dns_rebinding_protection=False)` for each sub-server before calling
+`.streamable_http_app()` — Caddy is already the trust boundary here. Found by
+an actual authenticated `tools/call` against the public domain, not by
+`/health`; see "Remote smoke tests" in §15 above.
 
 `Dockerfile` + `docker-compose.yml` build one image — **`uv sync --frozen --all-packages`**
 is required (this is a true `[tool.uv.workspace]`; plain `uv sync` only installs the
