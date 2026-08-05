@@ -26,6 +26,7 @@ import argparse
 import os
 from contextlib import AsyncExitStack, asynccontextmanager
 
+from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -58,6 +59,15 @@ _SUB_SERVERS = {
     "pptx-design": pptx_design_mcp,
     "pptx-new": pptx_new_mcp,
 }
+# Each sub-server's FastMCP defaults to host="127.0.0.1", which auto-enables
+# DNS-rebinding Host-header validation restricted to 127.0.0.1/localhost. The
+# unified server sits behind Caddy on a public hostname (e.g.
+# office.casava.space) forwarded via `header_up Host {host}`, so that check
+# rejects every real remote request with "Invalid Host header". Caddy is
+# already the trust boundary here, so disable it for the mounted sub-apps.
+for _sub_mcp in _SUB_SERVERS.values():
+    _sub_mcp.settings.transport_security = TransportSecuritySettings(enable_dns_rebinding_protection=False)
+
 _sub_apps = {name: mcp.streamable_http_app() for name, mcp in _SUB_SERVERS.items()}
 
 
