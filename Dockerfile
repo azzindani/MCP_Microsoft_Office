@@ -31,6 +31,14 @@ COPY servers ./servers
 RUN uv sync --frozen --all-packages
 
 FROM python:${PYTHON_VERSION} AS runtime
+# libreoffice-writer/-impress back export_pdf (docx_layout, pptx_design) —
+# both tools shell out to `libreoffice --headless --convert-to pdf`; without
+# this the tool call always fails with "No PDF converter available" in every
+# Docker/remote deployment. Scoped to writer+impress (not the full
+# libreoffice metapackage) to avoid pulling in calc/draw/base too.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libreoffice-writer libreoffice-impress \
+    && rm -rf /var/lib/apt/lists/*
 RUN groupadd -r app && useradd -r -g app app \
     && mkdir -p /home/app && chown app:app /home/app
 WORKDIR /app

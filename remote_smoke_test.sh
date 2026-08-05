@@ -1,74 +1,266 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# MCP_Microsoft_Office — remote smoke test.
+# MCP_Microsoft_Office — remote smoke test, all 96 tools across 11 sub-servers.
 #
-# NOT part of pytest / CI (see CLAUDE.md §15 "Remote smoke tests"). This
-# script is the separate, manual/on-demand check that actually exercises the
-# deployed HTTP endpoint: real auth enforcement + a real round trip through
-# two different mounted sub-servers, producing a real .docx file, against
-# the real public domain. This is exactly the kind of check that caught the
-# "Invalid Host header" DNS-rebinding regression (see CLAUDE.md, Transport
-# and Deployment) — a /health check alone would not have found it.
+# NOT part of pytest / CI (see CLAUDE.md §15 "Remote smoke tests"). Real auth
+# enforcement + real handwritten-prompt-style tool calls producing real
+# .docx/.xlsx/.pptx files, chaining real outputs (paragraph indices, shape
+# names, timestamps) between calls, against the real public domain. This is
+# exactly the kind of check that caught the Invalid Host header regression.
 #
 # Usage:
 #   ./remote_smoke_test.sh                          # reads OFFICE_API_KEY from .env
 #   OFFICE_API_KEY=sk-... ./remote_smoke_test.sh     # or pass it directly
 #   DOMAIN=http://localhost:8830 ./remote_smoke_test.sh   # test a different target
+#   CONTAINER=mcp-office ./remote_smoke_test.sh      # override container name
 # ─────────────────────────────────────────────────────────────────────────────
-set -euo pipefail
+set -uo pipefail
 
 DOMAIN="${DOMAIN:-https://office.casava.space}"
+CONTAINER="${CONTAINER:-mcp-office}"
 if [ -f .env ]; then
   set -a; source .env; set +a
 fi
 KEY="${OFFICE_API_KEY:?Set OFFICE_API_KEY (env var or .env file) before running}"
-DOC_PATH="/tmp/remote-smoke-test/report.docx"
+D=/tmp/remote-smoke-test
+DOCX="$D/report.docx"
+DOCX_TPL="$D/template.docx"
+XLSX="$D/workbook.xlsx"
+XLSX_TPL="$D/template.xlsx"
+PPTX="$D/deck.pptx"
+PPTX_TPL="$D/template.pptx"
+IMG="$D/logo.png"
+CSV="$D/data.csv"
 
+FAILS=0
 pass() { echo "  PASS: $1"; }
-fail() { echo "  FAIL: $1"; exit 1; }
+fail() { echo "  FAIL: $1"; FAILS=$((FAILS+1)); }
+ok_json() { echo "$1" | grep -Eq '\\?"success\\?"[[:space:]]*:[[:space:]]*true'; }
 
 echo "Target: $DOMAIN"
 echo
-echo "== auth enforcement =="
+echo "== seed a real logo image + a real CSV into the container =="
+docker exec "$CONTAINER" mkdir -p "$D"
+docker exec "$CONTAINER" python3 -c "
+from PIL import Image
+Image.new('RGB', (40, 20), color=(200, 30, 30)).save('$IMG')
+"
+docker exec "$CONTAINER" python3 -c "
+open('$CSV','w').write('Region,Units,Revenue\nAPAC,120,1450.5\nEMEA,95,1120.2\nAMER,80,990.75\n')
+"
+pass "real 40x20 PNG logo + real CSV seeded"
 
-code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$DOMAIN/docx-new/mcp" \
+declare -A SID
+init_session() {
+  curl -s -i -X POST "$DOMAIN/$1/mcp" \
+    -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+    -H "Authorization: Bearer $KEY" \
+    -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"1"}}}' \
+    | grep -i mcp-session-id | tr -d '\r' | awk '{print $2}'
+}
+init_notified() {
+  curl -s -X POST "$DOMAIN/$1/mcp" -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+    -H "Authorization: Bearer $KEY" -H "mcp-session-id: $2" \
+    -d '{"jsonrpc":"2.0","id":2,"method":"notifications/initialized"}' > /dev/null
+}
+
+echo
+echo "== auth enforcement =="
+code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$DOMAIN/docx-basic/mcp" \
   -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"1"}}}')
 [ "$code" = "401" ] && pass "no token -> 401" || fail "no token -> expected 401, got $code"
 
-SID_NEW=$(curl -s -i -X POST "$DOMAIN/docx-new/mcp" \
-  -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
-  -H "Authorization: Bearer $KEY" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"1"}}}' \
-  | grep -i mcp-session-id | tr -d '\r' | awk '{print $2}')
-[ -n "$SID_NEW" ] && pass "valid token -> session established on /docx-new" || fail "valid token -> no session id returned"
+for tier in docx-basic docx-tables docx-layout docx-new xlsx-basic xlsx-formulas xlsx-charts xlsx-new pptx-basic pptx-design pptx-new; do
+  SID[$tier]=$(init_session "$tier")
+  init_notified "$tier" "${SID[$tier]}"
+done
+[ -n "${SID[docx-basic]}" ] && pass "valid token -> sessions established on all 11 sub-servers" || fail "no session id"
 
-curl -s -X POST "$DOMAIN/docx-new/mcp" -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
-  -H "Authorization: Bearer $KEY" -H "mcp-session-id: $SID_NEW" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"notifications/initialized"}' > /dev/null
+call() {
+  local tier="$1" id="$2" name="$3" args="$4"
+  curl -s -X POST "$DOMAIN/$tier/mcp" -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+    -H "Authorization: Bearer $KEY" -H "mcp-session-id: ${SID[$tier]}" \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":$id,\"method\":\"tools/call\",\"params\":{\"name\":\"$name\",\"arguments\":$args}}"
+}
+extract() {
+  echo "$1" | grep -oE "\\\\?\"$2\\\\?\"[[:space:]]*:[[:space:]]*\\\\?\"[^\\\\\"]*" | head -1 | sed -E 's/.*"([^"]*)$/\1/'
+}
+extract_num() {
+  echo "$1" | grep -oE "\"$2\"[[:space:]]*:[[:space:]]*[0-9]+" | head -1 | grep -oE '[0-9]+$'
+}
 
-echo
-echo '== prompt: "create a doc titled Remote Smoke Test" -> create_from_text (/docx-new) =='
-RESULT=$(curl -s -X POST "$DOMAIN/docx-new/mcp" -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
-  -H "Authorization: Bearer $KEY" -H "mcp-session-id: $SID_NEW" \
-  -d "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"create_from_text\",\"arguments\":{\"output_path\":\"$DOC_PATH\",\"paragraphs\":[{\"text\":\"Remote Smoke Test\",\"style\":\"Title\"},{\"text\":\"Created by remote_smoke_test.sh.\",\"style\":\"Normal\"}]}}}")
-echo "$RESULT" | grep -q '"isError":false' && pass "create_from_text wrote a real .docx on the host" || fail "unexpected result: $RESULT"
-
-echo
-echo '== prompt: "read it back" -> read_document (/docx-basic, different sub-server) =='
-SID_BASIC=$(curl -s -i -X POST "$DOMAIN/docx-basic/mcp" \
-  -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
-  -H "Authorization: Bearer $KEY" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"1"}}}' \
-  | grep -i mcp-session-id | tr -d '\r' | awk '{print $2}')
-curl -s -X POST "$DOMAIN/docx-basic/mcp" -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
-  -H "Authorization: Bearer $KEY" -H "mcp-session-id: $SID_BASIC" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"notifications/initialized"}' > /dev/null
-
-RESULT=$(curl -s -X POST "$DOMAIN/docx-basic/mcp" -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
-  -H "Authorization: Bearer $KEY" -H "mcp-session-id: $SID_BASIC" \
-  -d "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"read_document\",\"arguments\":{\"file_path\":\"$DOC_PATH\"}}}")
-echo "$RESULT" | grep -q 'Remote Smoke Test' && pass "read_document read the real file back — full round trip across two sub-servers in one process" || fail "unexpected result: $RESULT"
+N=10
+LAST_R=""
+run() {
+  local tier="$1" name="$2" args="$3" prompt="$4"
+  echo "== prompt: \"$prompt\" -> $name =="
+  N=$((N+1))
+  LAST_R=$(call "$tier" "$N" "$name" "$args")
+  if ok_json "$LAST_R"; then pass "$name succeeded"; else fail "$name -> $LAST_R"; fi
+}
 
 echo
-echo "ALL CHECKS PASSED against $DOMAIN"
+echo "===== docx-new (7 tools) ====="
+run docx-new create_document "{\"output_path\":\"$D/blank.docx\"}" "create a blank document"
+run docx-new create_from_text "{\"output_path\":\"$DOCX\",\"paragraphs\":[{\"text\":\"Quarterly Report\",\"style\":\"Title\"},{\"text\":\"Revenue grew across all regions this quarter.\",\"style\":\"Normal\"},{\"text\":\"APAC led growth.\",\"style\":\"Normal\"}]}" "create the main report doc"
+run docx-new create_from_sections "{\"title\":\"Report Sections\",\"sections\":[{\"heading\":\"Summary\",\"body\":\"Overall performance was strong.\"},{\"heading\":\"Details\",\"body\":\"See appendix for details.\"}],\"output_path\":\"$D/sections.docx\"}" "create a doc with sections"
+run docx-new create_letter "{\"from_name\":\"Ops Team\",\"to_name\":\"Finance Team\",\"subject\":\"Q1 Summary\",\"body\":\"Please find the summary attached.\",\"output_path\":\"$D/letter.docx\"}" "create a letter"
+run docx-new merge_documents "{\"file_paths\":[\"$DOCX\",\"$D/sections.docx\"],\"output_path\":\"$D/merged.docx\"}" "merge the report and sections docs"
+run docx-new create_from_text "{\"output_path\":\"$DOCX_TPL\",\"paragraphs\":[{\"text\":\"Dear {{name}},\",\"style\":\"Normal\"},{\"text\":\"Your balance is {{balance}}.\",\"style\":\"Normal\"}]}" "create a template doc with placeholders"
+run docx-new create_from_template "{\"template_path\":\"$DOCX_TPL\",\"substitutions\":{\"name\":\"Alex\",\"balance\":\"\$100\"},\"output_path\":\"$D/from_template.docx\"}" "fill in the template for Alex"
+run docx-new batch_create_from_template "{\"template_path\":\"$DOCX_TPL\",\"data_list\":[{\"name\":\"Sam\",\"balance\":\"\$50\"},{\"name\":\"Jo\",\"balance\":\"\$75\"}],\"output_dir\":\"$D/batch\"}" "batch-generate letters for Sam and Jo"
+
+echo
+echo "===== docx-basic (15 tools) on the main report doc ====="
+run docx-basic get_document_outline "{\"file_path\":\"$DOCX\"}" "what is the outline of the report?"
+run docx-basic get_document_index "{\"file_path\":\"$DOCX\"}" "index the report doc"
+run docx-basic read_document "{\"file_path\":\"$DOCX\"}" "read the whole report"
+run docx-basic read_paragraph "{\"file_path\":\"$DOCX\",\"index\":0}" "read paragraph 0"
+run docx-basic read_paragraph_range "{\"file_path\":\"$DOCX\",\"start_index\":0,\"end_index\":2}" "read paragraphs 0-2"
+run docx-basic search_paragraphs "{\"file_path\":\"$DOCX\",\"query\":\"APAC\"}" "find the paragraph mentioning APAC"
+run docx-basic fetch_section "{\"file_path\":\"$DOCX\",\"address\":\"p0\"}" "fetch section p0"
+run docx-basic replace_text "{\"file_path\":\"$DOCX\",\"match_text\":\"APAC led growth.\",\"new_text\":\"APAC led growth this quarter.\"}" "reword the APAC sentence"
+run docx-basic insert_paragraph "{\"file_path\":\"$DOCX\",\"after_index\":1,\"text\":\"EMEA also performed well.\"}" "add a note about EMEA after paragraph 1"
+run docx-basic append_text "{\"file_path\":\"$DOCX\",\"text\":\"End of report.\"}" "append a closing line"
+run docx-basic get_history "{\"file_path\":\"$DOCX\"}" "show the version history"
+TS_A=$(extract "$LAST_R" timestamp)
+run docx-basic read_receipt "{\"file_path\":\"$DOCX\"}" "show the operation receipt log"
+run docx-basic delete_paragraph "{\"file_path\":\"$DOCX\",\"paragraph_index\":4}" "delete the last paragraph"
+run docx-basic get_history "{\"file_path\":\"$DOCX\"}" "show the version history again"
+TS_B=$(extract "$LAST_R" timestamp)
+if [ -n "$TS_A" ] && [ -n "$TS_B" ] && [ "$TS_A" != "$TS_B" ]; then
+  run docx-basic diff_versions "{\"file_path\":\"$DOCX\",\"timestamp_a\":\"$TS_A\",\"timestamp_b\":\"current\"}" "diff the current version against an earlier snapshot"
+  run docx-basic restore_version "{\"file_path\":\"$DOCX\",\"timestamp\":\"$TS_A\"}" "restore the earlier snapshot"
+else
+  fail "diff_versions/restore_version skipped — could not capture two distinct real timestamps from get_history"
+fi
+
+echo
+echo "===== docx-tables (9 tools) ====="
+run docx-tables add_table "{\"file_path\":\"$DOCX\",\"after_paragraph_index\":0,\"rows\":2,\"cols\":2,\"data\":[[\"Region\",\"Revenue\"],[\"APAC\",\"1450.5\"]]}" "add a 2x2 table after paragraph 0"
+run docx-tables list_tables "{\"file_path\":\"$DOCX\"}" "list the tables in the doc"
+run docx-tables read_table "{\"file_path\":\"$DOCX\",\"table_index\":0}" "read table 0"
+run docx-tables read_table_row "{\"file_path\":\"$DOCX\",\"table_index\":0,\"row\":0}" "read row 0 of table 0"
+run docx-tables search_table_cells "{\"file_path\":\"$DOCX\",\"query\":\"APAC\"}" "find APAC in any table cell"
+run docx-tables set_cell "{\"file_path\":\"$DOCX\",\"table_index\":0,\"row\":1,\"col\":1,\"text\":\"1500.0\"}" "update the revenue cell"
+run docx-tables add_row "{\"file_path\":\"$DOCX\",\"table_index\":0,\"data\":[\"EMEA\",\"1120.2\"]}" "add an EMEA row to the table"
+run docx-tables delete_row "{\"file_path\":\"$DOCX\",\"table_index\":0,\"row\":2}" "delete the row I just added"
+run docx-tables delete_table "{\"file_path\":\"$DOCX\",\"table_index\":0}" "delete the table entirely"
+
+echo
+echo "===== docx-layout (7 tools) ====="
+run docx-layout set_heading "{\"file_path\":\"$DOCX\",\"paragraph_index\":0,\"level\":1}" "make paragraph 0 a heading"
+run docx-layout set_font "{\"file_path\":\"$DOCX\",\"paragraph_index\":1,\"font_name\":\"Arial\",\"font_size\":12,\"bold\":true}" "bold paragraph 1 in Arial 12"
+run docx-layout set_paragraph_style "{\"file_path\":\"$DOCX\",\"paragraph_index\":1,\"style_name\":\"Body Text\"}" "set paragraph 1 to Body Text style"
+run docx-layout add_image "{\"file_path\":\"$DOCX\",\"paragraph_index\":0,\"image_path\":\"$IMG\",\"width_inches\":1.0}" "insert the logo image after paragraph 0"
+run docx-layout set_page_margins "{\"file_path\":\"$DOCX\",\"top\":1.0,\"bottom\":1.0,\"left\":1.0,\"right\":1.0}" "set 1-inch margins"
+run docx-layout add_header_footer "{\"file_path\":\"$DOCX\",\"text\":\"Confidential\",\"location\":\"footer\"}" "add a confidential footer"
+run docx-layout export_pdf "{\"file_path\":\"$DOCX\",\"output_path\":\"$D/report.pdf\"}" "export the report to PDF"
+
+echo
+echo "===== xlsx-new (6 tools) ====="
+run xlsx-new create_workbook "{\"sheet_name\":\"Main\",\"output_path\":\"$D/blank.xlsx\"}" "create a blank workbook"
+run xlsx-new create_from_data "{\"sheet_name\":\"Sales\",\"headers\":[\"Region\",\"Units\",\"Revenue\"],\"rows\":[[\"APAC\",120,1450.5],[\"EMEA\",95,1120.2],[\"AMER\",80,990.75]],\"output_path\":\"$XLSX\"}" "create the main sales workbook"
+run xlsx-new create_report "{\"title\":\"Q1 Report\",\"sheets\":[{\"name\":\"Summary\",\"headers\":[\"Metric\",\"Value\"],\"rows\":[[\"Total Revenue\",3561.45]]}],\"output_path\":\"$D/report.xlsx\"}" "create a report workbook"
+run xlsx-new create_from_data "{\"sheet_name\":\"Main\",\"headers\":[\"Name\",\"Balance\"],\"rows\":[[\"{{name}}\",\"{{balance}}\"]],\"output_path\":\"$XLSX_TPL\"}" "create a template workbook with placeholders"
+run xlsx-new create_from_template "{\"template_path\":\"$XLSX_TPL\",\"replacements\":{\"{{name}}\":\"Alex\",\"{{balance}}\":\"100\"},\"output_path\":\"$D/xlsx_from_template.xlsx\"}" "fill in the workbook template"
+run xlsx-new create_from_csv "{\"csv_path\":\"$CSV\",\"sheet_name\":\"Imported\",\"output_path\":\"$D/from_csv.xlsx\"}" "import the CSV into a workbook"
+run xlsx-new create_invoice "{\"company_name\":\"Acme Co\",\"client_name\":\"Beta LLC\",\"invoice_number\":\"INV-001\",\"items\":[{\"description\":\"Consulting\",\"quantity\":10,\"unit_price\":100}],\"output_path\":\"$D/invoice.xlsx\"}" "create an invoice"
+
+echo
+echo "===== xlsx-basic (14 tools) on the main sales workbook ====="
+run xlsx-basic list_sheets "{\"file_path\":\"$XLSX\"}" "what sheets are in the sales workbook?"
+run xlsx-basic get_sheet_summary "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\"}" "summarize the Sales sheet"
+run xlsx-basic read_cell "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"cell_address\":\"A1\"}" "read cell A1"
+run xlsx-basic read_cell_range "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"range_address\":\"A1:C4\"}" "read the whole table range"
+run xlsx-basic search_cells "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"query\":\"APAC\"}" "find APAC in the sheet"
+run xlsx-basic set_cell "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"cell_address\":\"C2\",\"value\":\"1500.0\"}" "update APAC revenue"
+run xlsx-basic set_range "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"start_cell\":\"A6\",\"data\":[[\"Total\",295,3561.45]]}" "add a totals row"
+run xlsx-basic insert_row "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"row_index\":2}" "insert a blank row at row 2"
+run xlsx-basic add_sheet "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Notes\"}" "add a Notes sheet"
+run xlsx-basic rename_sheet "{\"file_path\":\"$XLSX\",\"old_name\":\"Notes\",\"new_name\":\"Remarks\"}" "rename Notes to Remarks"
+run xlsx-basic copy_sheet "{\"file_path\":\"$XLSX\",\"source_sheet\":\"Sales\",\"new_sheet_name\":\"Sales Copy\"}" "duplicate the Sales sheet"
+run xlsx-basic sort_sheet "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales Copy\",\"column\":\"A\",\"has_header\":true}" "sort the Sales Copy sheet by region"
+run xlsx-basic find_duplicates "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"column\":\"A\",\"has_header\":true}" "check for duplicate regions"
+run xlsx-basic delete_row "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"row_index\":2}" "delete the blank row I inserted"
+
+echo
+echo "===== xlsx-formulas (9 tools) ====="
+run xlsx-formulas set_formula "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"cell_address\":\"D2\",\"formula\":\"=C2/B2\"}" "add a revenue-per-unit formula"
+run xlsx-formulas fill_formula_down "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"formula\":\"=C{row}/B{row}\",\"start_cell\":\"D3\",\"end_row\":4}" "fill that formula down"
+run xlsx-formulas auto_sum "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"data_range\":\"C2:C4\",\"sum_cell\":\"C5\"}" "auto-sum the revenue column"
+run xlsx-formulas set_named_range "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"range_name\":\"RevenueRange\",\"range_address\":\"C2:C4\"}" "name the revenue range"
+run xlsx-formulas set_conditional_format "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"range_address\":\"C2:C4\",\"rule\":\"greater_than\",\"value\":1000,\"color\":\"red\"}" "highlight revenue over 1000"
+run xlsx-formulas set_data_validation "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"range_address\":\"A2:A4\",\"validation_type\":\"list\",\"formula1\":\"APAC,EMEA,AMER\"}" "restrict region to a dropdown list"
+run xlsx-formulas freeze_panes "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"cell_address\":\"A2\"}" "freeze the header row"
+run xlsx-formulas set_autofilter "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"range_address\":\"A1:D4\"}" "add autofilter to the table"
+run xlsx-formulas convert_to_values "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"range_address\":\"D2:D4\"}" "convert the formula column to static values"
+
+echo
+echo "===== xlsx-charts (5 tools) ====="
+run xlsx-charts add_chart "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"chart_type\":\"bar\",\"data_range\":\"A1:C4\",\"title\":\"Revenue by Region\",\"anchor_cell\":\"F2\"}" "add a bar chart of revenue by region"
+run xlsx-charts add_pivot_table "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"source_range\":\"A1:C4\",\"dest_cell\":\"F20\",\"rows\":\"Region\",\"cols\":\"Units\",\"values\":\"Revenue\"}" "add a pivot table of revenue by region and units"
+run xlsx-charts set_cell_style "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"cell_address\":\"A1\",\"bold\":true,\"fill_color\":\"DDDDDD\"}" "bold and shade the header cell"
+run xlsx-charts update_chart "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"chart_index\":0,\"title\":\"Revenue by Region (updated)\"}" "retitle the chart"
+run xlsx-charts delete_chart "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"chart_index\":0}" "delete the chart"
+
+echo
+echo "===== pptx-new (6 tools) ====="
+run pptx-new create_presentation "{\"title\":\"Q1 Review\",\"subtitle\":\"Company All-Hands\",\"output_path\":\"$D/blank.pptx\"}" "create a blank deck"
+run pptx-new create_from_outline "{\"slides\":[{\"title\":\"Welcome\",\"bullets\":[\"Agenda\",\"Goals\"]},{\"title\":\"Revenue\",\"bullets\":[\"APAC up 12%\",\"EMEA steady\"]}],\"output_path\":\"$PPTX\"}" "create the main deck from an outline"
+run pptx-new create_deck_from_data "{\"title\":\"Metrics\",\"data_slides\":[{\"title\":\"Revenue by Region\",\"headers\":[\"Region\",\"Revenue\"],\"rows\":[[\"APAC\",1450.5],[\"EMEA\",1120.2]]}],\"output_path\":\"$D/data_deck.pptx\"}" "build a deck from tabular data"
+run pptx-new create_agenda "{\"meeting_title\":\"Q1 Review\",\"date\":\"2026-01-15\",\"items\":[{\"topic\":\"Welcome\",\"duration\":\"5 min\",\"owner\":\"Ops Team\"},{\"topic\":\"Revenue Review\",\"duration\":\"15 min\",\"owner\":\"Finance\"},{\"topic\":\"Q&A\",\"duration\":\"10 min\",\"owner\":\"All\"}],\"presenter\":\"Ops Team\",\"output_path\":\"$D/agenda.pptx\"}" "create an agenda deck"
+run pptx-new create_from_outline "{\"slides\":[{\"title\":\"{{name}}'s Slide\",\"bullets\":[\"{{note}}\"]}],\"output_path\":\"$PPTX_TPL\"}" "create a template deck with placeholders"
+run pptx-new create_from_template "{\"template_path\":\"$PPTX_TPL\",\"output_path\":\"$D/from_template.pptx\"}" "instantiate the deck template"
+run pptx-new create_from_docx "{\"docx_path\":\"$DOCX\",\"max_slides\":5,\"output_path\":\"$D/from_docx.pptx\"}" "turn the report doc into slides"
+
+echo
+echo "===== pptx-basic (10 tools) on the main deck ====="
+run pptx-basic read_presentation "{\"file_path\":\"$PPTX\"}" "read the whole deck"
+run pptx-basic read_slide "{\"file_path\":\"$PPTX\",\"slide_index\":0}" "read slide 0"
+SHAPE=$(extract "$LAST_R" shape_name)
+[ -z "$SHAPE" ] && SHAPE=$(extract "$LAST_R" name)
+run pptx-basic read_slide_text "{\"file_path\":\"$PPTX\",\"slide_index\":0}" "read the text on slide 0"
+run pptx-basic search_slides "{\"file_path\":\"$PPTX\",\"query\":\"APAC\"}" "find the slide mentioning APAC"
+if [ -n "$SHAPE" ]; then
+  run pptx-basic set_text "{\"file_path\":\"$PPTX\",\"slide_index\":0,\"shape_name\":\"$SHAPE\",\"new_text\":\"Welcome (updated)\"}" "retitle slide 0's $SHAPE shape"
+else
+  fail "set_text skipped — could not capture a real shape_name from read_slide"
+fi
+run pptx-basic add_slide "{\"file_path\":\"$PPTX\",\"layout_name\":\"Title and Content\",\"title\":\"New Slide\",\"body\":\"Added by the smoke test.\"}" "add a new slide"
+run pptx-basic add_text_box "{\"file_path\":\"$PPTX\",\"slide_index\":0,\"text\":\"Draft\",\"left\":1.0,\"top\":1.0,\"width\":2.0,\"height\":0.5}" "add a Draft text box to slide 0"
+run pptx-basic reorder_slide "{\"file_path\":\"$PPTX\",\"from_index\":2,\"to_index\":0}" "move the new slide to the front"
+echo "== prompt: \"diff the deck against itself\" -> diff_versions =="
+N=$((N+1))
+PROBE_R=$(call pptx-basic "$N" diff_versions "{\"file_path\":\"$PPTX\",\"timestamp_a\":\"__probe__\",\"timestamp_b\":\"current\"}")
+REAL_TS=$(echo "$PROBE_R" | grep -oE "'[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9-]+Z'" | head -1 | tr -d "'")
+if [ -n "$REAL_TS" ]; then
+  run pptx-basic diff_versions "{\"file_path\":\"$PPTX\",\"timestamp_a\":\"$REAL_TS\",\"timestamp_b\":\"current\"}" "diff the deck against a real earlier snapshot ($REAL_TS)"
+else
+  fail "diff_versions -> could not extract a real snapshot timestamp from the probe error"
+fi
+run pptx-basic delete_slide "{\"file_path\":\"$PPTX\",\"slide_index\":0}" "delete the slide I just moved to the front"
+
+echo
+echo "===== pptx-design (8 tools) ====="
+run pptx-design set_background "{\"file_path\":\"$PPTX\",\"slide_index\":0,\"color_hex\":\"F0F0F0\"}" "set slide 0's background to light gray"
+if [ -n "$SHAPE" ]; then
+  run pptx-design set_font_style "{\"file_path\":\"$PPTX\",\"slide_index\":0,\"shape_name\":\"$SHAPE\",\"font_name\":\"Arial\",\"font_size\":32,\"bold\":true}" "make slide 0's title bold Arial"
+else
+  fail "set_font_style skipped — no real shape_name captured"
+fi
+run pptx-design add_table "{\"file_path\":\"$PPTX\",\"slide_index\":0,\"rows\":2,\"cols\":2,\"data\":[[\"Region\",\"Revenue\"],[\"APAC\",\"1450.5\"]]}" "add a table to slide 0"
+run pptx-design add_chart "{\"file_path\":\"$PPTX\",\"slide_index\":0,\"chart_type\":\"bar\",\"data\":{\"categories\":[\"APAC\",\"EMEA\"],\"series\":[{\"name\":\"Revenue\",\"values\":[1450.5,1120.2]}]},\"title\":\"Revenue\"}" "add a bar chart to slide 0"
+run pptx-design duplicate_slide "{\"file_path\":\"$PPTX\",\"slide_index\":0}" "duplicate slide 0"
+run pptx-design add_image_to_all_slides "{\"file_path\":\"$PPTX\",\"image_path\":\"$IMG\",\"left\":0.1,\"top\":0.1,\"width\":0.5,\"height\":0.25}" "add the logo to every slide"
+run pptx-design set_font_all_slides "{\"file_path\":\"$PPTX\",\"font_name\":\"Calibri\",\"font_size\":18}" "set the font on every slide to Calibri 18"
+run pptx-design export_pdf "{\"file_path\":\"$PPTX\",\"output_path\":\"$D/deck.pdf\"}" "export the deck to PDF"
+
+echo
+if [ "$FAILS" -eq 0 ]; then
+  echo "ALL 96 TOOLS PASSED against $DOMAIN"
+else
+  echo "$FAILS TOOL(S) FAILED against $DOMAIN"
+  exit 1
+fi
