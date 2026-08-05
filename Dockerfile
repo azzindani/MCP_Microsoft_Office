@@ -31,7 +31,8 @@ COPY servers ./servers
 RUN uv sync --frozen --all-packages
 
 FROM python:${PYTHON_VERSION} AS runtime
-RUN groupadd -r app && useradd -r -g app app
+RUN groupadd -r app && useradd -r -g app app \
+    && mkdir -p /home/app && chown app:app /home/app
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/shared /app/shared
