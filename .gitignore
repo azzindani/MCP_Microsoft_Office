@@ -73,3 +73,6 @@ Desktop.ini
 
 # Deployment secrets
 tokens.json
+
+# Deployment secrets
+.env
