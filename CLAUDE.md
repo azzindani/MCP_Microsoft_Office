@@ -1110,14 +1110,26 @@ is taken and no receipt entry is written.
 
 ## Transport and Deployment (STANDARDS.md §30, §31)
 
-Each of the 11 servers supports `--transport {stdio,http}` via `main()`'s argparse,
-defaulting from `OFFICE_<NAME>_TRANSPORT` env vars (e.g. `OFFICE_DOCX_BASIC_TRANSPORT`).
-HTTP mode uses `transport="streamable-http"` (raw `mcp` SDK) and exposes
-unauthenticated `/health` and `/version` routes plus the authenticated `/mcp`
-endpoint. Host/port are constructor args on `FastMCP(...)`, read from
-`OFFICE_<NAME>_HOST` / `OFFICE_<NAME>_PORT` env vars at import time (ports 8830-8840,
-one per server — docx_basic/tables/layout/new, xlsx_basic/formulas/charts/new,
-pptx_basic/design/new).
+Each of the 11 servers still supports `--transport {stdio,http}` via its own
+`server.py::main()` for local/individual use (LM Studio "add one server"
+installs) — that per-server code is unchanged.
+
+For Docker/remote deployment, `unified_server.py` (repo root) combines all 11
+servers into **one process on one port**: each server's `FastMCP` instance
+(raw `mcp` SDK) is mounted at its own path (`/docx-basic`, `/xlsx-basic`,
+etc.) inside one Starlette app via `streamable_http_app()` + `Mount()`, with
+each server's session-manager lifespan explicitly entered through
+`contextlib.AsyncExitStack` — Starlette's `Mount()` does not auto-propagate
+lifespan events to sub-apps, and the raw `mcp` SDK's `streamable_http_app()`
+returns a plain `Starlette` (its lifespan reached via
+`app.router.lifespan_context`, unlike the `fastmcp` package's convenience
+`.lifespan` attribute) — verified live against real servers before relying
+on it. Every server's own `/health`, `/version`, and `/mcp` routes (already
+defined via `@mcp.custom_route` in its own `server.py`) come along for free
+under its mount prefix — nothing server-specific is duplicated in
+`unified_server.py`. This exists specifically to cut idle RAM:
+python-docx/openpyxl/python-pptx previously loaded eleven times (one per
+server's own process, ~650 MiB combined) now load once (~80–90 MiB total).
 
 Bearer auth (`shared/shared/deploy_auth.py`, `build_auth("OFFICE", host, port)`) is
 shared across all 11 servers via the `shared` workspace package — one token set
@@ -1131,11 +1143,11 @@ governs the whole repo:
 `Dockerfile` + `docker-compose.yml` build one image — **`uv sync --frozen --all-packages`**
 is required (this is a true `[tool.uv.workspace]`; plain `uv sync` only installs the
 root project's own deps, which are empty, not the 11 members' runtime deps like
-`python-docx`/`python-pptx`/`openpyxl`) — and run one container per server via
-`SERVER_MODULE` (path to that server's `server.py`). CI builds the image on every
-push (`docker-build` job, no push); `release.yml` publishes
-`ghcr.io/<owner>/mcp-microsoft-office:<version>` on tag via the shared
-`azzindani/MCP_Math` composite action.
+`python-docx`/`python-pptx`/`openpyxl`) — and run **one container**
+(`unified_server.py`, `OFFICE_HOST`/`OFFICE_PORT`, default port `8830`). CI
+builds the image on every push (`docker-build` job, no push); `release.yml`
+publishes `ghcr.io/<owner>/mcp-microsoft-office:<version>` on tag via the
+shared `azzindani/MCP_Math` composite action.
 
 ---
 

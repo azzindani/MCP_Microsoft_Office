@@ -715,13 +715,18 @@ For lower-memory machines, set `MCP_CONSTRAINED_MODE=1` in the `env` section of 
 | **Local Docker / HTTP** | Testing, or one other machine on your LAN | HTTP | optional |
 | **VPS Docker** | Remote MCP clients (claude.ai, hosted harnesses) | HTTP | **required** |
 
-All 11 servers deploy — each its own port (8830-8840) — and share one bearer-token set.
+Each server keeps its own stdio server for local LM Studio "add one server"
+installs. For Docker/remote deployment all 11 run as separate MCP endpoints
+inside **one process** (`unified_server.py`) on **one port** —
+python-docx/openpyxl/python-pptx load once instead of eleven times (~90 MiB
+vs ~650 MiB idle), and all 11 still share one bearer-token set.
 
 ### HTTP transport (no Docker)
 
 ```bash
-OFFICE_DOCX_BASIC_TRANSPORT=http uv run --package docx-basic python servers/docx_basic/docx_basic/server.py
-curl http://localhost:8830/health   # {"status":"ok","version":"0.1.0"}
+uv run python unified_server.py --port 8830
+curl http://localhost:8830/health              # {"status":"ok","version":"0.1.0","sub_servers":[...]}
+curl http://localhost:8830/docx-basic/health   # per-server health
 ```
 
 ### Docker
@@ -732,8 +737,9 @@ already wired into the Dockerfile:
 
 ```bash
 docker compose up -d --build
-curl http://localhost:8830/health   # docx-basic
-curl http://localhost:8840/health   # pptx-new
+curl http://localhost:8830/health            # aggregate
+curl http://localhost:8830/docx-basic/mcp    # docx-basic
+curl http://localhost:8830/pptx-new/mcp      # pptx-new
 ```
 
 With auth (recommended for any network-reachable deploy):
@@ -743,15 +749,16 @@ cp tokens.example.json tokens.json   # edit: replace placeholders with `openssl 
 docker compose up -d --build
 ```
 
-`/mcp` requires `Authorization: Bearer <token>` once any of `OFFICE_TOKENS_FILE` /
-`OFFICE_TOKENS` / `OFFICE_API_KEY` is set; `/health` and `/version` stay unauthenticated.
+`/<name>/mcp` requires `Authorization: Bearer <token>` once any of
+`OFFICE_TOKENS_FILE` / `OFFICE_TOKENS` / `OFFICE_API_KEY` is set; `/health`
+and `/version` (aggregate and per-server) stay unauthenticated.
 
 ### Deployment environment variables
 
 | Variable | Default | Description |
 |---|---|---|
-| `OFFICE_<NAME>_TRANSPORT` | `stdio` | `stdio` or `http`, per server (e.g. `OFFICE_DOCX_BASIC_TRANSPORT`) |
-| `OFFICE_<NAME>_HOST` / `OFFICE_<NAME>_PORT` | `127.0.0.1` / 8830-8840 | Bind address / port per server, HTTP mode |
+| `OFFICE_HOST` | `0.0.0.0` | Bind address for the unified server |
+| `OFFICE_PORT` | `8830` | Port for the unified server (all 11 sub-servers) |
 | `OFFICE_TOKENS_FILE` | unset | JSON file of named bearer tokens (`{"name": "token"}`) — highest priority, shared across all 11 servers |
 | `OFFICE_TOKENS` | unset | Inline `"name:token,name2:token2"` |
 | `OFFICE_API_KEY` | unset | Single shared bearer token |
@@ -759,18 +766,18 @@ docker compose up -d --build
 ### Remote testing (Cloudflare Quick Tunnel)
 
 Same idea as `azzindani/Folio`'s `launch.sh`: bring the Docker deployment up
-and expose each of the 11 sub-servers at its own ephemeral
-`*.trycloudflare.com` URL — no VPS, no DNS, no account — so they're reachable
-from any MCP-compatible harness for a quick remote smoke test.
+and expose it at an ephemeral `*.trycloudflare.com` URL — no VPS, no DNS, no
+account — so all 11 sub-servers are reachable from any MCP-compatible
+harness for a quick remote smoke test.
 
 ```bash
-./launch_tunnel.sh          # docker compose up -d --build, then tunnel all 11
-./launch_tunnel.sh stop     # tear the tunnels down (containers keep running)
+./launch_tunnel.sh          # docker compose up -d --build, then tunnel
+./launch_tunnel.sh stop     # tear the tunnel down (container keeps running)
 ```
 
 Not for production: Quick Tunnels are unauthenticated at the transport layer.
-Set `OFFICE_API_KEY` or `OFFICE_TOKENS_FILE` before tunneling so `/mcp` still
-requires a bearer token even while it's publicly reachable.
+Set `OFFICE_API_KEY` or `OFFICE_TOKENS_FILE` before tunneling so `/<name>/mcp`
+still requires a bearer token even while it's publicly reachable.
 
 ## Uninstall
 

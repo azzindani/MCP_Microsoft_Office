@@ -1,215 +1,40 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # mcp-microsoft-office — local & VPS-friendly compose stack.
 #
-# One image (see Dockerfile), one service per sub-server (11 total),
-# selected via SERVER_MODULE. All share one bearer-auth token set
+# One image, ONE container: unified_server.py mounts all 11 sub-servers as
+# separate MCP endpoints on one port, so python-docx/openpyxl/python-pptx
+# load once instead of eleven times. All 11 share one bearer-auth token set
 # (OFFICE_TOKENS_FILE / OFFICE_TOKENS / OFFICE_API_KEY) since they're one
 # logical deployment unit.
 #
 # Quick start (open mode, no auth — localhost/private network only):
 #   docker compose up -d --build
-#   curl http://localhost:8830/health   # docx_basic
+#   curl http://localhost:8830/health              # aggregate
+#   curl http://localhost:8830/docx-basic/health    # per sub-server
 #
 # With auth: cp tokens.example.json tokens.json && docker compose up -d --build
 # ─────────────────────────────────────────────────────────────────────────────
-x-office-common: &office-common
-  build:
-    context: .
-  image: ${OFFICE_IMAGE:-mcp-microsoft-office:latest}
-  restart: unless-stopped
-  environment: &office-common-env
-    OFFICE_TOKENS_FILE: ${OFFICE_TOKENS_FILE:-}
-    OFFICE_TOKENS: ${OFFICE_TOKENS:-}
-    OFFICE_API_KEY: ${OFFICE_API_KEY:-}
-  mem_limit: ${OFFICE_MEM_LIMIT:-1g}
-  volumes:
-    - ./tokens.json:/home/app/tokens.json:ro
-
 services:
-  docx-basic:
-    <<: *office-common
-    container_name: mcp-docx-basic
-    ports: ["${OFFICE_DOCX_BASIC_HOST_PORT:-8830}:8830"]
+  office:
+    build:
+      context: .
+    image: ${OFFICE_IMAGE:-mcp-microsoft-office:latest}
+    container_name: mcp-office
+    restart: unless-stopped
+    ports:
+      - "${OFFICE_HOST_PORT:-8830}:8830"
     environment:
-      <<: *office-common-env
-      SERVER_MODULE: servers/docx_basic/docx_basic/server.py
-      OFFICE_DOCX_BASIC_TRANSPORT: http
-      OFFICE_DOCX_BASIC_HOST: 0.0.0.0
-      OFFICE_DOCX_BASIC_PORT: 8830
+      OFFICE_HOST: 0.0.0.0
+      OFFICE_PORT: 8830
+      OFFICE_TOKENS_FILE: ${OFFICE_TOKENS_FILE:-}
+      OFFICE_TOKENS: ${OFFICE_TOKENS:-}
+      OFFICE_API_KEY: ${OFFICE_API_KEY:-}
+    mem_limit: ${OFFICE_MEM_LIMIT:-512m}
+    volumes:
+      - ./tokens.json:/home/app/tokens.json:ro
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.environ['OFFICE_DOCX_BASIC_PORT']+'/health',timeout=3)\""]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8830/health', timeout=3)"]
       interval: 30s
       timeout: 5s
       start_period: 10s
       retries: 3
-
-  docx-tables:
-    <<: *office-common
-    container_name: mcp-docx-tables
-    ports: ["${OFFICE_DOCX_TABLES_HOST_PORT:-8831}:8831"]
-    environment:
-      <<: *office-common-env
-      SERVER_MODULE: servers/docx_tables/docx_tables/server.py
-      OFFICE_DOCX_TABLES_TRANSPORT: http
-      OFFICE_DOCX_TABLES_HOST: 0.0.0.0
-      OFFICE_DOCX_TABLES_PORT: 8831
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.environ['OFFICE_DOCX_TABLES_PORT']+'/health',timeout=3)\""]
-      interval: 30s
-      timeout: 5s
-      start_period: 10s
-      retries: 3
-
-  docx-layout:
-    <<: *office-common
-    container_name: mcp-docx-layout
-    ports: ["${OFFICE_DOCX_LAYOUT_HOST_PORT:-8832}:8832"]
-    environment:
-      <<: *office-common-env
-      SERVER_MODULE: servers/docx_layout/docx_layout/server.py
-      OFFICE_DOCX_LAYOUT_TRANSPORT: http
-      OFFICE_DOCX_LAYOUT_HOST: 0.0.0.0
-      OFFICE_DOCX_LAYOUT_PORT: 8832
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.environ['OFFICE_DOCX_LAYOUT_PORT']+'/health',timeout=3)\""]
-      interval: 30s
-      timeout: 5s
-      start_period: 10s
-      retries: 3
-
-  docx-new:
-    <<: *office-common
-    container_name: mcp-docx-new
-    ports: ["${OFFICE_DOCX_NEW_HOST_PORT:-8833}:8833"]
-    environment:
-      <<: *office-common-env
-      SERVER_MODULE: servers/docx_new/docx_new/server.py
-      OFFICE_DOCX_NEW_TRANSPORT: http
-      OFFICE_DOCX_NEW_HOST: 0.0.0.0
-      OFFICE_DOCX_NEW_PORT: 8833
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.environ['OFFICE_DOCX_NEW_PORT']+'/health',timeout=3)\""]
-      interval: 30s
-      timeout: 5s
-      start_period: 10s
-      retries: 3
-
-  xlsx-basic:
-    <<: *office-common
-    container_name: mcp-xlsx-basic
-    ports: ["${OFFICE_XLSX_BASIC_HOST_PORT:-8834}:8834"]
-    environment:
-      <<: *office-common-env
-      SERVER_MODULE: servers/xlsx_basic/xlsx_basic/server.py
-      OFFICE_XLSX_BASIC_TRANSPORT: http
-      OFFICE_XLSX_BASIC_HOST: 0.0.0.0
-      OFFICE_XLSX_BASIC_PORT: 8834
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.environ['OFFICE_XLSX_BASIC_PORT']+'/health',timeout=3)\""]
-      interval: 30s
-      timeout: 5s
-      start_period: 10s
-      retries: 3
-
-  xlsx-formulas:
-    <<: *office-common
-    container_name: mcp-xlsx-formulas
-    ports: ["${OFFICE_XLSX_FORMULAS_HOST_PORT:-8835}:8835"]
-    environment:
-      <<: *office-common-env
-      SERVER_MODULE: servers/xlsx_formulas/xlsx_formulas/server.py
-      OFFICE_XLSX_FORMULAS_TRANSPORT: http
-      OFFICE_XLSX_FORMULAS_HOST: 0.0.0.0
-      OFFICE_XLSX_FORMULAS_PORT: 8835
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.environ['OFFICE_XLSX_FORMULAS_PORT']+'/health',timeout=3)\""]
-      interval: 30s
-      timeout: 5s
-      start_period: 10s
-      retries: 3
-
-  xlsx-charts:
-    <<: *office-common
-    container_name: mcp-xlsx-charts
-    ports: ["${OFFICE_XLSX_CHARTS_HOST_PORT:-8836}:8836"]
-    environment:
-      <<: *office-common-env
-      SERVER_MODULE: servers/xlsx_charts/xlsx_charts/server.py
-      OFFICE_XLSX_CHARTS_TRANSPORT: http
-      OFFICE_XLSX_CHARTS_HOST: 0.0.0.0
-      OFFICE_XLSX_CHARTS_PORT: 8836
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.environ['OFFICE_XLSX_CHARTS_PORT']+'/health',timeout=3)\""]
-      interval: 30s
-      timeout: 5s
-      start_period: 10s
-      retries: 3
-
-  xlsx-new:
-    <<: *office-common
-    container_name: mcp-xlsx-new
-    ports: ["${OFFICE_XLSX_NEW_HOST_PORT:-8837}:8837"]
-    environment:
-      <<: *office-common-env
-      SERVER_MODULE: servers/xlsx_new/xlsx_new/server.py
-      OFFICE_XLSX_NEW_TRANSPORT: http
-      OFFICE_XLSX_NEW_HOST: 0.0.0.0
-      OFFICE_XLSX_NEW_PORT: 8837
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.environ['OFFICE_XLSX_NEW_PORT']+'/health',timeout=3)\""]
-      interval: 30s
-      timeout: 5s
-      start_period: 10s
-      retries: 3
-
-  pptx-basic:
-    <<: *office-common
-    container_name: mcp-pptx-basic
-    ports: ["${OFFICE_PPTX_BASIC_HOST_PORT:-8838}:8838"]
-    environment:
-      <<: *office-common-env
-      SERVER_MODULE: servers/pptx_basic/pptx_basic/server.py
-      OFFICE_PPTX_BASIC_TRANSPORT: http
-      OFFICE_PPTX_BASIC_HOST: 0.0.0.0
-      OFFICE_PPTX_BASIC_PORT: 8838
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.environ['OFFICE_PPTX_BASIC_PORT']+'/health',timeout=3)\""]
-      interval: 30s
-      timeout: 5s
-      start_period: 10s
-      retries: 3
-
-  pptx-design:
-    <<: *office-common
-    container_name: mcp-pptx-design
-    ports: ["${OFFICE_PPTX_DESIGN_HOST_PORT:-8839}:8839"]
-    environment:
-      <<: *office-common-env
-      SERVER_MODULE: servers/pptx_design/pptx_design/server.py
-      OFFICE_PPTX_DESIGN_TRANSPORT: http
-      OFFICE_PPTX_DESIGN_HOST: 0.0.0.0
-      OFFICE_PPTX_DESIGN_PORT: 8839
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.environ['OFFICE_PPTX_DESIGN_PORT']+'/health',timeout=3)\""]
-      interval: 30s
-      timeout: 5s
-      start_period: 10s
-      retries: 3
-
-  pptx-new:
-    <<: *office-common
-    container_name: mcp-pptx-new
-    ports: ["${OFFICE_PPTX_NEW_HOST_PORT:-8840}:8840"]
-    environment:
-      <<: *office-common-env
-      SERVER_MODULE: servers/pptx_new/pptx_new/server.py
-      OFFICE_PPTX_NEW_TRANSPORT: http
-      OFFICE_PPTX_NEW_HOST: 0.0.0.0
-      OFFICE_PPTX_NEW_PORT: 8840
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.environ['OFFICE_PPTX_NEW_PORT']+'/health',timeout=3)\""]
-      interval: 30s
-      timeout: 5s
-      start_period: 10s
-      retries: 3
-

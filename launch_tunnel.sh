@@ -2,10 +2,11 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # MCP_Microsoft_Office — remote testing protocol (Cloudflare Quick Tunnel).
 #
-# Brings the local Docker deployment up and exposes each sub-server through
-# an ephemeral *.trycloudflare.com URL — no account, no DNS, no config.
-# Same pattern as azzindani/Folio's launch.sh, adapted for a docker-compose
-# stack with N services instead of a single process.
+# Brings the local Docker deployment up and exposes it through an ephemeral
+# *.trycloudflare.com URL — no account, no DNS, no config. Same pattern as
+# azzindani/Folio's launch.sh. One process serves all 11 sub-servers as
+# separate MCP endpoints under one port — /docx-basic/mcp, /xlsx-basic/mcp,
+# etc.
 #
 # This makes the server reachable by ANY MCP-compatible harness or AI
 # platform (Claude, ChatGPT custom connectors, LM Studio, etc.) without
@@ -24,19 +25,9 @@ set -euo pipefail
 
 # name:host_port pairs — one per sub-server. Edit for this repo's services.
 PORTS=(
-  "docx-basic:8830"
-  "docx-tables:8831"
-  "docx-layout:8832"
-  "docx-new:8833"
-  "xlsx-basic:8834"
-  "xlsx-formulas:8835"
-  "xlsx-charts:8836"
-  "xlsx-new:8837"
-  "pptx-basic:8838"
-  "pptx-design:8839"
-  "pptx-new:8840"
-
+  "office:8830"
 )
+SUB_SERVERS=(docx-basic docx-tables docx-layout docx-new xlsx-basic xlsx-formulas xlsx-charts xlsx-new pptx-basic pptx-design pptx-new)
 
 LOG_DIR="/tmp/office-tunnels"
 mkdir -p "$LOG_DIR"
@@ -96,16 +87,15 @@ done
 
 echo ""
 echo "  remote endpoints:"
-for entry in "${PORTS[@]}"; do
-  name="${entry%%:*}"
-  port="${entry##*:}"
-  echo "    ${name} (:${port})  ->  ${URLS[$name]}/mcp"
+url="${URLS[office]}"
+for sub in "${SUB_SERVERS[@]}"; do
+  echo "    ${sub}  ->  ${url}/${sub}/mcp"
 done
 echo ""
 echo "  health checks:"
-for entry in "${PORTS[@]}"; do
-  name="${entry%%:*}"
-  echo "    ${URLS[$name]}/health"
+echo "    ${url}/health   (aggregate)"
+for sub in "${SUB_SERVERS[@]}"; do
+  echo "    ${url}/${sub}/health"
 done
 echo ""
 echo "  stop tunnels:  ./launch_tunnel.sh stop"
