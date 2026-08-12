@@ -516,7 +516,10 @@ def replace_text(
         backup = snapshot(str(path))
         progress.append(ok("Snapshot saved", Path(backup).name))
 
-        replaced = docxedit.replace_string(doc, match_text, new_text)
+        # docxedit.replace_string() has no return statement (always None) —
+        # use the paragraph match count computed above instead.
+        docxedit.replace_string(doc, match_text, new_text)
+        replaced = len(matches)
         progress.append(
             ok(
                 f"Replaced '{match_text}' → '{new_text}'",

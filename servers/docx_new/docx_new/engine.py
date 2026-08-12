@@ -28,6 +28,20 @@ def _token_estimate(obj: Any) -> int:
     return len(str(obj)) // 4
 
 
+def _count_occurrences(doc: Any, needle: str) -> int:
+    """Count paragraphs (incl. table cells) containing needle.
+
+    docxedit.replace_string() has no return statement (always None), so
+    callers must count occurrences themselves before/independent of calling it.
+    """
+    n = sum(1 for p in doc.paragraphs if needle in p.text)
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                n += sum(1 for p in cell.paragraphs if needle in p.text)
+    return n
+
+
 def _ensure_parent(path: Path) -> None:
     """Create parent directories if they do not exist."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -267,7 +281,8 @@ def create_from_template(
             old_s = str(old_str)
             new_s = str(new_str)
             # docxedit.replace_string operates on runs — never assigns .text directly
-            count = docxedit.replace_string(doc, old_s, new_s)
+            count = _count_occurrences(doc, old_s)
+            docxedit.replace_string(doc, old_s, new_s)
             if count:
                 progress.append(
                     ok(
