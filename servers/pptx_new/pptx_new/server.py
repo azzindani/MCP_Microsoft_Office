@@ -10,12 +10,15 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from pptx_new import engine
-from shared.deploy_auth import build_auth
+from shared.deploy_auth import build_auth, build_oauth_bridge
 
-_VERSION = "0.1.0"  # keep in sync with pyproject.toml [project].version
+_VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
 _HOST = os.environ.get("OFFICE_PPTX_NEW_HOST", "127.0.0.1")
 _PORT = int(os.environ.get("OFFICE_PPTX_NEW_PORT", "8840"))
-_token_verifier, _auth_settings = build_auth("OFFICE", _HOST, _PORT)
+_oauth_bridge = build_oauth_bridge(
+    "OFFICE", state_dir=os.environ.get("OFFICE_PPTX_NEW_OAUTH_STATE_DIR", "/tmp/office-pptx-new-oauth-state")
+)
+_token_verifier, _auth_settings = build_auth("OFFICE", _HOST, _PORT, _oauth_bridge)
 
 mcp = FastMCP(
     "pptx-new",
@@ -24,6 +27,8 @@ mcp = FastMCP(
     token_verifier=_token_verifier,
     auth=_auth_settings,
 )
+if _oauth_bridge is not None:
+    _oauth_bridge.register_routes(mcp)
 
 
 @mcp.custom_route("/health", methods=["GET"])

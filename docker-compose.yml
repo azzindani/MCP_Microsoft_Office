@@ -29,9 +29,34 @@ services:
       OFFICE_TOKENS_FILE: ${OFFICE_TOKENS_FILE:-}
       OFFICE_TOKENS: ${OFFICE_TOKENS:-}
       OFFICE_API_KEY: ${OFFICE_API_KEY:-}
+      # OAuth 2.0 bridge for clients that require it (e.g. claude.ai's Custom
+      # Connector) instead of a plain bearer header — see shared/oauth_bridge.py.
+      # One state dir per sub-server (each is its own claude.ai connector, at
+      # its own /docx-basic, /xlsx-basic, ... path) even though it's one
+      # process/port. Only takes effect when a token source above is set;
+      # harmless otherwise.
+      OFFICE_DOCX_BASIC_OAUTH_STATE_DIR: /home/app/.oauth-state/docx-basic
+      OFFICE_DOCX_TABLES_OAUTH_STATE_DIR: /home/app/.oauth-state/docx-tables
+      OFFICE_DOCX_LAYOUT_OAUTH_STATE_DIR: /home/app/.oauth-state/docx-layout
+      OFFICE_DOCX_NEW_OAUTH_STATE_DIR: /home/app/.oauth-state/docx-new
+      OFFICE_XLSX_BASIC_OAUTH_STATE_DIR: /home/app/.oauth-state/xlsx-basic
+      OFFICE_XLSX_FORMULAS_OAUTH_STATE_DIR: /home/app/.oauth-state/xlsx-formulas
+      OFFICE_XLSX_CHARTS_OAUTH_STATE_DIR: /home/app/.oauth-state/xlsx-charts
+      OFFICE_XLSX_NEW_OAUTH_STATE_DIR: /home/app/.oauth-state/xlsx-new
+      OFFICE_PPTX_BASIC_OAUTH_STATE_DIR: /home/app/.oauth-state/pptx-basic
+      OFFICE_PPTX_DESIGN_OAUTH_STATE_DIR: /home/app/.oauth-state/pptx-design
+      OFFICE_PPTX_NEW_OAUTH_STATE_DIR: /home/app/.oauth-state/pptx-new
+      OFFICE_OAUTH_CLIENT_ID: ${OFFICE_OAUTH_CLIENT_ID:-}
+      OFFICE_OAUTH_CLIENT_SECRET: ${OFFICE_OAUTH_CLIENT_SECRET:-}
     mem_limit: ${OFFICE_MEM_LIMIT:-512m}
     volumes:
       - ./tokens.json:/home/app/tokens.json:ro
+      # Persists OAuth-issued access/refresh tokens (one subdir per
+      # sub-server) so a container restart doesn't force claude.ai to
+      # reauthorize. `mkdir -p oauth-state && chown 999:999 oauth-state`
+      # before first run — left root-owned, the container's non-root user
+      # can't write to it.
+      - ./oauth-state:/home/app/.oauth-state
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8830/health', timeout=3)"]
       interval: 30s
