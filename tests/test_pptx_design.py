@@ -248,6 +248,28 @@ def test_add_chart_creates_snapshot(deck: Path) -> None:
     assert Path(result["backup"]).exists()
 
 
+def test_add_chart_series_as_dict_shape(deck: Path) -> None:
+    """series as {name: [values]} is an equally natural shape given the tool's
+    own "data: {categories, series}" description doesn't pin down a list —
+    it must work, not crash. Regression test for a raw "string indices must
+    be integers, not 'str'" TypeError leaking through."""
+    data = {
+        "categories": ["Q1", "Q2", "Q3"],
+        "series": {"Revenue": [100, 200, 150]},
+    }
+    result = add_chart(str(deck), 0, "bar", data, title="Revenue Chart")
+    assert result["success"] is True
+    assert result["chart_type"] == "bar"
+
+
+def test_add_chart_series_malformed_list_gives_clear_error(deck: Path) -> None:
+    data = {"categories": ["A", "B"], "series": ["not-a-dict"]}
+    result = add_chart(str(deck), 0, "bar", data)
+    assert result["success"] is False
+    assert "series" in result["error"]
+    assert "hint" in result
+
+
 # ---------------------------------------------------------------------------
 # duplicate_slide
 # ---------------------------------------------------------------------------

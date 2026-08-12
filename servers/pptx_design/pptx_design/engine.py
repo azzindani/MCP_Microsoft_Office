@@ -428,7 +428,25 @@ def add_chart(
         categories = data.get("categories", [])
         chart_data.categories = categories
 
-        for series_def in data.get("series", []):
+        series = data.get("series", [])
+        # Accept both {"series": {name: [values], ...}} and the documented
+        # {"series": [{"name": ..., "values": [...]}, ...]} shape — the tool's
+        # own "data: {categories, series}" description doesn't pin down which,
+        # and the dict form crashed with a raw "string indices" TypeError.
+        if isinstance(series, dict):
+            series = [{"name": name, "values": values} for name, values in series.items()]
+        if not isinstance(series, list) or not all(
+            isinstance(s, dict) and "name" in s and "values" in s for s in series
+        ):
+            return {
+                "success": False,
+                "error": "data['series'] must be a list of {'name': str, 'values': list} objects, "
+                "or a dict of {name: [values]}.",
+                "hint": 'Example: {"categories": ["A","B"], "series": {"Revenue": [10, 20]}}',
+                "progress": progress,
+                "token_estimate": 40,
+            }
+        for series_def in series:
             chart_data.add_series(series_def["name"], series_def["values"])
 
         xl_chart_type = CHART_TYPE_MAP[chart_type]
