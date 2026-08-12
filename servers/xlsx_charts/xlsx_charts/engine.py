@@ -34,6 +34,23 @@ def _validate_cell(address: str) -> bool:
     return bool(_CELL_RE.match(address.upper()))
 
 
+def _chart_title_text(chart: Any) -> str:
+    """Extract plain title text from an openpyxl chart.
+
+    chart.title is a rich-text Title object, not a string — str()'ing it
+    directly dumps the whole nested object tree.
+    """
+    title = getattr(chart, "title", None)
+    if title is None:
+        return ""
+    if isinstance(title, str):
+        return title
+    try:
+        return title.tx.rich.p[0].r[0].t
+    except (AttributeError, IndexError, TypeError):
+        return ""
+
+
 def _open_wb(path: Path, progress: list[dict[str, Any]]) -> tuple[Any, dict[str, Any] | None]:
     """Load workbook; return (wb, None) on success or (None, error_dict) on fail."""
     if not path.exists():
@@ -225,7 +242,7 @@ def delete_chart(
                 "token_estimate": 15,
             }
 
-        deleted_title = getattr(charts[chart_index], "title", f"chart_{chart_index}")
+        deleted_title = _chart_title_text(charts[chart_index]) or f"chart_{chart_index}"
         del charts[chart_index]
 
         wb.save(str(path))
