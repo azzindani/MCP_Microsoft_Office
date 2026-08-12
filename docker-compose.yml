@@ -35,6 +35,14 @@ services:
       # its own /docx-basic, /xlsx-basic, ... path) even though it's one
       # process/port. Only takes effect when a token source above is set;
       # harmless otherwise.
+      # OFFICE_PUBLIC_URL is the public HTTPS origin (no trailing slash, no
+      # tier suffix) this service is reachable at through the reverse proxy —
+      # each server.py appends its own /docx-basic, /xlsx-basic, etc.
+      # REQUIRED for OAuth discovery to work once mounted behind a path
+      # prefix: without it, both the 401's WWW-Authenticate hint AND the raw
+      # SDK's own /.well-known/oauth-protected-resource route fall back to
+      # the internal bind address, which claude.ai can't reach.
+      OFFICE_PUBLIC_URL: ${OFFICE_PUBLIC_URL:-}
       OFFICE_DOCX_BASIC_OAUTH_STATE_DIR: /home/app/.oauth-state/docx-basic
       OFFICE_DOCX_TABLES_OAUTH_STATE_DIR: /home/app/.oauth-state/docx-tables
       OFFICE_DOCX_LAYOUT_OAUTH_STATE_DIR: /home/app/.oauth-state/docx-layout

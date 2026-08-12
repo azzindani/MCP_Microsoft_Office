@@ -93,7 +93,11 @@ def build_oauth_bridge(prefix: str, state_dir: str | None = None) -> OAuthBridge
 
 
 def build_auth(
-    prefix: str, host: str, port: int, oauth_bridge: OAuthBridge | None = None
+    prefix: str,
+    host: str,
+    port: int,
+    oauth_bridge: OAuthBridge | None = None,
+    public_url: str | None = None,
 ) -> tuple[TokenVerifier, AuthSettings] | tuple[None, None]:
     """Build (token_verifier, auth_settings) from env vars, Folio-style priority.
 
@@ -104,10 +108,23 @@ def build_auth(
 
     oauth_bridge, if given, is consulted as a fallback whenever a presented
     token doesn't match a static one.
+
+    public_url, when given, must be the PUBLIC HTTPS URL this sub-server is
+    reachable at, including its reverse-proxy mount prefix (e.g.
+    "https://office.casava.space/docx-basic"). It becomes both issuer_url and
+    resource_server_url — the raw SDK bakes the latter into the
+    WWW-Authenticate `resource_metadata` hint on 401s AND its own
+    /.well-known/oauth-protected-resource route at app-build time, so it can't
+    be derived per-request. Without it, both fall back to
+    f"http://{host}:{port}" — the internal bind address, unreachable from the
+    internet, which breaks OAuth discovery for every mounted sub-server behind
+    a reverse proxy (a bare, unprefixed single-server deployment doesn't need
+    this because a client can often still fall back to guessing the
+    unprefixed default well-known path against the public host).
     """
     named = load_named_tokens(prefix)
     if not named:
         return None, None
 
-    base_url = AnyHttpUrl(f"http://{host}:{port}")
+    base_url = AnyHttpUrl(public_url) if public_url else AnyHttpUrl(f"http://{host}:{port}")
     return _DynamicTokenVerifier(named, oauth_bridge), AuthSettings(issuer_url=base_url, resource_server_url=base_url)

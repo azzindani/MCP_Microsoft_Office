@@ -20,7 +20,9 @@ _PORT = int(os.environ.get("OFFICE_DOCX_BASIC_PORT", "8830"))
 _oauth_bridge = build_oauth_bridge(
     "OFFICE", state_dir=os.environ.get("OFFICE_DOCX_BASIC_OAUTH_STATE_DIR", "/tmp/office-docx-basic-oauth-state")
 )
-_token_verifier, _auth_settings = build_auth("OFFICE", _HOST, _PORT, _oauth_bridge)
+_public_origin = os.environ.get("OFFICE_PUBLIC_URL", "").rstrip("/")
+_public_url = f"{_public_origin}/docx-basic" if _public_origin else None
+_token_verifier, _auth_settings = build_auth("OFFICE", _HOST, _PORT, _oauth_bridge, public_url=_public_url)
 
 mcp = FastMCP(
     "docx-basic",

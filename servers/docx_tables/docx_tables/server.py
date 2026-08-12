@@ -16,7 +16,9 @@ _PORT = int(os.environ.get("OFFICE_DOCX_TABLES_PORT", "8831"))
 _oauth_bridge = build_oauth_bridge(
     "OFFICE", state_dir=os.environ.get("OFFICE_DOCX_TABLES_OAUTH_STATE_DIR", "/tmp/office-docx-tables-oauth-state")
 )
-_token_verifier, _auth_settings = build_auth("OFFICE", _HOST, _PORT, _oauth_bridge)
+_public_origin = os.environ.get("OFFICE_PUBLIC_URL", "").rstrip("/")
+_public_url = f"{_public_origin}/docx-tables" if _public_origin else None
+_token_verifier, _auth_settings = build_auth("OFFICE", _HOST, _PORT, _oauth_bridge, public_url=_public_url)
 
 mcp = FastMCP(
     "docx-tables",

@@ -29,7 +29,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, RedirectResponse
 from starlette.routing import Mount, Route
 
 from servers.docx_basic.docx_basic.server import mcp as docx_basic_mcp
@@ -98,11 +98,47 @@ async def _root(request: Request) -> JSONResponse:
     )
 
 
+def _redirect(target: str):
+    """308 redirect to a sub-server's real well-known route.
+
+    RFC 8414/9728 clients build discovery URLs by inserting
+    `/.well-known/...` between the origin and the resource/issuer path
+    (e.g. `/.well-known/oauth-protected-resource/docx-basic`), landing at
+    the OUTER app's root. But Mount() nests each sub-server's real
+    well-known routes under its own prefix (`/docx-basic/.well-known/...`)
+    instead, so the client's computed URL 404s without this redirect —
+    confirmed live against a real unauthenticated claude.ai connector
+    attempt. Unlike the fastmcp-package sibling repos, the raw SDK's
+    resource URL has no /mcp suffix, so the protected-resource source path
+    doesn't get one either.
+    """
+
+    async def _handler(request: Request) -> RedirectResponse:
+        return RedirectResponse(target, status_code=308)
+
+    return _handler
+
+
+_discovery_redirects = [
+    route
+    for name in _SUB_SERVERS
+    for route in (
+        Route(
+            f"/.well-known/oauth-protected-resource/{name}", _redirect(f"/{name}/.well-known/oauth-protected-resource")
+        ),
+        Route(
+            f"/.well-known/oauth-authorization-server/{name}",
+            _redirect(f"/{name}/.well-known/oauth-authorization-server"),
+        ),
+    )
+]
+
 app = Starlette(
     routes=[
         Route("/health", _root_health),
         Route("/version", _root_version),
         Route("/", _root),
+        *_discovery_redirects,
         *(Mount(f"/{name}", app=sub_app) for name, sub_app in _sub_apps.items()),
     ],
     lifespan=_combined_lifespan,
