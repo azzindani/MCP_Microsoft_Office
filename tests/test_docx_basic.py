@@ -480,3 +480,100 @@ class TestProgressField:
 
         result = read_document("/nonexistent/path/file.docx")
         assert "progress" in result
+
+
+# ─── get_document_index ────────────────────────────────────────────────────
+
+
+class TestGetDocumentIndex:
+    def test_returns_section_tree(self, tmp_path):
+        from docx_basic.engine import get_document_index
+
+        path = _copy("contract_simple.docx", tmp_path)
+        result = get_document_index(str(path))
+        assert result["success"] is True
+        assert result["total_paragraphs"] == 13
+        assert len(result["sections"]) > 0
+        assert result["sections"][0]["address"] == "§1"
+
+    def test_file_not_found(self, tmp_path):
+        from docx_basic.engine import get_document_index
+
+        result = get_document_index(str(tmp_path / "nonexistent.docx"))
+        assert result["success"] is False
+        assert "not found" in result["error"].lower()
+
+    def test_wrong_file_type(self, tmp_path):
+        from docx_basic.engine import get_document_index
+
+        bad = tmp_path / "notes.txt"
+        bad.write_text("hello")
+        result = get_document_index(str(bad))
+        assert result["success"] is False
+
+
+# ─── fetch_section ──────────────────────────────────────────────────────────
+
+
+class TestFetchSection:
+    def test_returns_paragraphs_for_valid_address(self, tmp_path):
+        from docx_basic.engine import fetch_section
+
+        path = _copy("contract_simple.docx", tmp_path)
+        result = fetch_section(str(path), "§1")
+        assert result["success"] is True
+        assert result["heading"] == "Service Agreement"
+        assert len(result["paragraphs"]) == 13
+        assert result["paragraphs"][0]["addr"] == "§1.p0"
+
+    def test_invalid_address_gives_actionable_error(self, tmp_path):
+        from docx_basic.engine import fetch_section
+
+        path = _copy("contract_simple.docx", tmp_path)
+        result = fetch_section(str(path), "§99")
+        assert result["success"] is False
+        assert "get_document_index" in result["hint"]
+
+    def test_file_not_found(self, tmp_path):
+        from docx_basic.engine import fetch_section
+
+        result = fetch_section(str(tmp_path / "nonexistent.docx"), "§1")
+        assert result["success"] is False
+
+
+# ─── read_receipt ───────────────────────────────────────────────────────────
+
+
+class TestReadReceipt:
+    def test_empty_log_before_any_operation(self, tmp_path):
+        from docx_basic.helpers import read_receipt_tool
+
+        path = _copy("contract_simple.docx", tmp_path)
+        result = read_receipt_tool(str(path))
+        assert result["success"] is True
+        assert result["entries"] == []
+
+    def test_records_entry_after_mutating_op(self, tmp_path):
+        from docx_basic.engine import replace_text
+        from docx_basic.helpers import read_receipt_tool
+
+        path = _copy("contract_simple.docx", tmp_path)
+        replace_text(str(path), "PARTY_A_NAME", "Acme Corp")
+
+        result = read_receipt_tool(str(path))
+        assert result["success"] is True
+        assert len(result["entries"]) == 1
+        assert result["entries"][0]["tool"] == "replace_text"
+        assert result["entries"][0]["success"] is True
+
+    def test_last_n_limits_entries(self, tmp_path):
+        from docx_basic.engine import replace_text
+        from docx_basic.helpers import read_receipt_tool
+
+        path = _copy("contract_simple.docx", tmp_path)
+        replace_text(str(path), "PARTY_A_NAME", "Acme Corp")
+        replace_text(str(path), "PARTY_B_NAME", "Widget Ltd")
+        replace_text(str(path), "30 days", "45 days")
+
+        result = read_receipt_tool(str(path), last_n=2)
+        assert len(result["entries"]) == 2

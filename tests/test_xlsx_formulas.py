@@ -7,6 +7,9 @@ import openpyxl
 import pytest
 
 from xlsx_formulas.engine import (
+    auto_sum,
+    convert_to_values,
+    fill_formula_down,
     freeze_panes,
     set_autofilter,
     set_conditional_format,
@@ -291,3 +294,154 @@ def test_all_responses_have_progress(workbook: Path) -> None:
     for r in results:
         assert "progress" in r, f"Missing 'progress' key in response: {r}"
         assert isinstance(r["progress"], list)
+
+
+# ---------------------------------------------------------------------------
+# fill_formula_down
+# ---------------------------------------------------------------------------
+
+
+def test_fill_formula_down_adjusts_row_references(workbook: Path) -> None:
+    wb = openpyxl.load_workbook(str(workbook))
+    sheet_name = wb.sheetnames[0]
+    wb.close()
+
+    result = fill_formula_down(str(workbook), sheet_name, "=A2*2", "Z2", 5)
+    assert result["success"] is True
+    assert result["cells_filled"] == 4
+
+    wb2 = openpyxl.load_workbook(str(workbook))
+    ws = wb2[sheet_name]
+    assert ws["Z2"].value == "=A2*2"
+    assert ws["Z3"].value == "=A3*2"
+    assert ws["Z5"].value == "=A5*2"
+    wb2.close()
+
+
+def test_fill_formula_down_rejects_missing_equals(workbook: Path) -> None:
+    wb = openpyxl.load_workbook(str(workbook))
+    sheet_name = wb.sheetnames[0]
+    wb.close()
+
+    result = fill_formula_down(str(workbook), sheet_name, "A2*2", "Z2", 5)
+    assert result["success"] is False
+    assert "=" in result["error"]
+
+
+def test_fill_formula_down_end_row_before_start(workbook: Path) -> None:
+    wb = openpyxl.load_workbook(str(workbook))
+    sheet_name = wb.sheetnames[0]
+    wb.close()
+
+    result = fill_formula_down(str(workbook), sheet_name, "=A2*2", "Z5", 2)
+    assert result["success"] is False
+    assert "end_row" in result["error"]
+
+
+def test_fill_formula_down_creates_snapshot(workbook: Path) -> None:
+    wb = openpyxl.load_workbook(str(workbook))
+    sheet_name = wb.sheetnames[0]
+    wb.close()
+
+    result = fill_formula_down(str(workbook), sheet_name, "=A2*2", "Z2", 3)
+    assert "backup" in result
+    assert Path(result["backup"]).exists()
+
+
+# ---------------------------------------------------------------------------
+# auto_sum
+# ---------------------------------------------------------------------------
+
+
+def test_auto_sum_writes_sum_formula(workbook: Path) -> None:
+    wb = openpyxl.load_workbook(str(workbook))
+    sheet_name = wb.sheetnames[0]
+    wb.close()
+
+    result = auto_sum(str(workbook), sheet_name, "B2:B5", "B10")
+    assert result["success"] is True
+    assert result["formula"] == "=SUM(B2:B5)"
+
+    wb2 = openpyxl.load_workbook(str(workbook))
+    ws = wb2[sheet_name]
+    assert ws["B10"].value == "=SUM(B2:B5)"
+    wb2.close()
+
+
+def test_auto_sum_other_functions(workbook: Path) -> None:
+    wb = openpyxl.load_workbook(str(workbook))
+    sheet_name = wb.sheetnames[0]
+    wb.close()
+
+    result = auto_sum(str(workbook), sheet_name, "B2:B5", "B11", function_name="average")
+    assert result["success"] is True
+    assert result["formula"] == "=AVERAGE(B2:B5)"
+
+
+def test_auto_sum_rejects_unknown_function(workbook: Path) -> None:
+    wb = openpyxl.load_workbook(str(workbook))
+    sheet_name = wb.sheetnames[0]
+    wb.close()
+
+    result = auto_sum(str(workbook), sheet_name, "B2:B5", "B10", function_name="MEDIAN")
+    assert result["success"] is False
+    assert "Unknown function_name" in result["error"]
+
+
+def test_auto_sum_rejects_invalid_range(workbook: Path) -> None:
+    wb = openpyxl.load_workbook(str(workbook))
+    sheet_name = wb.sheetnames[0]
+    wb.close()
+
+    result = auto_sum(str(workbook), sheet_name, "not-a-range", "B10")
+    assert result["success"] is False
+    assert "Invalid range" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# convert_to_values
+# ---------------------------------------------------------------------------
+
+
+def test_convert_to_values_replaces_formula_cells(workbook: Path) -> None:
+    wb = openpyxl.load_workbook(str(workbook))
+    sheet_name = wb.sheetnames[0]
+    wb.close()
+
+    set_formula(str(workbook), sheet_name, "Z1", "=1+1")
+    result = convert_to_values(str(workbook), sheet_name, "Z1:Z1")
+    assert result["success"] is True
+    assert result["formulas_converted"] == 1
+
+    wb2 = openpyxl.load_workbook(str(workbook))
+    ws = wb2[sheet_name]
+    # openpyxl never computed the formula, so the cached value is None —
+    # the cell must no longer hold a formula string either way.
+    assert not (isinstance(ws["Z1"].value, str) and ws["Z1"].value.startswith("="))
+    wb2.close()
+
+
+def test_convert_to_values_skips_non_formula_cells(workbook: Path) -> None:
+    wb = openpyxl.load_workbook(str(workbook))
+    sheet_name = wb.sheetnames[0]
+    wb.close()
+
+    result = convert_to_values(str(workbook), sheet_name, "A1:A2")
+    assert result["success"] is True
+    assert result["formulas_converted"] == 0
+
+
+def test_convert_to_values_rejects_invalid_range(workbook: Path) -> None:
+    wb = openpyxl.load_workbook(str(workbook))
+    sheet_name = wb.sheetnames[0]
+    wb.close()
+
+    result = convert_to_values(str(workbook), sheet_name, "not-a-range")
+    assert result["success"] is False
+    assert "Invalid range" in result["error"]
+
+
+def test_convert_to_values_sheet_not_found(workbook: Path) -> None:
+    result = convert_to_values(str(workbook), "Ghost", "A1:A2")
+    assert result["success"] is False
+    assert "not found" in result["error"]

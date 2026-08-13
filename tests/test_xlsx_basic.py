@@ -18,6 +18,7 @@ from xlsx_basic.engine import (
     set_cell,
     set_range,
 )
+from xlsx_basic.helpers import copy_sheet, find_duplicates, rename_sheet, sort_sheet
 
 FIXTURES = Path(__file__).parent / "fixtures"
 BUDGET_SIMPLE = FIXTURES / "budget_simple.xlsx"
@@ -478,3 +479,138 @@ def test_all_responses_have_progress_field(workbook: Path):
     for r in results:
         assert "progress" in r, f"Missing 'progress' in: {r}"
         assert isinstance(r["progress"], list), f"'progress' is not a list in: {r}"
+
+
+# ---------------------------------------------------------------------------
+# sort_sheet
+# ---------------------------------------------------------------------------
+
+
+def test_sort_sheet_ascending_by_column(workbook: Path):
+    result = sort_sheet(str(workbook), "Q3 Revenue", "A")
+    assert result["success"] is True
+    assert result["rows_sorted"] == 4
+
+    wb = openpyxl.load_workbook(str(workbook), data_only=True)
+    ws = wb["Q3 Revenue"]
+    regions = [ws.cell(row=r, column=1).value for r in range(2, 6)]
+    wb.close()
+    assert regions == sorted(regions)
+
+
+def test_sort_sheet_descending_by_numeric_column(workbook: Path):
+    result = sort_sheet(str(workbook), "Q3 Revenue", "E", ascending=False)
+    assert result["success"] is True
+
+    wb = openpyxl.load_workbook(str(workbook), data_only=True)
+    ws = wb["Q3 Revenue"]
+    totals = [ws.cell(row=r, column=5).value for r in range(2, 6)]
+    wb.close()
+    assert totals == sorted(totals, reverse=True)
+
+
+def test_sort_sheet_invalid_column(workbook: Path):
+    result = sort_sheet(str(workbook), "Q3 Revenue", "!!")
+    assert result["success"] is False
+    assert "Invalid column" in result["error"]
+
+
+def test_sort_sheet_sheet_not_found(workbook: Path):
+    result = sort_sheet(str(workbook), "Ghost", "A")
+    assert result["success"] is False
+    assert "not found" in result["error"]
+
+
+def test_sort_sheet_creates_snapshot(workbook: Path):
+    result = sort_sheet(str(workbook), "Q3 Revenue", "A")
+    assert "backup" in result
+    assert Path(result["backup"]).exists()
+
+
+# ---------------------------------------------------------------------------
+# rename_sheet
+# ---------------------------------------------------------------------------
+
+
+def test_rename_sheet_changes_title(workbook: Path):
+    result = rename_sheet(str(workbook), "Q3 Revenue", "Q3 Renamed")
+    assert result["success"] is True
+    assert result["new_name"] == "Q3 Renamed"
+
+    wb = openpyxl.load_workbook(str(workbook))
+    assert "Q3 Renamed" in wb.sheetnames
+    assert "Q3 Revenue" not in wb.sheetnames
+    wb.close()
+
+
+def test_rename_sheet_source_not_found(workbook: Path):
+    result = rename_sheet(str(workbook), "Ghost", "New Name")
+    assert result["success"] is False
+    assert "not found" in result["error"]
+
+
+def test_rename_sheet_target_already_exists(workbook: Path):
+    result = rename_sheet(str(workbook), "Q3 Revenue", "Dashboard")
+    assert result["success"] is False
+    assert "already exists" in result["error"]
+
+
+def test_rename_sheet_empty_new_name(workbook: Path):
+    result = rename_sheet(str(workbook), "Q3 Revenue", "")
+    assert result["success"] is False
+    assert "cannot be empty" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# copy_sheet
+# ---------------------------------------------------------------------------
+
+
+def test_copy_sheet_creates_new_sheet_with_same_data(workbook: Path):
+    result = copy_sheet(str(workbook), "Q3 Revenue", "Q3 Revenue Copy")
+    assert result["success"] is True
+
+    wb = openpyxl.load_workbook(str(workbook), data_only=True)
+    assert "Q3 Revenue Copy" in wb.sheetnames
+    original = [c.value for row in wb["Q3 Revenue"].iter_rows() for c in row]
+    copied = [c.value for row in wb["Q3 Revenue Copy"].iter_rows() for c in row]
+    wb.close()
+    assert original == copied
+
+
+def test_copy_sheet_source_not_found(workbook: Path):
+    result = copy_sheet(str(workbook), "Ghost", "New")
+    assert result["success"] is False
+    assert "not found" in result["error"]
+
+
+def test_copy_sheet_target_already_exists(workbook: Path):
+    result = copy_sheet(str(workbook), "Q3 Revenue", "Dashboard")
+    assert result["success"] is False
+    assert "already exists" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# find_duplicates
+# ---------------------------------------------------------------------------
+
+
+def test_find_duplicates_none_in_clean_column(workbook: Path):
+    result = find_duplicates(str(workbook), "Q3 Revenue", "A")
+    assert result["success"] is True
+    assert result["duplicate_count"] == 0
+
+
+def test_find_duplicates_detects_repeated_value(workbook: Path):
+    set_cell(str(workbook), "Q3 Revenue", "A3", "North")  # duplicate of A2
+    result = find_duplicates(str(workbook), "Q3 Revenue", "A")
+    assert result["success"] is True
+    assert result["duplicate_count"] == 1
+    assert result["duplicates"][0]["value"] == "North"
+    assert set(result["duplicates"][0]["rows"]) == {2, 3}
+
+
+def test_find_duplicates_sheet_not_found(workbook: Path):
+    result = find_duplicates(str(workbook), "Ghost", "A")
+    assert result["success"] is False
+    assert "not found" in result["error"]

@@ -8,10 +8,12 @@ from pptx import Presentation
 
 from pptx_design.engine import (
     add_chart,
+    add_image_to_all_slides,
     add_table,
     duplicate_slide,
     export_pdf,
     set_background,
+    set_font_all_slides,
     set_font_style,
 )
 
@@ -404,3 +406,91 @@ def test_all_responses_have_progress(deck: Path) -> None:
     for r in results:
         assert "progress" in r, f"Missing 'progress' key in: {r}"
         assert isinstance(r["progress"], list)
+
+
+def _minimal_png(path: Path) -> None:
+    import struct
+    import zlib
+
+    sig = b"\x89PNG\r\n\x1a\n"
+    ihdr_data = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+    ihdr_crc = zlib.crc32(b"IHDR" + ihdr_data)
+    ihdr = struct.pack(">I", 13) + b"IHDR" + ihdr_data + struct.pack(">I", ihdr_crc)
+    idat_data = zlib.compress(b"\x00\xff\xff\xff")
+    idat_crc = zlib.crc32(b"IDAT" + idat_data)
+    idat = struct.pack(">I", len(idat_data)) + b"IDAT" + idat_data + struct.pack(">I", idat_crc)
+    iend_crc = zlib.crc32(b"IEND")
+    iend = struct.pack(">I", 0) + b"IEND" + struct.pack(">I", iend_crc)
+    path.write_bytes(sig + ihdr + idat + iend)
+
+
+# ---------------------------------------------------------------------------
+# add_image_to_all_slides
+# ---------------------------------------------------------------------------
+
+
+def test_add_image_to_all_slides_adds_picture_to_every_slide(deck: Path, tmp_path: Path) -> None:
+    img_path = tmp_path / "logo.png"
+    _minimal_png(img_path)
+
+    result = add_image_to_all_slides(str(deck), str(img_path))
+    assert result["success"] is True
+    assert result["slide_count"] == 5
+
+    prs = Presentation(str(deck))
+    for slide in prs.slides:
+        assert any(shape.shape_type == 13 for shape in slide.shapes)  # PICTURE
+
+
+def test_add_image_to_all_slides_image_not_found(deck: Path, tmp_path: Path) -> None:
+    result = add_image_to_all_slides(str(deck), str(tmp_path / "missing.png"))
+    assert result["success"] is False
+    assert "not found" in result["error"].lower()
+
+
+def test_add_image_to_all_slides_unsupported_format(deck: Path, tmp_path: Path) -> None:
+    fake_img = tmp_path / "logo.xyz"
+    fake_img.write_bytes(b"fake")
+    result = add_image_to_all_slides(str(deck), str(fake_img))
+    assert result["success"] is False
+    assert "unsupported" in result["error"].lower()
+
+
+def test_add_image_to_all_slides_creates_snapshot(deck: Path, tmp_path: Path) -> None:
+    img_path = tmp_path / "logo.png"
+    _minimal_png(img_path)
+
+    result = add_image_to_all_slides(str(deck), str(img_path))
+    assert "backup" in result
+    assert Path(result["backup"]).exists()
+
+
+# ---------------------------------------------------------------------------
+# set_font_all_slides
+# ---------------------------------------------------------------------------
+
+
+def test_set_font_all_slides_applies_font_name_and_size(deck: Path) -> None:
+    result = set_font_all_slides(str(deck), font_name="Georgia", font_size=24)
+    assert result["success"] is True
+    assert result["slides_modified"] == 5
+
+    prs = Presentation(str(deck))
+    run = prs.slides[0].shapes[0].text_frame.paragraphs[0].runs[0]
+    assert run.font.name == "Georgia"
+    assert run.font.size.pt == 24
+
+
+def test_set_font_all_slides_applies_color(deck: Path) -> None:
+    result = set_font_all_slides(str(deck), color_hex="#336699")
+    assert result["success"] is True
+
+    prs = Presentation(str(deck))
+    run = prs.slides[0].shapes[0].text_frame.paragraphs[0].runs[0]
+    assert str(run.font.color.rgb) == "336699"
+
+
+def test_set_font_all_slides_creates_snapshot(deck: Path) -> None:
+    result = set_font_all_slides(str(deck), font_name="Arial")
+    assert "backup" in result
+    assert Path(result["backup"]).exists()
