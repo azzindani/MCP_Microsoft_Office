@@ -721,3 +721,84 @@ class TestCsvToExcelScenario:
 
         cell_a2 = read_cell(str(out), sheet, "A2")
         assert cell_a2["value"] == "Alice"
+
+    def test_numeric_columns_import_as_real_numbers(self, tmp_path):
+        """Regression test: create_from_csv used to write every CSV field as
+        a text string via csv.reader, so a numeric column looked fine on
+        screen but SUM()/pivot tables/charts built on it silently summed to
+        zero — Excel skips text cells in aggregate functions. Found via a
+        real 16,834-row Ad_Data.csv import where every spends/impressions/
+        clicks cell came back as str, breaking a real add_pivot_table call."""
+        import csv
+
+        from xlsx_basic.engine import read_cell
+        from xlsx_formulas.engine import auto_sum
+        from xlsx_new.engine import create_from_csv
+
+        csv_path = tmp_path / "spend.csv"
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Region", "Spend"])
+            writer.writerow(["North", "0"])
+            writer.writerow(["South", "14.63"])
+            writer.writerow(["East", "100"])
+
+        out = tmp_path / "spend.xlsx"
+        result = create_from_csv(str(csv_path), str(out), has_header=True, open_after=False)
+        assert result["success"] is True
+        sheet = result.get("sheet_name", "Data")
+
+        assert read_cell(str(out), sheet, "B2")["value"] == 0
+        assert read_cell(str(out), sheet, "B3")["value"] == 14.63
+        assert read_cell(str(out), sheet, "B4")["value"] == 100
+
+        auto_sum(str(out), sheet, "B2:B4", "B5")
+        # Recompute via a fresh formula-aware read: SUM only works on real
+        # numbers, so this would read as 0 if the bug were still present.
+        from openpyxl import load_workbook
+
+        wb = load_workbook(str(out))
+        wb_formula_ws = wb[sheet]
+        assert wb_formula_ws["B5"].value == "=SUM(B2:B4)"
+        wb.close()
+
+    def test_leading_zero_values_kept_as_text(self, tmp_path):
+        """Zip-code-style zero-padded values must not lose their leading
+        zero by being coerced to a number, matching Excel's own CSV-import
+        convention."""
+        import csv
+
+        from xlsx_basic.engine import read_cell
+        from xlsx_new.engine import create_from_csv
+
+        csv_path = tmp_path / "zips.csv"
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["City", "Zip"])
+            writer.writerow(["Boston", "02134"])
+
+        out = tmp_path / "zips.xlsx"
+        result = create_from_csv(str(csv_path), str(out), has_header=True, open_after=False)
+        assert result["success"] is True
+        sheet = result.get("sheet_name", "Data")
+
+        assert read_cell(str(out), sheet, "B2")["value"] == "02134"
+
+    def test_empty_field_becomes_blank_cell(self, tmp_path):
+        import csv
+
+        from xlsx_basic.engine import read_cell
+        from xlsx_new.engine import create_from_csv
+
+        csv_path = tmp_path / "gaps.csv"
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Name", "Notes"])
+            writer.writerow(["Alice", ""])
+
+        out = tmp_path / "gaps.xlsx"
+        result = create_from_csv(str(csv_path), str(out), has_header=True, open_after=False)
+        assert result["success"] is True
+        sheet = result.get("sheet_name", "Data")
+
+        assert read_cell(str(out), sheet, "B2")["value"] is None

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -49,6 +50,29 @@ def _write_rows(ws: Any, rows: list[list[Any]], start_row: int = 2) -> None:
     for row_idx, row_data in enumerate(rows, start=start_row):
         for col_idx, value in enumerate(row_data, start=1):
             ws.cell(row=row_idx, column=col_idx, value=value)
+
+
+_LEADING_ZERO_RE = re.compile(r"^-?0\d")
+
+
+def _coerce_csv_value(value: str) -> Any:
+    """Convert a raw CSV string to int/float when it unambiguously
+    represents a number, so SUM/pivot/chart formulas can use imported
+    data as real numbers instead of silently treating it as text.
+    Zero-padded strings (zip codes, IDs) are kept as text, matching
+    Excel's own CSV-import convention."""
+    if value == "":
+        return None
+    if _LEADING_ZERO_RE.match(value):
+        return value
+    try:
+        return int(value)
+    except ValueError:
+        pass
+    try:
+        return float(value)
+    except ValueError:
+        return value
 
 
 # ---------------------------------------------------------------------------
@@ -380,9 +404,11 @@ def create_from_csv(
         ws.title = sheet_name
 
         for r_idx, row_data in enumerate(all_rows, start=1):
+            is_header_row = has_header and r_idx == 1
             for c_idx, value in enumerate(row_data, start=1):
-                cell = ws.cell(row=r_idx, column=c_idx, value=value)
-                if has_header and r_idx == 1:
+                cell_value = value if is_header_row else _coerce_csv_value(value)
+                cell = ws.cell(row=r_idx, column=c_idx, value=cell_value)
+                if is_header_row:
                     cell.font = Font(bold=True)
 
         wb.save(str(out_path))
