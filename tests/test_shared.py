@@ -55,6 +55,42 @@ class TestResolvePathFileUtils:
         assert str(tmp_path) in str(result)
 
 
+class TestEmbedContent:
+    def test_embeds_real_base64_bytes_when_requested(self, tmp_path):
+        import base64
+
+        from shared.file_utils import embed_content
+
+        f = tmp_path / "out.xlsx"
+        f.write_bytes(b"PK\x03\x04fake zip bytes")
+        result = embed_content({"success": True}, f, return_content=True)
+        assert base64.b64decode(result["content_base64"]) == f.read_bytes()
+        assert result["content_mime_type"] == ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    def test_does_nothing_when_return_content_false(self, tmp_path):
+        from shared.file_utils import embed_content
+
+        f = tmp_path / "out.xlsx"
+        f.write_bytes(b"data")
+        result = embed_content({"success": True}, f, return_content=False)
+        assert "content_base64" not in result
+
+    def test_does_nothing_when_result_already_failed(self, tmp_path):
+        from shared.file_utils import embed_content
+
+        f = tmp_path / "out.xlsx"
+        f.write_bytes(b"data")
+        result = embed_content({"success": False}, f, return_content=True)
+        assert "content_base64" not in result
+
+    def test_missing_file_does_not_raise(self, tmp_path):
+        from shared.file_utils import embed_content
+
+        result = embed_content({"success": True}, tmp_path / "missing.xlsx", return_content=True)
+        assert "content_base64" not in result
+        assert result["success"] is True
+
+
 class TestSafeCopy:
     def test_creates_parent_dirs(self, tmp_path):
         from shared.file_utils import safe_copy

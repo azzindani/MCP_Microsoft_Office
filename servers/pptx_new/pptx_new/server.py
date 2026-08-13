@@ -50,18 +50,20 @@ def create_presentation(
     title: str = "",
     subtitle: str = "",
     output_path: str = "",
+    return_content: bool = False,
 ) -> dict:
-    """Create a blank PowerPoint with a title slide."""
-    return engine.create_presentation(output_path, title, subtitle, open_after=False)
+    """Create blank .pptx w/ title slide. return_content=True embeds bytes."""
+    return engine.create_presentation(output_path, title, subtitle, open_after=False, return_content=return_content)
 
 
 @mcp.tool()
 def create_from_outline(
     slides: list[dict],
     output_path: str = "",
+    return_content: bool = False,
 ) -> dict:
     """Create .pptx from [{title, content, layout}] slide list."""
-    return engine.create_from_outline(output_path, slides, open_after=True)
+    return engine.create_from_outline(output_path, slides, open_after=True, return_content=return_content)
 
 
 @mcp.tool()
@@ -69,18 +71,20 @@ def create_deck_from_data(
     title: str,
     data_slides: list[dict],
     output_path: str = "",
+    return_content: bool = False,
 ) -> dict:
     """Create .pptx deck from title + [{heading, bullets}] list."""
-    return engine.create_deck_from_data(output_path, title, data_slides, open_after=True)
+    return engine.create_deck_from_data(output_path, title, data_slides, open_after=True, return_content=return_content)
 
 
 @mcp.tool()
 def create_from_template(
     template_path: str,
     output_path: str = "",
+    return_content: bool = False,
 ) -> dict:
     """Copy .pptx template to output_path as starting point."""
-    return engine.create_from_template(template_path, output_path, open_after=True)
+    return engine.create_from_template(template_path, output_path, open_after=True, return_content=return_content)
 
 
 @mcp.tool()
@@ -90,9 +94,18 @@ def create_agenda(
     items: list,
     presenter: str = "",
     output_path: str = "",
+    return_content: bool = False,
 ) -> dict:
-    """Create a meeting agenda .pptx from a list of {topic,duration,owner} items."""
-    return engine.create_agenda(output_path, meeting_title, date, items, presenter, open_after=True)
+    """Create a meeting agenda .pptx from {topic,duration,owner} items."""
+    return engine.create_agenda(
+        output_path,
+        meeting_title,
+        date,
+        items,
+        presenter,
+        open_after=True,
+        return_content=return_content,
+    )
 
 
 @mcp.tool()
@@ -100,9 +113,10 @@ def create_from_docx(
     docx_path: str,
     max_slides: int = 20,
     output_path: str = "",
+    return_content: bool = False,
 ) -> dict:
     """Convert a Word document outline into a PowerPoint presentation."""
-    return engine.create_from_docx(docx_path, output_path, max_slides, open_after=True)
+    return engine.create_from_docx(docx_path, output_path, max_slides, open_after=True, return_content=return_content)
 
 
 def main() -> None:

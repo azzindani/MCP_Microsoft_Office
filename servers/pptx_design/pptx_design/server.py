@@ -116,9 +116,10 @@ def duplicate_slide(
 def export_pdf(
     file_path: str,
     output_path: str = "",
+    return_content: bool = False,
 ) -> dict:
-    """Export PPTX to PDF using LibreOffice or PowerPoint."""
-    return engine.export_pdf(file_path, output_path, open_after=True)
+    """Export .pptx to PDF (needs LibreOffice/PowerPoint). Can embed bytes."""
+    return engine.export_pdf(file_path, output_path, open_after=True, return_content=return_content)
 
 
 @mcp.tool()

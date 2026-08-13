@@ -4,7 +4,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from shared.file_utils import hint_for_error, resolve_path
+from shared.file_utils import embed_content, hint_for_error, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_pdf_converter, open_file, resolve_output_path
 from shared.progress import fail, info, ok
@@ -574,7 +574,12 @@ def add_header_footer(
         return _error(str(e), hint_for_error(e, path), progress, backup)
 
 
-def export_pdf(file_path: str, output_path: str = "", open_after: bool = True) -> dict[str, Any]:
+def export_pdf(
+    file_path: str,
+    output_path: str = "",
+    open_after: bool = True,
+    return_content: bool = False,
+) -> dict[str, Any]:
     """Export .docx to PDF. Requires Word (Win/Mac) or LibreOffice (Linux)."""
     progress: list[dict[str, Any]] = []
     try:
@@ -652,7 +657,7 @@ def export_pdf(file_path: str, output_path: str = "", open_after: bool = True) -
             open_file(out_path)
             progress.append(ok("Opened PDF in default viewer"))
 
-        return {
+        result: dict[str, Any] = {
             "success": True,
             "op": "export_pdf",
             "input": str(path),
@@ -660,8 +665,10 @@ def export_pdf(file_path: str, output_path: str = "", open_after: bool = True) -
             "output_name": out_path.name,
             "converter": converter,
             "progress": progress,
-            "token_estimate": len(str(progress)) // 4,
         }
+        embed_content(result, out_path, return_content)
+        result["token_estimate"] = len(str(result)) // 4
+        return result
     except Exception as e:
         progress.append(fail(str(e)))
         return _error(

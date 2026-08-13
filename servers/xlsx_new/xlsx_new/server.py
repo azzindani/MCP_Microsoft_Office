@@ -49,9 +49,10 @@ async def version(request: Request) -> JSONResponse:
 def create_workbook(
     sheet_name: str = "Sheet1",
     output_path: str = "",
+    return_content: bool = False,
 ) -> dict:
-    """Create a blank Excel workbook with one sheet."""
-    return engine.create_workbook(output_path, sheet_name, open_after=False)
+    """Create blank .xlsx. return_content=True embeds file bytes (remote)."""
+    return engine.create_workbook(output_path, sheet_name, open_after=False, return_content=return_content)
 
 
 @mcp.tool()
@@ -60,9 +61,12 @@ def create_from_data(
     headers: list,
     rows: list,
     output_path: str = "",
+    return_content: bool = False,
 ) -> dict:
-    """Create .xlsx from headers list and rows (list of lists)."""
-    return engine.create_from_data(output_path, sheet_name, headers, rows, open_after=True)
+    """Create .xlsx from headers+rows. return_content=True embeds bytes."""
+    return engine.create_from_data(
+        output_path, sheet_name, headers, rows, open_after=True, return_content=return_content
+    )
 
 
 @mcp.tool()
@@ -70,9 +74,10 @@ def create_report(
     title: str,
     sheets: list,
     output_path: str = "",
+    return_content: bool = False,
 ) -> dict:
     """Create multi-sheet .xlsx report from [{name,headers,rows}] list."""
-    return engine.create_report(output_path, title, sheets, open_after=True)
+    return engine.create_report(output_path, title, sheets, open_after=True, return_content=return_content)
 
 
 @mcp.tool()
@@ -80,9 +85,12 @@ def create_from_template(
     template_path: str,
     replacements: dict,
     output_path: str = "",
+    return_content: bool = False,
 ) -> dict:
     """Copy .xlsx template, replace cell values, save to output_path."""
-    return engine.create_from_template(template_path, output_path, replacements, open_after=True)
+    return engine.create_from_template(
+        template_path, output_path, replacements, open_after=True, return_content=return_content
+    )
 
 
 @mcp.tool()
@@ -92,9 +100,18 @@ def create_from_csv(
     delimiter: str = ",",
     has_header: bool = True,
     output_path: str = "",
+    return_content: bool = False,
 ) -> dict:
     """Import a CSV file into a new Excel workbook."""
-    return engine.create_from_csv(csv_path, output_path, sheet_name, delimiter, has_header, open_after=True)
+    return engine.create_from_csv(
+        csv_path,
+        output_path,
+        sheet_name,
+        delimiter,
+        has_header,
+        open_after=True,
+        return_content=return_content,
+    )
 
 
 @mcp.tool()
@@ -106,6 +123,7 @@ def create_invoice(
     tax_rate: float = 0.0,
     currency: str = "USD",
     output_path: str = "",
+    return_content: bool = False,
 ) -> dict:
     """Create a formatted invoice .xlsx with items, totals, and tax formula."""
     return engine.create_invoice(
@@ -117,6 +135,7 @@ def create_invoice(
         tax_rate,
         currency,
         open_after=True,
+        return_content=return_content,
     )
 
 

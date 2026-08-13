@@ -46,18 +46,19 @@ async def version(request: Request) -> JSONResponse:
 
 
 @mcp.tool()
-def create_document(output_path: str = "") -> dict:
-    """Create a blank Word document and save to output_path."""
-    return engine.create_document(output_path, open_after=False)
+def create_document(output_path: str = "", return_content: bool = False) -> dict:
+    """Create blank .docx. return_content=True embeds file bytes (remote)."""
+    return engine.create_document(output_path, open_after=False, return_content=return_content)
 
 
 @mcp.tool()
 def create_from_text(
     paragraphs: list[dict],
     output_path: str = "",
+    return_content: bool = False,
 ) -> dict:
     """Create .docx from list of {text, style} paragraph dicts."""
-    return engine.create_from_text(output_path, paragraphs, open_after=True)
+    return engine.create_from_text(output_path, paragraphs, open_after=True, return_content=return_content)
 
 
 @mcp.tool()
@@ -65,9 +66,10 @@ def create_from_sections(
     title: str,
     sections: list[dict],
     output_path: str = "",
+    return_content: bool = False,
 ) -> dict:
     """Create structured .docx from title + [{heading, body}] sections."""
-    return engine.create_from_sections(output_path, title, sections, open_after=True)
+    return engine.create_from_sections(output_path, title, sections, open_after=True, return_content=return_content)
 
 
 @mcp.tool()
@@ -75,9 +77,12 @@ def create_from_template(
     template_path: str,
     substitutions: dict,
     output_path: str = "",
+    return_content: bool = False,
 ) -> dict:
     """Copy template .docx, fill {key: value} substitutions, save."""
-    return engine.create_from_template(template_path, output_path, substitutions, open_after=True)
+    return engine.create_from_template(
+        template_path, output_path, substitutions, open_after=True, return_content=return_content
+    )
 
 
 @mcp.tool()
@@ -87,9 +92,18 @@ def create_letter(
     subject: str,
     body: str,
     output_path: str = "",
+    return_content: bool = False,
 ) -> dict:
     """Create a formatted business letter .docx."""
-    return engine.create_letter(output_path, from_name, to_name, subject, body, open_after=True)
+    return engine.create_letter(
+        output_path,
+        from_name,
+        to_name,
+        subject,
+        body,
+        open_after=True,
+        return_content=return_content,
+    )
 
 
 @mcp.tool()
@@ -97,9 +111,12 @@ def merge_documents(
     file_paths: list,
     output_path: str = "",
     add_page_break: bool = True,
+    return_content: bool = False,
 ) -> dict:
     """Merge multiple .docx files into one document."""
-    return engine.merge_documents(file_paths, output_path, add_page_break, open_after=True)
+    return engine.merge_documents(
+        file_paths, output_path, add_page_break, open_after=True, return_content=return_content
+    )
 
 
 @mcp.tool()

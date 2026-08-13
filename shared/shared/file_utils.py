@@ -1,6 +1,8 @@
 """Safe file path resolution, backup copy, and JSON helpers."""
 
+import base64
 import json
+import mimetypes
 import os
 import shutil
 import sys
@@ -100,6 +102,25 @@ def hint_for_error(e: Exception, path: Path | None = None) -> str:
         name = path.name if path else "the file"
         return f"'{name}' is open in Word, Excel, or PowerPoint. Close it and try again."
     return "Use restore_version to undo if a snapshot was taken."
+
+
+def embed_content(result: dict[str, Any], path: Path, return_content: bool) -> dict[str, Any]:
+    """Attach base64 file bytes to a tool result dict when requested.
+
+    In remote/HTTP deployments the caller has no filesystem in common
+    with this server, so a server-local output path is useless to it —
+    this lets the caller get the real bytes back over the wire instead.
+    A read failure here doesn't fail the whole tool call.
+    """
+    if not return_content or not result.get("success"):
+        return result
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return result
+    result["content_base64"] = base64.b64encode(data).decode("ascii")
+    result["content_mime_type"] = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+    return result
 
 
 def safe_copy(src: str, dst: str) -> None:

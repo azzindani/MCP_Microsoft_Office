@@ -16,6 +16,7 @@ if str(_ROOT) not in sys.path:
 from pptx import Presentation  # noqa: E402
 from pptx.util import Inches, Pt  # noqa: E402,F401
 
+from shared.file_utils import embed_content  # noqa: E402
 from shared.platform_utils import open_file, resolve_output_path  # noqa: E402
 from shared.progress import fail, info, ok  # noqa: E402
 
@@ -71,6 +72,7 @@ def create_presentation(
     title: str = "",
     subtitle: str = "",
     open_after: bool = True,
+    return_content: bool = False,
 ) -> dict[str, Any]:
     """Create a blank presentation with a single title slide."""
     progress: list[dict[str, Any]] = []
@@ -100,15 +102,17 @@ def create_presentation(
             open_file(path)
             progress.append(ok("Opened in default application"))
 
-        return {
+        result: dict[str, Any] = {
             "success": True,
             "op": "create_presentation",
             "output": str(path),
             "output_name": path.name,
             "slide_count": 1,
             "progress": progress,
-            "token_estimate": _token_estimate(progress),
         }
+        embed_content(result, path, return_content)
+        result["token_estimate"] = _token_estimate(result)
+        return result
 
     except Exception as exc:
         logger.exception("create_presentation failed")
@@ -119,6 +123,7 @@ def create_from_outline(
     output_path: str,
     slides: list[dict[str, Any]],
     open_after: bool = True,
+    return_content: bool = False,
 ) -> dict[str, Any]:
     """Create a presentation from a list of slide descriptor dicts."""
     progress: list[dict[str, Any]] = []
@@ -179,15 +184,17 @@ def create_from_outline(
             open_file(path)
             progress.append(ok("Opened in default application"))
 
-        return {
+        result: dict[str, Any] = {
             "success": True,
             "op": "create_from_outline",
             "output": str(path),
             "output_name": path.name,
             "slide_count": slide_count,
             "progress": progress,
-            "token_estimate": _token_estimate(progress),
         }
+        embed_content(result, path, return_content)
+        result["token_estimate"] = _token_estimate(result)
+        return result
 
     except Exception as exc:
         logger.exception("create_from_outline failed")
@@ -199,6 +206,7 @@ def create_deck_from_data(
     title: str,
     data_slides: list[dict[str, Any]],
     open_after: bool = True,
+    return_content: bool = False,
 ) -> dict[str, Any]:
     """Create a deck with a title slide followed by one content slide per data item."""
     progress: list[dict[str, Any]] = []
@@ -257,15 +265,17 @@ def create_deck_from_data(
             open_file(path)
             progress.append(ok("Opened in default application"))
 
-        return {
+        result: dict[str, Any] = {
             "success": True,
             "op": "create_deck_from_data",
             "output": str(path),
             "output_name": path.name,
             "slide_count": slide_count,
             "progress": progress,
-            "token_estimate": _token_estimate(progress),
         }
+        embed_content(result, path, return_content)
+        result["token_estimate"] = _token_estimate(result)
+        return result
 
     except Exception as exc:
         logger.exception("create_deck_from_data failed")
@@ -276,6 +286,7 @@ def create_from_template(
     template_path: str,
     output_path: str,
     open_after: bool = True,
+    return_content: bool = False,
 ) -> dict[str, Any]:
     """Copy an existing .pptx as a new presentation starting point."""
     progress: list[dict[str, Any]] = []
@@ -312,7 +323,7 @@ def create_from_template(
             open_file(path)
             progress.append(ok("Opened in default application"))
 
-        return {
+        result: dict[str, Any] = {
             "success": True,
             "op": "create_from_template",
             "output": str(path),
@@ -321,8 +332,10 @@ def create_from_template(
             "template_name": tmpl.name,
             "slide_count": slide_count,
             "progress": progress,
-            "token_estimate": _token_estimate(progress),
         }
+        embed_content(result, path, return_content)
+        result["token_estimate"] = _token_estimate(result)
+        return result
 
     except Exception as exc:
         logger.exception("create_from_template failed")
@@ -336,6 +349,7 @@ def create_agenda(
     items: list,
     presenter: str = "",
     open_after: bool = True,
+    return_content: bool = False,
 ) -> dict[str, Any]:
     """Create a meeting agenda presentation with title and agenda slides."""
     progress: list[dict[str, Any]] = []
@@ -386,7 +400,7 @@ def create_agenda(
             open_file(path)
             progress.append(ok("Opened in default application"))
 
-        return {
+        result: dict[str, Any] = {
             "success": True,
             "op": "create_agenda",
             "output": str(path),
@@ -394,8 +408,10 @@ def create_agenda(
             "slide_count": 2,
             "item_count": len(items),
             "progress": progress,
-            "token_estimate": _token_estimate(progress),
         }
+        embed_content(result, path, return_content)
+        result["token_estimate"] = _token_estimate(result)
+        return result
 
     except Exception as exc:
         logger.exception("create_agenda failed")
@@ -407,6 +423,7 @@ def create_from_docx(
     output_path: str,
     max_slides: int = 20,
     open_after: bool = True,
+    return_content: bool = False,
 ) -> dict[str, Any]:
     """Convert a Word document outline into a PowerPoint presentation."""
     progress: list[dict[str, Any]] = []
@@ -513,7 +530,7 @@ def create_from_docx(
             open_file(path)
             progress.append(ok("Opened in default application"))
 
-        return {
+        result: dict[str, Any] = {
             "success": True,
             "op": "create_from_docx",
             "output": str(path),
@@ -521,8 +538,10 @@ def create_from_docx(
             "slide_count": slide_count,
             "source_paragraph_count": source_para_count,
             "progress": progress,
-            "token_estimate": _token_estimate(progress),
         }
+        embed_content(result, path, return_content)
+        result["token_estimate"] = _token_estimate(result)
+        return result
 
     except Exception as exc:
         logger.exception("create_from_docx failed")

@@ -38,6 +38,25 @@ def test_create_workbook_default_sheet_name(tmp_path: Path) -> None:
     assert result["sheet_name"] == "Sheet1"
 
 
+def test_create_workbook_return_content_embeds_real_bytes(tmp_path: Path) -> None:
+    import base64
+
+    out = tmp_path / "wb.xlsx"
+    result = create_workbook(str(out), open_after=False, return_content=True)
+    assert result["success"] is True
+    assert result["content_mime_type"] == ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    decoded = base64.b64decode(result["content_base64"])
+    assert decoded == out.read_bytes()
+    # a real xlsx is a zip archive
+    assert decoded[:2] == b"PK"
+
+
+def test_create_workbook_no_return_content_by_default(tmp_path: Path) -> None:
+    out = tmp_path / "wb.xlsx"
+    result = create_workbook(str(out), open_after=False)
+    assert "content_base64" not in result
+
+
 # ---------------------------------------------------------------------------
 # create_from_data
 # ---------------------------------------------------------------------------

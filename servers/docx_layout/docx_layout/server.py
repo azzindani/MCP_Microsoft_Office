@@ -102,9 +102,9 @@ def add_header_footer(
 
 
 @mcp.tool()
-def export_pdf(file_path: str, output_path: str = "") -> dict:
-    """Export .docx to PDF. Requires Word (Win/Mac) or LibreOffice."""
-    return engine.export_pdf(file_path, output_path, open_after=True)
+def export_pdf(file_path: str, output_path: str = "", return_content: bool = False) -> dict:
+    """Export .docx to PDF (needs Word/LibreOffice). return_content=bytes."""
+    return engine.export_pdf(file_path, output_path, open_after=True, return_content=return_content)
 
 
 def main() -> None:

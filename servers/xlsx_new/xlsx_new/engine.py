@@ -18,6 +18,7 @@ if str(_ROOT) not in sys.path:
 import openpyxl  # noqa: E402
 from openpyxl.styles import Font  # noqa: E402
 
+from shared.file_utils import embed_content  # noqa: E402
 from shared.platform_utils import open_file, resolve_output_path  # noqa: E402
 from shared.progress import fail, info, ok, warn  # noqa: E402
 
@@ -84,6 +85,7 @@ def create_workbook(
     output_path: str,
     sheet_name: str = "Sheet1",
     open_after: bool = True,
+    return_content: bool = False,
 ) -> dict[str, Any]:
     """Create a blank Excel workbook with one sheet."""
     progress: list[dict[str, Any]] = []
@@ -113,6 +115,7 @@ def create_workbook(
             "sheet_name": sheet_name,
             "progress": progress,
         }
+        embed_content(result, path, return_content)
         result["token_estimate"] = _token_estimate(result)
         return result
 
@@ -133,6 +136,7 @@ def create_from_data(
     headers: list[Any],
     rows: list[list[Any]],
     open_after: bool = True,
+    return_content: bool = False,
 ) -> dict[str, Any]:
     """Create an Excel workbook from headers and data rows."""
     progress: list[dict[str, Any]] = []
@@ -181,6 +185,7 @@ def create_from_data(
             "column_count": col_count,
             "progress": progress,
         }
+        embed_content(result, path, return_content)
         result["token_estimate"] = _token_estimate(result)
         return result
 
@@ -202,6 +207,7 @@ def create_report(
     title: str,
     sheets: list[dict[str, Any]],
     open_after: bool = True,
+    return_content: bool = False,
 ) -> dict[str, Any]:
     """Create a multi-sheet Excel workbook with a Cover sheet."""
     progress: list[dict[str, Any]] = []
@@ -259,6 +265,7 @@ def create_report(
             "sheets_created": sheet_count + 1,  # includes Cover
             "progress": progress,
         }
+        embed_content(result, path, return_content)
         result["token_estimate"] = _token_estimate(result)
         return result
 
@@ -281,6 +288,7 @@ def create_from_template(
     output_path: str,
     replacements: dict[str, Any],
     open_after: bool = True,
+    return_content: bool = False,
 ) -> dict[str, Any]:
     """Copy a .xlsx template, replace matching cell values, save to output_path."""
     progress: list[dict[str, Any]] = []
@@ -342,6 +350,7 @@ def create_from_template(
             "cells_replaced": replaced_count,
             "progress": progress,
         }
+        embed_content(result, dst, return_content)
         result["token_estimate"] = _token_estimate(result)
         return result
 
@@ -363,6 +372,7 @@ def create_from_csv(
     delimiter: str = ",",
     has_header: bool = True,
     open_after: bool = True,
+    return_content: bool = False,
 ) -> dict[str, Any]:
     """Import a CSV file into a new Excel workbook."""
     progress: list[dict[str, Any]] = []
@@ -427,6 +437,7 @@ def create_from_csv(
             "column_count": col_count,
             "progress": progress,
         }
+        embed_content(result, out_path, return_content)
         result["token_estimate"] = _token_estimate(result)
         return result
 
@@ -452,6 +463,7 @@ def create_invoice(
     tax_rate: float = 0.0,
     currency: str = "USD",
     open_after: bool = True,
+    return_content: bool = False,
 ) -> dict[str, Any]:
     """Create a formatted invoice .xlsx with items, totals, and tax formula."""
     progress: list[dict[str, Any]] = []
@@ -565,6 +577,7 @@ def create_invoice(
             "currency": currency,
             "progress": progress,
         }
+        embed_content(result, out_path, return_content)
         result["token_estimate"] = _token_estimate(result)
         return result
 

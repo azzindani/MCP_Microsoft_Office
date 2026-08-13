@@ -33,6 +33,24 @@ def test_create_document_creates_blank_docx(tmp_path: Path) -> None:
     assert len(doc.paragraphs) == 0
 
 
+def test_create_document_return_content_embeds_real_bytes(tmp_path: Path) -> None:
+    import base64
+
+    out = tmp_path / "blank.docx"
+    result = create_document(str(out), open_after=False, return_content=True)
+    assert result["success"] is True
+    decoded = base64.b64decode(result["content_base64"])
+    assert decoded == out.read_bytes()
+    assert decoded[:2] == b"PK"  # a real .docx is a zip archive
+    assert result["content_mime_type"] == ("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
+
+def test_create_document_no_return_content_by_default(tmp_path: Path) -> None:
+    out = tmp_path / "blank.docx"
+    result = create_document(str(out), open_after=False)
+    assert "content_base64" not in result
+
+
 def test_create_document_invalid_path_gives_error(tmp_path: Path) -> None:
     # "blocker" is a file, not a directory — mkdir(parents=True) on a path
     # beneath it must fail.

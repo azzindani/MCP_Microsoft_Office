@@ -12,6 +12,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+from shared.file_utils import embed_content  # noqa: E402
 from shared.platform_utils import open_file, resolve_output_path  # noqa: E402
 from shared.progress import fail, info, ok, warn  # noqa: E402
 
@@ -68,7 +69,7 @@ def _err(progress: list[dict[str, Any]], error: str, hint: str) -> dict[str, Any
 # ---------------------------------------------------------------------------
 
 
-def create_document(output_path: str, open_after: bool = True) -> dict[str, Any]:
+def create_document(output_path: str, open_after: bool = True, return_content: bool = False) -> dict[str, Any]:
     """Create a blank Word document and save to output_path."""
     progress: list[dict[str, Any]] = []
     try:
@@ -90,8 +91,9 @@ def create_document(output_path: str, open_after: bool = True) -> dict[str, Any]
             "output": str(path),
             "output_name": path.name,
             "progress": progress,
-            "token_estimate": _token_estimate(progress),
         }
+        embed_content(result, path, return_content)
+        result["token_estimate"] = _token_estimate(result)
         return result
     except Exception as exc:
         logger.warning("create_document failed: %s", exc)
@@ -107,6 +109,7 @@ def create_from_text(
     output_path: str,
     paragraphs: list[dict[str, Any]],
     open_after: bool = True,
+    return_content: bool = False,
 ) -> dict[str, Any]:
     """Create a Word document from a list of {text, style} paragraph dicts."""
     progress: list[dict[str, Any]] = []
@@ -145,15 +148,17 @@ def create_from_text(
 
         _open_if_requested(path, open_after, progress)
 
-        return {
+        result: dict[str, Any] = {
             "success": True,
             "op": "create_from_text",
             "output": str(path),
             "output_name": path.name,
             "paragraph_count": added,
             "progress": progress,
-            "token_estimate": _token_estimate(progress),
         }
+        embed_content(result, path, return_content)
+        result["token_estimate"] = _token_estimate(result)
+        return result
     except Exception as exc:
         logger.warning("create_from_text failed: %s", exc)
         progress.append(fail(str(exc)))
@@ -169,6 +174,7 @@ def create_from_sections(
     title: str,
     sections: list[dict[str, Any]],
     open_after: bool = True,
+    return_content: bool = False,
 ) -> dict[str, Any]:
     """Create a structured document from a title and list of {heading, body} sections."""
     progress: list[dict[str, Any]] = []
@@ -208,15 +214,17 @@ def create_from_sections(
 
         _open_if_requested(path, open_after, progress)
 
-        return {
+        result: dict[str, Any] = {
             "success": True,
             "op": "create_from_sections",
             "output": str(path),
             "output_name": path.name,
             "section_count": section_count,
             "progress": progress,
-            "token_estimate": _token_estimate(progress),
         }
+        embed_content(result, path, return_content)
+        result["token_estimate"] = _token_estimate(result)
+        return result
     except Exception as exc:
         logger.warning("create_from_sections failed: %s", exc)
         progress.append(fail(str(exc)))
@@ -232,6 +240,7 @@ def create_from_template(
     output_path: str,
     substitutions: dict[str, str],
     open_after: bool = True,
+    return_content: bool = False,
 ) -> dict[str, Any]:
     """Copy a .docx template, apply text substitutions, save to output_path."""
     progress: list[dict[str, Any]] = []
@@ -299,15 +308,17 @@ def create_from_template(
 
         _open_if_requested(out_path, open_after, progress)
 
-        return {
+        result: dict[str, Any] = {
             "success": True,
             "op": "create_from_template",
             "output": str(out_path),
             "output_name": out_path.name,
             "substitutions_applied": applied,
             "progress": progress,
-            "token_estimate": _token_estimate(progress),
         }
+        embed_content(result, out_path, return_content)
+        result["token_estimate"] = _token_estimate(result)
+        return result
     except Exception as exc:
         logger.warning("create_from_template failed: %s", exc)
         progress.append(fail(str(exc)))
@@ -325,6 +336,7 @@ def create_letter(
     subject: str,
     body: str,
     open_after: bool = True,
+    return_content: bool = False,
 ) -> dict[str, Any]:
     """Create a formatted business letter .docx."""
     progress: list[dict[str, Any]] = []
@@ -380,7 +392,7 @@ def create_letter(
 
         _open_if_requested(path, open_after, progress)
 
-        return {
+        result: dict[str, Any] = {
             "success": True,
             "op": "create_letter",
             "output": str(path),
@@ -389,8 +401,10 @@ def create_letter(
             "to_name": to_name,
             "subject": subject,
             "progress": progress,
-            "token_estimate": _token_estimate(progress),
         }
+        embed_content(result, path, return_content)
+        result["token_estimate"] = _token_estimate(result)
+        return result
     except Exception as exc:
         logger.warning("create_letter failed: %s", exc)
         progress.append(fail(str(exc)))
@@ -406,6 +420,7 @@ def merge_documents(
     output_path: str,
     add_page_break: bool = True,
     open_after: bool = True,
+    return_content: bool = False,
 ) -> dict[str, Any]:
     """Merge multiple .docx files into one document."""
     progress: list[dict[str, Any]] = []
@@ -484,15 +499,17 @@ def merge_documents(
 
         _open_if_requested(out_path, open_after, progress)
 
-        return {
+        result: dict[str, Any] = {
             "success": True,
             "op": "merge_documents",
             "output": str(out_path),
             "output_name": out_path.name,
             "merged_count": len(resolved),
             "progress": progress,
-            "token_estimate": _token_estimate(progress),
         }
+        embed_content(result, out_path, return_content)
+        result["token_estimate"] = _token_estimate(result)
+        return result
     except Exception as exc:
         logger.warning("merge_documents failed: %s", exc)
         progress.append(fail(str(exc)))

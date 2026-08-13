@@ -11,7 +11,7 @@ from pptx.dml.color import RGBColor
 from pptx.enum.chart import XL_CHART_TYPE  # type: ignore[attr-defined]
 from pptx.util import Inches, Pt
 
-from shared.file_utils import hint_for_error, resolve_path
+from shared.file_utils import embed_content, hint_for_error, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_pdf_converter, open_file, resolve_output_path
 from shared.progress import fail, ok
@@ -579,6 +579,7 @@ def export_pdf(
     file_path: str,
     output_path: str = "",
     open_after: bool = True,
+    return_content: bool = False,
 ) -> dict[str, Any]:
     """Export PPTX to PDF using LibreOffice or Microsoft PowerPoint."""
     progress: list[dict[str, Any]] = []
@@ -680,6 +681,7 @@ def export_pdf(
             "converter": converter,
             "progress": progress,
         }
+        embed_content(result, out, return_content)
         result["token_estimate"] = len(str(result)) // 4
         return result
 
