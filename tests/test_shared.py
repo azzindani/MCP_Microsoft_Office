@@ -90,6 +90,28 @@ class TestEmbedContent:
         assert "content_base64" not in result
         assert result["success"] is True
 
+    def test_office_mime_types_resolved_without_os_mimetypes_db(self, tmp_path, monkeypatch):
+        """mimetypes.guess_type() is registry/OS-db-dependent and doesn't know
+        Office Open XML types on every platform (verified missing on
+        windows-latest CI) — these must resolve from the explicit map, not
+        depend on the stdlib db at all."""
+        import mimetypes
+
+        from shared.file_utils import embed_content
+
+        monkeypatch.setattr(mimetypes, "guess_type", lambda *a, **k: (None, None))
+
+        for ext, expected in [
+            (".docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+            (".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            (".pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+            (".pdf", "application/pdf"),
+        ]:
+            f = tmp_path / f"out{ext}"
+            f.write_bytes(b"data")
+            result = embed_content({"success": True}, f, return_content=True)
+            assert result["content_mime_type"] == expected, ext
+
 
 class TestSafeCopy:
     def test_creates_parent_dirs(self, tmp_path):

@@ -104,6 +104,18 @@ def hint_for_error(e: Exception, path: Path | None = None) -> str:
     return "Use restore_version to undo if a snapshot was taken."
 
 
+# mimetypes.guess_type() depends on the OS's registered MIME db (registry on
+# Windows, /etc/mime.types on Linux/macOS) and doesn't reliably know Office
+# Open XML types on every platform — verified missing on windows-latest CI
+# runners specifically. Known extensions are resolved here first.
+_KNOWN_MIME_TYPES = {
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".pdf": "application/pdf",
+}
+
+
 def embed_content(result: dict[str, Any], path: Path, return_content: bool) -> dict[str, Any]:
     """Attach base64 file bytes to a tool result dict when requested.
 
@@ -119,7 +131,10 @@ def embed_content(result: dict[str, Any], path: Path, return_content: bool) -> d
     except OSError:
         return result
     result["content_base64"] = base64.b64encode(data).decode("ascii")
-    result["content_mime_type"] = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+    mime = _KNOWN_MIME_TYPES.get(path.suffix.lower())
+    if mime is None:
+        mime = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+    result["content_mime_type"] = mime
     return result
 
 
