@@ -404,6 +404,11 @@ def test_auto_sum_rejects_invalid_range(workbook: Path) -> None:
 
 
 def test_convert_to_values_replaces_formula_cells(workbook: Path) -> None:
+    """Regression test: a formula openpyxl itself never evaluated (no cached
+    value in the file) must be left alone, not silently blanked. A prior
+    version treated "no longer a formula string" as success even when that
+    meant the cell became empty — real data loss reported as a success —
+    found live via the opencode harness real-tool sweep."""
     wb = openpyxl.load_workbook(str(workbook))
     sheet_name = wb.sheetnames[0]
     wb.close()
@@ -411,13 +416,62 @@ def test_convert_to_values_replaces_formula_cells(workbook: Path) -> None:
     set_formula(str(workbook), sheet_name, "Z1", "=1+1")
     result = convert_to_values(str(workbook), sheet_name, "Z1:Z1")
     assert result["success"] is True
-    assert result["formulas_converted"] == 1
+    assert result["formulas_converted"] == 0
+    assert result["skipped_no_cached_value"] == ["Z1"]
 
     wb2 = openpyxl.load_workbook(str(workbook))
     ws = wb2[sheet_name]
-    # openpyxl never computed the formula, so the cached value is None —
-    # the cell must no longer hold a formula string either way.
-    assert not (isinstance(ws["Z1"].value, str) and ws["Z1"].value.startswith("="))
+    # No cached value existed, so the formula must be preserved rather than
+    # overwritten with a blank value.
+    assert ws["Z1"].value == "=1+1"
+    wb2.close()
+
+
+def test_convert_to_values_uses_cached_value_when_present(workbook: Path) -> None:
+    """When the workbook already has a cached formula result (as a real
+    spreadsheet app would leave behind), that cached value must actually be
+    used to replace the formula."""
+    wb = openpyxl.load_workbook(str(workbook))
+    sheet_name = wb.sheetnames[0]
+    ws = wb[sheet_name]
+    ws["Z2"] = "=1+1"
+    # Simulate a cached value the way Excel/LibreOffice would store it: the
+    # formula stays in the shared-formula cell, but a real app also writes a
+    # calculated <v> alongside it. openpyxl's writer doesn't expose that
+    # directly, so we patch the saved file's cached value via a second
+    # data_only-style write path: reopen with data_only after setting a
+    # plain value, then restore the formula, mimicking a cached round-trip.
+    wb.save(str(workbook))
+    wb.close()
+
+    import zipfile
+
+    with zipfile.ZipFile(workbook, "r") as zf:
+        names = zf.namelist()
+        sheet_xml_name = next(n for n in names if n.startswith("xl/worksheets/sheet") and n.endswith(".xml"))
+        contents = {n: zf.read(n) for n in names}
+
+    xml = contents[sheet_xml_name].decode("utf-8")
+    # openpyxl writes an empty <v></v> alongside the formula it never
+    # evaluated — fill it in with a cached value so data_only=True reads it,
+    # the same way Excel/LibreOffice would after actually calculating it.
+    xml = xml.replace(
+        '<c r="Z2"><f>1+1</f><v></v></c>',
+        '<c r="Z2"><f>1+1</f><v>4</v></c>',
+    )
+    contents[sheet_xml_name] = xml.encode("utf-8")
+
+    with zipfile.ZipFile(workbook, "w", zipfile.ZIP_DEFLATED) as zf:
+        for name, data in contents.items():
+            zf.writestr(name, data)
+
+    result = convert_to_values(str(workbook), sheet_name, "Z2:Z2")
+    assert result["success"] is True
+    assert result["formulas_converted"] == 1
+    assert result["skipped_no_cached_value"] == []
+
+    wb2 = openpyxl.load_workbook(str(workbook))
+    assert wb2[sheet_name]["Z2"].value == 4
     wb2.close()
 
 

@@ -13,7 +13,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from shared.file_utils import hint_for_error, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import open_file
-from shared.progress import fail, ok
+from shared.progress import fail, ok, warn
 from shared.version_control import snapshot
 
 # ---------------------------------------------------------------------------
@@ -801,13 +801,24 @@ def convert_to_values(
         ws = wb[sheet_name]
         ws_values = wb_values[sheet_name]
 
+        # data_only=True only returns a value that Excel/LibreOffice already
+        # cached in the file — openpyxl never evaluates formulas itself. A
+        # formula written by set_formula/auto_sum/fill_formula_down and never
+        # opened by a real spreadsheet app has no cached value at all, so
+        # cell_v.value is None. Blindly assigning that would silently wipe
+        # the formula and leave the cell empty while reporting success.
+        # Skip those cells instead of destroying their content.
         converted = 0
+        skipped: list[str] = []
         for row in ws_values[range_address.upper()]:
             for cell_v in row:
                 coord = cell_v.coordinate
                 cell_w = ws[coord]
                 # Only replace formula cells (value starts with "=")
                 if isinstance(cell_w.value, str) and cell_w.value.startswith("="):
+                    if cell_v.value is None:
+                        skipped.append(coord)
+                        continue
                     cell_w.value = cell_v.value
                     converted += 1
 
@@ -823,6 +834,13 @@ def convert_to_values(
                 f"{converted} formula{'s' if converted != 1 else ''} replaced",
             )
         )
+        if skipped:
+            progress.append(
+                warn(
+                    f"Skipped {len(skipped)} formula cell(s) with no cached value",
+                    ", ".join(skipped),
+                )
+            )
         progress.append(notify_reload(str(path), "xlsx"))
         result: dict[str, Any] = {
             "success": True,
@@ -830,9 +848,15 @@ def convert_to_values(
             "sheet": sheet_name,
             "range": range_address,
             "formulas_converted": converted,
+            "skipped_no_cached_value": skipped,
             "backup": backup,
             "progress": progress,
         }
+        if skipped:
+            result["hint"] = (
+                "Some formula cells had no cached value (never opened in Excel/LibreOffice) "
+                "and were left as formulas rather than being overwritten with a blank value."
+            )
         result["token_estimate"] = len(str(result)) // 4
         return result
 
