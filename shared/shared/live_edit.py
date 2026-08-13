@@ -62,11 +62,22 @@ def notify_reload(file_path: str, app_type: str) -> dict[str, Any]:
         )
 
 
+def _applescript_escape(s: str) -> str:
+    """Escape a string for safe interpolation into an AppleScript string literal.
+
+    file_path reaches here as a plain f-string interpolation; an
+    unescaped '"' lets a crafted filename break out of the string
+    literal and inject arbitrary AppleScript (including `do shell
+    script`), so both backslash and double-quote must be escaped first.
+    """
+    return s.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def _notify_word_reload_macos(file_path: str) -> bool:
     """Tell Microsoft Word to close and reopen the document."""
     script = f"""
 tell application "Microsoft Word"
-    set targetDoc to "{file_path}"
+    set targetDoc to "{_applescript_escape(file_path)}"
     repeat with d in documents
         if full name of d is targetDoc then
             close d saving no
@@ -92,7 +103,7 @@ def _notify_excel_reload_macos(file_path: str) -> bool:
     """Tell Microsoft Excel to close and reopen the workbook."""
     script = f"""
 tell application "Microsoft Excel"
-    set targetWB to "{file_path}"
+    set targetWB to "{_applescript_escape(file_path)}"
     repeat with wb in workbooks
         if full name of wb is targetWB then
             close wb saving no

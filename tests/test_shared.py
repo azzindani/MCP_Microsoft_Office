@@ -451,3 +451,63 @@ class TestDocDiff:
         text = format_diff_as_text(diff)
         assert isinstance(text, str)
         assert len(text) > 0
+
+
+# ─── live_edit ──────────────────────────────────────────────────────────────
+
+
+class TestLiveEditAppleScriptEscaping:
+    def test_applescript_escape_handles_quotes_and_backslashes(self):
+        from shared.live_edit import _applescript_escape
+
+        assert _applescript_escape('a"b') == 'a\\"b'
+        assert _applescript_escape("a\\b") == "a\\\\b"
+        assert _applescript_escape('a\\"b') == 'a\\\\\\"b'
+
+    def test_word_reload_escapes_injected_quote(self, monkeypatch):
+        # Regression: file_path was interpolated into the AppleScript source
+        # unescaped, so a filename containing '"' could break out of the
+        # `set targetDoc to "..."` string literal and inject arbitrary
+        # AppleScript (including `do shell script`).
+        from shared import live_edit
+
+        captured: dict = {}
+
+        class FakeCompleted:
+            returncode = 0
+
+        def fake_run(cmd, **kwargs):
+            captured["script"] = cmd[2]
+            return FakeCompleted()
+
+        monkeypatch.setattr(live_edit.subprocess, "run", fake_run)
+
+        malicious = 'x.docx" \n do shell script "echo INJECTED" \n --'
+        live_edit._notify_word_reload_macos(malicious)
+
+        script = captured["script"]
+        # The literal payload must never appear unescaped inside the
+        # generated AppleScript source.
+        assert f'"{malicious}"' not in script
+        assert 'do shell script "echo INJECTED"' not in script
+
+    def test_excel_reload_escapes_injected_quote(self, monkeypatch):
+        from shared import live_edit
+
+        captured: dict = {}
+
+        class FakeCompleted:
+            returncode = 0
+
+        def fake_run(cmd, **kwargs):
+            captured["script"] = cmd[2]
+            return FakeCompleted()
+
+        monkeypatch.setattr(live_edit.subprocess, "run", fake_run)
+
+        malicious = 'x.xlsx" \n do shell script "echo INJECTED" \n --'
+        live_edit._notify_excel_reload_macos(malicious)
+
+        script = captured["script"]
+        assert f'"{malicious}"' not in script
+        assert 'do shell script "echo INJECTED"' not in script
