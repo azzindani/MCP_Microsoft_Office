@@ -378,8 +378,17 @@ def test_all_write_tools_create_snapshot(deck: Path) -> None:
     r = add_table(str(deck), 0, 2, 2, [["A", "B"], ["C", "D"]])
     results.append(("add_table", r))
 
+    # The chart goes on a blank slide: add_table above already fills slide 0,
+    # and a shape that cannot be placed without covering existing content is now
+    # refused rather than stacked on top of it. This test is about snapshots, so
+    # give the chart somewhere it legitimately fits.
+    with_blank = Presentation(str(deck))
+    with_blank.slides.add_slide(with_blank.slide_layouts[6])
+    with_blank.save(str(deck))
+    blank_index = len(with_blank.slides) - 1
+
     data = {"categories": ["X"], "series": [{"name": "N", "values": [1]}]}
-    r = add_chart(str(deck), 0, "bar", data)
+    r = add_chart(str(deck), blank_index, "bar", data)
     results.append(("add_chart", r))
 
     r = duplicate_slide(str(deck), 0)

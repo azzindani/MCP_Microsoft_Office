@@ -212,6 +212,15 @@ def _text_height(shape, width_in: float) -> float:
     return min(drawn, (shape.height or 0) / 914400)
 
 
+# Below this, a chart or table is a sliver of unreadable pixels rather than
+# content, so the call is refused instead of drawn.
+MIN_USABLE_HEIGHT = 1.0
+
+
+class NoRoomOnSlide(Exception):
+    """Raised when a shape cannot be placed without covering existing content."""
+
+
 def _occupied_bottom(slide, left: float, width: float, margin: float) -> float:
     """Return the lowest bottom edge, in inches, of content already on the slide.
 
@@ -274,14 +283,16 @@ def place_below_content(
     new_top = occupied + gap
     available = slide_h - margin - new_top
 
-    if available < 1.0:
-        # Nothing usable left below; leave the caller's position and say so
-        # rather than squeezing an illegible sliver onto the slide.
-        collision = (
-            f"Slide already has content down to {occupied:.2f}in and there is no room below it; "
-            f"the new shape will overlap. Add it to a new slide instead."
+    if available < MIN_USABLE_HEIGHT:
+        # Returning the caller's position here was the original mistake: it put
+        # the shape straight back on top of the content, which is the exact
+        # unreadable slide this function exists to prevent. There is no
+        # placement that satisfies the request, so say so rather than produce a
+        # file that looks fine to a return-value check and is illegible to read.
+        raise NoRoomOnSlide(
+            f"Slide already has content down to {occupied:.2f}in, leaving {available:.2f}in "
+            f"below it -- not enough for a readable {height:.2f}in shape."
         )
-        return left, top, width, height, f"{note} {collision}".strip()
 
     new_height = min(height, available)
     collision = (

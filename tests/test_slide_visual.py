@@ -363,3 +363,66 @@ class TestNewShapesDoNotLandOnExistingContent:
         add_table(str(deck), 0, 2, 2, [["a", "b"], ["c", "d"]], top=2.0)
         table = next(s for s in Presentation(str(deck)).slides[0].shapes if s.has_table)
         assert table.top == Inches(2.0)
+
+
+class TestAFullSlideIsRefusedNotOverlapped:
+    """The first version returned the caller's requested position when there was
+    no room below existing content -- putting the shape straight back on top of
+    it, which is the unreadable slide this whole mechanism exists to prevent.
+    A rendered check caught it: the table moved correctly and the chart, added
+    afterwards, landed back at top=2.0in over everything."""
+
+    def _crowded(self, tmp_path):
+        deck = tmp_path / "c.pptx"
+        p = Presentation()
+        slide = p.slides.add_slide(p.slide_layouts[1])
+        slide.shapes.title.text = "Spend Overview"
+        tf = slide.placeholders[1].text_frame
+        tf.text = "Total spend across 16834 campaign rows"
+        for extra in ("Google Ads leads on both spend and clicks", "Programmatic is the smallest share"):
+            tf.add_paragraph().text = extra
+        p.save(deck)
+        return deck
+
+    def test_a_second_shape_is_refused_rather_than_stacked(self, tmp_path):
+        from pptx_design.engine import add_chart, add_table
+
+        deck = self._crowded(tmp_path)
+        first = add_table(str(deck), 0, 4, 3, [["a", "b", "c"]] * 4, top=2.0, height=1.6)
+        assert first["success"] is True
+
+        second = add_chart(str(deck), 0, "bar", {"categories": ["A"], "series": {"S": [1]}}, top=2.0, height=1.6)
+        assert second["success"] is False, "chart was placed on top of the full slide"
+
+    def test_the_refusal_says_what_to_do(self, tmp_path):
+        from pptx_design.engine import add_chart, add_table
+
+        deck = self._crowded(tmp_path)
+        add_table(str(deck), 0, 4, 3, [["a", "b", "c"]] * 4, top=2.0, height=1.6)
+        second = add_chart(str(deck), 0, "bar", {"categories": ["A"], "series": {"S": [1]}}, top=2.0, height=1.6)
+        assert "add_slide" in second["hint"]
+
+    def test_nothing_is_written_when_it_is_refused(self, tmp_path):
+        """A refused call must not leave a half-modified deck behind."""
+        from pptx_design.engine import add_chart, add_table
+
+        deck = self._crowded(tmp_path)
+        add_table(str(deck), 0, 4, 3, [["a", "b", "c"]] * 4, top=2.0, height=1.6)
+        before = len(Presentation(str(deck)).slides[0].shapes)
+
+        add_chart(str(deck), 0, "bar", {"categories": ["A"], "series": {"S": [1]}}, top=2.0, height=1.6)
+        assert len(Presentation(str(deck)).slides[0].shapes) == before
+
+    def test_a_roomy_slide_still_accepts_both(self, tmp_path):
+        """The refusal must only fire when the slide is genuinely full."""
+        from pptx_design.engine import add_chart, add_table
+
+        deck = tmp_path / "r.pptx"
+        p = Presentation()
+        p.slides.add_slide(p.slide_layouts[6])  # blank
+        p.save(deck)
+
+        assert add_table(str(deck), 0, 2, 2, [["a", "b"], ["c", "d"]], top=0.5, height=1.2)["success"]
+        assert add_chart(str(deck), 0, "bar", {"categories": ["A"], "series": {"S": [1]}}, top=0.5, height=1.5)[
+            "success"
+        ]

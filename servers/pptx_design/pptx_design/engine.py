@@ -16,6 +16,7 @@ from shared.live_edit import notify_reload
 from shared.platform_utils import get_pdf_converter, open_file, resolve_output_path
 from shared.progress import fail, ok, warn
 from shared.slide_visual import (
+    NoRoomOnSlide,
     contrast_ratio,
     contrast_warning,
     place_below_content,
@@ -396,7 +397,19 @@ def add_table(
         # Default top is 2.0in, which lands squarely on a layout's body text.
         # A swept deck ended up with bullets, a table and a chart stacked in the
         # same region -- three shapes, none readable, all reported as success.
-        left, top, width, height, place_note = place_below_content(prs, slide, left, top, width, height)
+        try:
+            left, top, width, height, place_note = place_below_content(prs, slide, left, top, width, height)
+        except NoRoomOnSlide as exc:
+            progress.append(fail("No room for the table", str(exc)))
+            return {
+                "success": False,
+                "error": str(exc),
+                "hint": "Add a new slide with add_slide and put the table there, "
+                "or shorten the text already on this one.",
+                "backup": backup,
+                "progress": progress,
+                "token_estimate": 30,
+            }
         if place_note:
             progress.append(warn("Table repositioned", place_note))
 
@@ -517,7 +530,19 @@ def add_chart(
         # slide, or on top of whatever is already there. A chart drawn that way
         # loses its lower category labels, or lands on the body text and buries
         # it. Both happened in swept decks, both reported success.
-        left, top, width, height, fit_note = place_below_content(prs, slide, left, top, width, height)
+        try:
+            left, top, width, height, fit_note = place_below_content(prs, slide, left, top, width, height)
+        except NoRoomOnSlide as exc:
+            progress.append(fail("No room for the chart", str(exc)))
+            return {
+                "success": False,
+                "error": str(exc),
+                "hint": "Add a new slide with add_slide and put the chart there, "
+                "or shorten the text already on this one.",
+                "backup": backup,
+                "progress": progress,
+                "token_estimate": 30,
+            }
         if fit_note:
             progress.append(warn("Chart repositioned", fit_note))
 
