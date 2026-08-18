@@ -258,6 +258,63 @@ run pptx-design set_font_all_slides "{\"file_path\":\"$PPTX\",\"font_name\":\"Ca
 run pptx-design export_pdf "{\"file_path\":\"$PPTX\",\"output_path\":\"$D/deck.pdf\"}" "export the deck to PDF"
 
 echo
+echo "===== hybrid file exchange (remote-only behaviour) ====="
+# Only meaningful against a deployment that sets MCP_OUTPUT_DIR /
+# MCP_PUBLIC_BASE_URL — exactly what pytest cannot check, since pytest never
+# spins up a server or touches the network.
+SHARED_DIR=$(docker exec "$CONTAINER" printenv MCP_OUTPUT_DIR 2>/dev/null || true)
+if [ -z "$SHARED_DIR" ]; then
+  echo "  SKIP: MCP_OUTPUT_DIR is unset on $CONTAINER — nothing to verify"
+else
+  echo "== prompt: \"make me a workbook\" -> create_workbook with no output_path =="
+  N=$((N+1))
+  EX_R=$(call xlsx-new "$N" create_workbook '{"sheet_name":"Exchange"}')
+  EX_PATH=$(extract "$EX_R" output_path)
+  EX_URL=$(extract "$EX_R" public_url)
+  case "$EX_PATH" in
+    "$SHARED_DIR"/*) pass "default output landed in the shared dir ($EX_PATH)" ;;
+    *) fail "default output went to $EX_PATH, expected it under $SHARED_DIR" ;;
+  esac
+  [ -n "$EX_URL" ] && pass "response carried public_url ($EX_URL)" || fail "no public_url in response"
+  if docker exec "$CONTAINER" test -s "$EX_PATH"; then
+    pass "the workbook is a real non-empty file on disk, not just a success message"
+  else
+    fail "no file at $EX_PATH inside the container"
+  fi
+  MODE=$(docker exec "$CONTAINER" stat -c '%a' "$EX_PATH" 2>/dev/null)
+  case "$MODE" in
+    *[4567]) pass "generated file is readable by the file server sharing the dir (mode $MODE)" ;;
+    *) fail "mode $MODE leaves the file unreadable to anything else sharing the directory" ;;
+  esac
+  docker exec "$CONTAINER" rm -f "$EX_PATH"
+
+  echo "== prompt: \"open the document at <link>\" -> a URL as a file path =="
+  # A *sibling* endpoint's public /health, never this server's own: fetching
+  # its own public URL deadlocks, because the tool call occupies the worker
+  # that would have to serve the request, and the fetch dies on the timeout.
+  N=$((N+1))
+  URL_R=$(call docx-basic "$N" read_document '{"file_path":"https://math.casava.space/health"}')
+  if echo "$URL_R" | grep -q "does not fetch URLs"; then
+    echo "  SKIP: MCP_FETCH_URLS is not enabled on $CONTAINER"
+  elif echo "$URL_R" | grep -qE 'health\.json|inbox|\.docx'; then
+    pass "a URL was accepted as a file path and fetched server-side"
+  else
+    fail "URL input -> $URL_R"
+  fi
+
+  echo "== SSRF guard: a private address must be refused =="
+  N=$((N+1))
+  SSRF_R=$(call docx-basic "$N" read_document '{"file_path":"http://169.254.169.254/latest/meta-data/"}')
+  if echo "$SSRF_R" | grep -q "non-public address"; then
+    pass "link-local metadata address refused"
+  elif echo "$SSRF_R" | grep -q "does not fetch URLs"; then
+    echo "  SKIP: URL fetching disabled, guard not reachable"
+  else
+    fail "SSRF guard did not fire -> $SSRF_R"
+  fi
+fi
+
+echo
 if [ "$FAILS" -eq 0 ]; then
   echo "ALL 96 TOOLS PASSED against $DOMAIN"
 else
