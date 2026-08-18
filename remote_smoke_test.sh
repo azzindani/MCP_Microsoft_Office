@@ -38,6 +38,15 @@ fail() { echo "  FAIL: $1"; FAILS=$((FAILS+1)); }
 ok_json() { echo "$1" | grep -Eq '\\?"success\\?"[[:space:]]*:[[:space:]]*true'; }
 
 echo "Target: $DOMAIN"
+
+# Tools called without an explicit output_path now default into
+# MCP_OUTPUT_DIR, which on a real deployment is a directory the operator
+# actually looks at. Remember what was there so the run can leave it exactly
+# as it found it (see the cleanup at the very bottom).
+SHARED_DIR=$(docker exec "$CONTAINER" printenv MCP_OUTPUT_DIR 2>/dev/null || true)
+SHARED_BEFORE=$(mktemp)
+[ -n "$SHARED_DIR" ] && docker exec "$CONTAINER" sh -c "ls -1A '$SHARED_DIR' 2>/dev/null" | sort > "$SHARED_BEFORE"
+
 echo
 echo "== seed a real logo image + a real CSV into the container =="
 docker exec "$CONTAINER" mkdir -p "$D"
@@ -262,18 +271,17 @@ echo "===== hybrid file exchange (remote-only behaviour) ====="
 # Only meaningful against a deployment that sets MCP_OUTPUT_DIR /
 # MCP_PUBLIC_BASE_URL — exactly what pytest cannot check, since pytest never
 # spins up a server or touches the network.
-SHARED_DIR=$(docker exec "$CONTAINER" printenv MCP_OUTPUT_DIR 2>/dev/null || true)
 if [ -z "$SHARED_DIR" ]; then
   echo "  SKIP: MCP_OUTPUT_DIR is unset on $CONTAINER — nothing to verify"
 else
   echo "== prompt: \"make me a workbook\" -> create_workbook with no output_path =="
   N=$((N+1))
   EX_R=$(call xlsx-new "$N" create_workbook '{"sheet_name":"Exchange"}')
-  EX_PATH=$(extract "$EX_R" output_path)
+  EX_PATH=$(extract "$EX_R" output)
   EX_URL=$(extract "$EX_R" public_url)
   case "$EX_PATH" in
     "$SHARED_DIR"/*) pass "default output landed in the shared dir ($EX_PATH)" ;;
-    *) fail "default output went to $EX_PATH, expected it under $SHARED_DIR" ;;
+    *) fail "default output went to $EX_PATH, expected it under $SHARED_DIR (key: output)" ;;
   esac
   [ -n "$EX_URL" ] && pass "response carried public_url ($EX_URL)" || fail "no public_url in response"
   if docker exec "$CONTAINER" test -s "$EX_PATH"; then
@@ -313,6 +321,18 @@ else
     fail "SSRF guard did not fire -> $SSRF_R"
   fi
 fi
+
+if [ -n "$SHARED_DIR" ]; then
+  echo
+  echo "== leave the shared directory as we found it =="
+  docker exec "$CONTAINER" sh -c "ls -1A '$SHARED_DIR' 2>/dev/null" | sort \
+    | comm -13 "$SHARED_BEFORE" - \
+    | while IFS= read -r leftover; do
+        [ -n "$leftover" ] && docker exec "$CONTAINER" rm -rf "$SHARED_DIR/$leftover"
+      done
+  pass "removed everything this run added to $SHARED_DIR"
+fi
+rm -f "$SHARED_BEFORE"
 
 echo
 if [ "$FAILS" -eq 0 ]; then
