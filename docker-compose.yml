@@ -79,7 +79,12 @@ services:
       MCP_FETCH_URLS: ${MCP_FETCH_URLS:-0}
       MCP_FETCH_ALLOW_PRIVATE: ${MCP_FETCH_ALLOW_PRIVATE:-0}
       MCP_MAX_FETCH_MB: ${MCP_MAX_FETCH_MB:-100}
-    mem_limit: ${OFFICE_MEM_LIMIT:-512m}
+    # Reads stream (openpyxl read_only), but writes cannot -- set_cell,
+    # sort_sheet and friends have to materialise the whole workbook, and
+    # openpyxl allocates a Python object per cell. A 16,834 x 16 sheet peaked at
+    # 470 MB of the old 512 MB during a sweep, i.e. one slightly larger file
+    # away from the OOM that used to take all twelve sub-servers down together.
+    mem_limit: ${OFFICE_MEM_LIMIT:-1g}
     volumes:
       - ./tokens.json:/home/app/tokens.json:ro
       # Shared output directory (see MCP_OUTPUT_DIR above). The container
@@ -93,9 +98,17 @@ services:
       # before first run — left root-owned, the container's non-root user
       # can't write to it.
       - ./oauth-state:/home/app/.oauth-state
+    # A health check should detect "dead", not "busy". openpyxl is pure Python,
+    # so a large workbook operation holds the GIL for its whole duration and
+    # starves the event loop -- /health still answers 200 the moment it gets a
+    # slice, but a 3s probe times out. Single tool calls on a 16k-row sheet took
+    # ~17s during a sweep and three consecutive probes failed, marking all
+    # twelve sub-servers unhealthy while the server was working correctly. It
+    # recovered on its own once the operation finished. Widened so a genuinely
+    # dead server is still caught within ~2 minutes.
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8830/health', timeout=3)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8830/health', timeout=10)"]
       interval: 30s
-      timeout: 5s
+      timeout: 12s
       start_period: 10s
-      retries: 3
+      retries: 4

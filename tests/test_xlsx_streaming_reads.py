@@ -103,3 +103,70 @@ class TestReadsStillReturnTheRightThing:
         result = read_cell(str(workbook), "NoSuchSheet", "A1")
         assert result["success"] is False
         assert "list_sheets" in result["hint"]
+
+
+class TestConvertToValuesDoesNotDoubleTheMemory:
+    """convert_to_values needs a writable workbook to save its edits, which
+    cannot stream. But it also opened a *second* full copy with data_only=True
+    just to read cached values, doubling the footprint. On a 16,834 x 16 sheet
+    the pair ran long enough for the transport to drop mid-call -- the same
+    failure read_cell had, and the one remaining tool holding two full loads."""
+
+    @pytest.fixture()
+    def formula_book(self, tmp_path: Path) -> Path:
+        path = tmp_path / "f.xlsx"
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws["A1"], ws["A2"] = 2, 3
+        ws["B1"] = "=A1+A2"
+        wb.save(path)
+        return path
+
+    @pytest.fixture()
+    def formula_calls(self, monkeypatch) -> list[dict]:
+        calls: list[dict] = []
+        real = openpyxl.load_workbook
+
+        def spy(*args, **kwargs):
+            calls.append(dict(kwargs))
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr("xlsx_formulas.engine.openpyxl.load_workbook", spy)
+        return calls
+
+    def test_the_values_copy_streams(self, formula_book, formula_calls):
+        from xlsx_formulas.engine import convert_to_values
+
+        sheet = openpyxl.load_workbook(formula_book).sheetnames[0]
+        formula_calls.clear()
+        result = convert_to_values(str(formula_book), sheet, "A1:B2")
+
+        assert result["success"] is True
+        values_loads = [c for c in formula_calls if c.get("data_only") is True]
+        assert values_loads, "no data_only load was made"
+        for call in values_loads:
+            assert call.get("read_only") is True, f"values copy still loads in full: {call}"
+
+    def test_only_one_writable_load_is_held(self, formula_book, formula_calls):
+        from xlsx_formulas.engine import convert_to_values
+
+        sheet = openpyxl.load_workbook(formula_book).sheetnames[0]
+        formula_calls.clear()
+        convert_to_values(str(formula_book), sheet, "A1:B2")
+
+        full_loads = [c for c in formula_calls if not c.get("read_only")]
+        assert len(full_loads) == 1, f"expected one writable load, got {len(full_loads)}"
+
+    def test_conversion_still_works(self, formula_book):
+        """Streaming changes how the file is walked; the result must not change.
+        A formula with no cached value must still be skipped rather than wiped."""
+        from xlsx_formulas.engine import convert_to_values
+
+        sheet = openpyxl.load_workbook(formula_book).sheetnames[0]
+        result = convert_to_values(str(formula_book), sheet, "A1:B2")
+
+        assert result["success"] is True
+        check = openpyxl.load_workbook(formula_book)[sheet]
+        # openpyxl never evaluates formulas, so B1 has no cached value and must
+        # be left intact rather than blanked.
+        assert check["B1"].value == "=A1+A2"

@@ -7,6 +7,7 @@ from typing import Any
 import openpyxl
 from openpyxl.formatting.rule import CellIsRule
 from openpyxl.styles import PatternFill
+from openpyxl.utils import get_column_letter, range_boundaries
 from openpyxl.workbook.defined_name import DefinedName
 from openpyxl.worksheet.datavalidation import DataValidation
 
@@ -780,8 +781,13 @@ def convert_to_values(
         if err:
             return err
 
-        # Load a second copy with data_only=True to read evaluated values
-        wb_values = openpyxl.load_workbook(str(path), data_only=True)
+        # Load a second copy with data_only=True to read evaluated values.
+        # read_only matters here: the writable copy above already materialises
+        # every cell, and a second full load doubles that. On a 16,834 x 16
+        # sheet the pair ran long enough for the transport to drop mid-call --
+        # the same failure read_cell had, for the same reason. This copy is only
+        # ever read from (cell_v.value below), so it can stream.
+        wb_values = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
 
         if sheet_name not in wb.sheetnames:
             progress.append(fail(f"Sheet '{sheet_name}' not found"))
@@ -810,9 +816,16 @@ def convert_to_values(
         # Skip those cells instead of destroying their content.
         converted = 0
         skipped: list[str] = []
-        for row in ws_values[range_address.upper()]:
-            for cell_v in row:
-                coord = cell_v.coordinate
+        # Coordinates are derived from the range bounds rather than read off the
+        # cell. A streaming worksheet yields EmptyCell for blank cells, and
+        # EmptyCell has no .coordinate -- reading it raised
+        # "'EmptyCell' object has no attribute 'coordinate'" and failed the whole
+        # call. iter_rows with explicit bounds behaves identically in both modes.
+        min_col, min_row, max_col, max_row = range_boundaries(range_address.upper())
+        rows = ws_values.iter_rows(min_row=min_row, max_row=max_row, min_col=min_col, max_col=max_col)
+        for row_offset, row in enumerate(rows):
+            for col_offset, cell_v in enumerate(row):
+                coord = f"{get_column_letter(min_col + col_offset)}{min_row + row_offset}"
                 cell_w = ws[coord]
                 # Only replace formula cells (value starts with "=")
                 if isinstance(cell_w.value, str) and cell_w.value.startswith("="):
