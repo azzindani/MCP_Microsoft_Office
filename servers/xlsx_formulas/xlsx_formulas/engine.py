@@ -821,7 +821,11 @@ def convert_to_values(
         # EmptyCell has no .coordinate -- reading it raised
         # "'EmptyCell' object has no attribute 'coordinate'" and failed the whole
         # call. iter_rows with explicit bounds behaves identically in both modes.
-        min_col, min_row, max_col, max_row = range_boundaries(range_address.upper())
+        # range_boundaries is typed as returning optionals for open-ended ranges
+        # like "A:C". _validate_range above already requires both endpoints, so
+        # these are always concrete -- coerced so the arithmetic below type-checks.
+        bounds = range_boundaries(range_address.upper())
+        min_col, min_row, max_col, max_row = (int(b or 1) for b in bounds)
         rows = ws_values.iter_rows(min_row=min_row, max_row=max_row, min_col=min_col, max_col=max_col)
         for row_offset, row in enumerate(rows):
             for col_offset, cell_v in enumerate(row):
