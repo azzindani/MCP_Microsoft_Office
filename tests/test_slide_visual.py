@@ -59,13 +59,15 @@ class TestContrastMaths:
 class TestUnreadableSlides:
     def test_white_text_on_a_white_slide_is_reported_invisible(self, prs):
         _paint(prs.slides[0], "FFFFFF")
-        offenders = unreadable_slides(prs, "FFFFFF")
-        assert [o["slide"] for o in offenders] == [0]
-        assert offenders[0]["invisible"] is True
+        offender = next(o for o in unreadable_slides(prs, "FFFFFF") if o["slide"] == 0)
+        assert offender["invisible"] is True
+        assert offender["assumed"] is False
 
     def test_white_text_on_a_dark_slide_is_fine(self, prs):
+        """Slide 1 is deliberately left inheriting, so it is still flagged; the
+        painted dark slide is the one that must not be."""
         _paint(prs.slides[0], "1B2A47")
-        assert unreadable_slides(prs, "FFFFFF") == []
+        assert 0 not in [o["slide"] for o in unreadable_slides(prs, "FFFFFF")]
 
     def test_the_mixed_deck_that_caused_this(self, prs):
         """Slide 0 dark, slide 1 left at default: white everywhere flags only 1."""
@@ -73,17 +75,40 @@ class TestUnreadableSlides:
         _paint(prs.slides[1], "FFFFFF")
         assert [o["slide"] for o in unreadable_slides(prs, "FFFFFF")] == [1]
 
-    def test_a_slide_that_inherits_its_background_is_never_guessed_at(self, prs):
-        """No explicit fill means no warning -- a false positive would be worse
-        than silence, because it would flag text the user can read."""
-        assert slide_background_hex(prs.slides[0]) is None
-        assert unreadable_slides(prs, "FFFFFF") == []
+    def test_an_inherited_background_is_still_checked(self, prs):
+        """The deck that prompted all this had its unreadable slide left at the
+        template default -- white by inheritance, not by an explicit fill. A
+        check that only looked at the slide's own fill saw nothing and missed
+        the exact bug it was written for."""
+        assert slide_background_hex(prs.slides[0]) is None  # nothing set anywhere
+        offenders = unreadable_slides(prs, "FFFFFF")
+        assert [o["slide"] for o in offenders] == [0, 1]
+        assert all(o["assumed"] for o in offenders)
+
+    def test_dark_text_on_an_inherited_background_is_fine(self):
+        """The assumption must not fire on the normal case: default template,
+        default dark text."""
+        from pptx import Presentation as _P
+
+        deck = _P()
+        deck.slides.add_slide(deck.slide_layouts[6])
+        assert unreadable_slides(deck, "000000") == []
+
+    def test_an_explicit_background_is_not_marked_assumed(self, prs):
+        _paint(prs.slides[0], "FFFFFF")
+        offender = next(o for o in unreadable_slides(prs, "FFFFFF") if o["slide"] == 0)
+        assert offender["assumed"] is False
 
     def test_the_warning_names_the_slides_and_the_fix(self, prs):
         _paint(prs.slides[1], "FFFFFF")
         message = contrast_warning(unreadable_slides(prs, "FFFFFF"), "FFFFFF")
         assert "1" in message
         assert "set_background" in message
+
+    def test_the_warning_says_when_the_background_was_inherited(self, prs):
+        """A caller using a themed master should know the check assumed white."""
+        message = contrast_warning(unreadable_slides(prs, "FFFFFF"), "FFFFFF")
+        assert "inherit" in message
 
 
 class TestFitToSlide:

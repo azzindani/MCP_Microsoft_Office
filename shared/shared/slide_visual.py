@@ -52,39 +52,47 @@ def contrast_ratio(fg_hex: str, bg_hex: str) -> float:
 def slide_background_hex(slide) -> str | None:
     """Return the slide's own solid background colour, or None if it inherits.
 
-    Only an explicitly set solid fill is reported. A slide that takes its
-    background from the layout or master is left as None rather than guessed at,
-    because a wrong guess would produce a false warning about text the user can
-    actually read.
+    The slide's own fill wins; failing that the layout's, then the master's.
+    Returns None only when nothing in that chain sets a solid fill.
+
+    Resolving the chain matters more than it looks. The deck that prompted this
+    had its unreadable slide left at the template default -- white by
+    inheritance, not by an explicit fill -- so a check that only looked at the
+    slide itself saw nothing and missed the very bug it was written for.
     """
     # Imported here rather than at module scope: shared/ is also imported by the
     # docx and xlsx servers, which have no reason to pull in python-pptx.
     from pptx.enum.dml import MSO_FILL
 
-    try:
-        fill = slide.background.fill
-        # An untouched slide reports MSO_FILL_TYPE.BACKGROUND, which is exactly
-        # the inherit case this returns None for.
-        if fill.type == MSO_FILL.SOLID:
-            return str(fill.fore_color.rgb)
-    except (AttributeError, TypeError, ValueError):
-        pass
+    for source in (slide, getattr(slide, "slide_layout", None), getattr(slide, "slide_master", None)):
+        if source is None:
+            continue
+        try:
+            fill = source.background.fill
+            # Anything other than SOLID (usually BACKGROUND) means "inherit",
+            # so fall through to the next level of the chain.
+            if fill.type == MSO_FILL.SOLID:
+                return str(fill.fore_color.rgb)
+        except (AttributeError, TypeError, ValueError):
+            continue
     return None
 
 
-def unreadable_slides(prs, color_hex: str) -> list[dict]:
-    """Return the slides where `color_hex` text would be hard or impossible to read.
+# PowerPoint renders a slide with nothing set anywhere in its inheritance chain
+# on white. Assuming that is a guess, but it is the correct guess for every
+# default-template deck, and the alternative -- staying silent -- is what let
+# white-on-white text ship in the first place. Offenders found this way are
+# flagged `assumed` so the caller can tell the two apart.
+_DEFAULT_BACKGROUND = "FFFFFF"
 
-    A slide is only reported when its background was set explicitly -- see
-    slide_background_hex -- so this cannot fire on a deck using the default
-    template.
-    """
+
+def unreadable_slides(prs, color_hex: str) -> list[dict]:
+    """Return the slides where `color_hex` text would be hard or impossible to read."""
     clean = color_hex.lstrip("#").upper()
     offenders: list[dict] = []
     for index, slide in enumerate(prs.slides):
-        background = slide_background_hex(slide)
-        if background is None:
-            continue
+        resolved = slide_background_hex(slide)
+        background = resolved if resolved is not None else _DEFAULT_BACKGROUND
         ratio = contrast_ratio(clean, background)
         if ratio < MIN_CONTRAST:
             offenders.append(
@@ -93,6 +101,7 @@ def unreadable_slides(prs, color_hex: str) -> list[dict]:
                     "background": f"#{background}",
                     "contrast": round(ratio, 2),
                     "invisible": ratio <= INVISIBLE_CONTRAST,
+                    "assumed": resolved is None,
                 }
             )
     return offenders
@@ -102,15 +111,23 @@ def contrast_warning(offenders: list[dict], color_hex: str) -> str:
     """One sentence naming the slides and what to do about them."""
     invisible = [o for o in offenders if o["invisible"]]
     slides = ", ".join(str(o["slide"]) for o in offenders)
+    colour = color_hex.lstrip("#").upper()
+    # Say so when the background was inherited rather than read off the slide,
+    # so a caller using a themed master knows why they are being warned.
+    basis = (
+        " (those slides inherit the template background, taken as white)"
+        if all(o.get("assumed") for o in offenders)
+        else ""
+    )
     if invisible:
         return (
-            f"Text set to #{color_hex.lstrip('#').upper()} is effectively invisible on "
-            f"slide(s) {slides} -- it nearly matches the background there. "
-            f"Use set_background on those slides, or pick a colour that contrasts with them."
+            f"Text set to #{colour} is effectively invisible on slide(s) {slides}{basis} -- "
+            f"it nearly matches the background there. Use set_background on those slides, "
+            f"or pick a colour that contrasts with them."
         )
     return (
-        f"Text set to #{color_hex.lstrip('#').upper()} falls below the {MIN_CONTRAST}:1 readable "
-        f"contrast ratio on slide(s) {slides}. Use set_background on those slides, "
+        f"Text set to #{colour} falls below the {MIN_CONTRAST}:1 readable contrast ratio on "
+        f"slide(s) {slides}{basis}. Use set_background on those slides, "
         f"or pick a darker or lighter colour."
     )
 
