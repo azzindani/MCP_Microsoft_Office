@@ -79,3 +79,6 @@ tokens.json
 
 # OAuth 2.0 bridge state (issued access/refresh tokens) — see oauth_bridge.py
 oauth-state/
+
+# Default host directory for the shared output mount (docker-compose MCP_SHARED_DIR)
+shared-files/

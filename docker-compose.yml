@@ -56,9 +56,31 @@ services:
       OFFICE_PPTX_NEW_OAUTH_STATE_DIR: /home/app/.oauth-state/pptx-new
       OFFICE_OAUTH_CLIENT_ID: ${OFFICE_OAUTH_CLIENT_ID:-}
       OFFICE_OAUTH_CLIENT_SECRET: ${OFFICE_OAUTH_CLIENT_SECRET:-}
+      # Hybrid file exchange — see README "Hybrid local + remote file handling".
+      # MCP_OUTPUT_DIR doubles as the in-container mount point below so the
+      # two can never drift apart: point MCP_SHARED_DIR at a host directory
+      # your file server also serves, set MCP_PUBLIC_BASE_URL to that
+      # directory's public URL, and every generated .docx/.xlsx/.pptx/.pdf
+      # comes back with a `public_url` the caller can actually open. Without
+      # this, documents land in ~/Downloads *inside the container* — a black
+      # hole for any remote caller.
+      MCP_OUTPUT_DIR: ${MCP_OUTPUT_DIR:-/files}
+      MCP_PUBLIC_BASE_URL: ${MCP_PUBLIC_BASE_URL:-}
+      # Off by default. With it on, any file path argument may be an http(s)
+      # URL. Hosts resolving to loopback/link-local/private addresses are
+      # refused unless MCP_FETCH_ALLOW_PRIVATE=1 — don't relax that on a
+      # publicly reachable deployment.
+      MCP_FETCH_URLS: ${MCP_FETCH_URLS:-0}
+      MCP_FETCH_ALLOW_PRIVATE: ${MCP_FETCH_ALLOW_PRIVATE:-0}
+      MCP_MAX_FETCH_MB: ${MCP_MAX_FETCH_MB:-100}
     mem_limit: ${OFFICE_MEM_LIMIT:-512m}
     volumes:
       - ./tokens.json:/home/app/tokens.json:ro
+      # Shared output directory (see MCP_OUTPUT_DIR above). The container
+      # writes as uid/gid 999 (`app`), so `chown 999:999` the host directory
+      # before first run — left root-owned, every generated document fails
+      # with EACCES, same gotcha as oauth-state below.
+      - ${MCP_SHARED_DIR:-./shared-files}:${MCP_OUTPUT_DIR:-/files}
       # Persists OAuth-issued access/refresh tokens (one subdir per
       # sub-server) so a container restart doesn't force claude.ai to
       # reauthorize. `mkdir -p oauth-state && chown 999:999 oauth-state`

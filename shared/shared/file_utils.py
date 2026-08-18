@@ -10,9 +10,42 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from shared.exchange import (
+    attach_public_url,
+    fetch_url,
+    get_inbox_dir,
+    get_output_dir,
+    is_url,
+    public_url_for,
+    url_fetch_enabled,
+)
+
+__all__ = [
+    "attach_public_url",
+    "embed_content",
+    "fetch_url",
+    "get_inbox_dir",
+    "get_output_dir",
+    "hint_for_error",
+    "is_url",
+    "public_url_for",
+    "read_mcp_json",
+    "resolve_path",
+    "safe_copy",
+    "url_fetch_enabled",
+    "write_mcp_json",
+]
+
 
 def _downloads_dir() -> Path:
-    """Return the user's Downloads directory."""
+    """Return MCP_OUTPUT_DIR when set, else the user's Downloads directory.
+
+    A container deployment sets MCP_OUTPUT_DIR to a bind-mounted directory so
+    generated documents land somewhere the caller can reach; unset, this is
+    the original ~/Downloads behaviour.
+    """
+    if os.environ.get("MCP_OUTPUT_DIR", "").strip():
+        return get_output_dir()
     if sys.platform == "win32":
         base = Path(os.environ.get("USERPROFILE", str(Path.home())))
     else:
@@ -39,11 +72,16 @@ def resolve_path(raw: str) -> Path:
     - Windows backslash paths
     - Windows UNC paths and long-path prefix (\\\\?\\)
     - Relative paths (resolved from CWD)
+    - http(s) URLs, downloaded into the inbox dir first (MCP_FETCH_URLS=1;
+      off by default — see shared/exchange.py)
 
     Raises:
         ValueError: if path is inside .mcp_versions/ or contains null bytes
     """
     s = raw.strip()
+
+    if is_url(s):
+        return fetch_url(s)
 
     # Resolve workspace: / project: aliases produced by MCP_Data_Analyst handover
     if s.startswith("workspace:") or s.startswith("project:"):
@@ -117,14 +155,18 @@ _KNOWN_MIME_TYPES = {
 
 
 def embed_content(result: dict[str, Any], path: Path, return_content: bool) -> dict[str, Any]:
-    """Attach base64 file bytes to a tool result dict when requested.
+    """Attach `public_url`, and base64 file bytes when return_content is set.
 
-    In remote/HTTP deployments the caller has no filesystem in common
-    with this server, so a server-local output path is useless to it —
-    this lets the caller get the real bytes back over the wire instead.
-    A read failure here doesn't fail the whole tool call.
+    In remote/HTTP deployments the caller has no filesystem in common with this
+    server, so a server-local output path is useless to it. `public_url` (set
+    whenever the file lands under a publicly served MCP_OUTPUT_DIR) gives it a
+    link; return_content gives it the bytes themselves. A read failure here
+    doesn't fail the whole tool call.
     """
-    if not return_content or not result.get("success"):
+    if not result.get("success"):
+        return result
+    attach_public_url(result, path)
+    if not return_content:
         return result
     try:
         data = path.read_bytes()

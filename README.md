@@ -706,6 +706,35 @@ For lower-memory machines, set `MCP_CONSTRAINED_MODE=1` in the `env` section of 
 |---|---|---|
 | `MCP_CONSTRAINED_MODE` | `0` | Set to `1` for low-memory machines |
 | `GIT_INTEGRATION` | `true` | Set to `false` to disable auto Git commits on edits |
+| `MCP_OUTPUT_DIR` | `~/Downloads` | Where new documents land by default |
+| `MCP_PUBLIC_BASE_URL` | _(unset)_ | Public URL serving `MCP_OUTPUT_DIR`; adds `public_url` to results |
+| `MCP_FETCH_URLS` | `0` | `1` lets any file path argument be an `http(s)` URL |
+| `MCP_FETCH_ALLOW_PRIVATE` | `0` | `1` permits fetching hosts on private/loopback addresses |
+| `MCP_MAX_FETCH_MB` | `100` | Size cap for a fetched URL |
+
+### Hybrid local + remote file handling
+
+The same engine serves a local stdio install and a self-hosted HTTP endpoint,
+but over HTTP the caller shares no filesystem with the server: a server-local
+output path means nothing to it, and it may hold a link rather than a path.
+Three opt-in variables close that gap without changing local behaviour — all
+are unset by default, so a local install stays offline and writes to
+`~/Downloads` exactly as before:
+
+- **`MCP_OUTPUT_DIR`** — bind-mount a directory here and every generated
+  `.docx`/`.xlsx`/`.pptx`/`.pdf` defaults into it, so documents land somewhere
+  you can actually see. An explicit `output_path` still wins.
+- **`MCP_PUBLIC_BASE_URL`** — the public URL that serves that directory. Every
+  produced document then comes back with a `public_url` you can open or pass on.
+- **`MCP_FETCH_URLS=1`** — a file path argument may be a link
+  (`read_document("https://…/contract.docx")`), downloaded into
+  `MCP_OUTPUT_DIR/inbox` before the tool runs. Hosts resolving to
+  loopback/link-local/private addresses are refused, redirects included,
+  unless `MCP_FETCH_ALLOW_PRIVATE=1`.
+
+Document-creating tools also accept `return_content=True`, which embeds the
+file's bytes as `content_base64` for callers that have neither a shared
+filesystem nor access to the public URL.
 
 ## Deployment
 

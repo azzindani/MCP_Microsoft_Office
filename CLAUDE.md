@@ -1197,6 +1197,33 @@ builds the image on every push (`docker-build` job, no push); `release.yml`
 publishes `ghcr.io/<owner>/mcp-microsoft-office:<version>` on tag via the
 shared `azzindani/MCP_Math` composite action.
 
+### Hybrid file exchange (`shared/shared/exchange.py`)
+
+Local and remote run the same engine, but over HTTP the caller shares no
+filesystem with the server — a server-local `output_path` is meaningless to
+it, and it may hold a link rather than a path. `exchange.py` closes that gap
+through three env vars, all unset by default so a local stdio install keeps
+its offline `~/Downloads` behaviour bit for bit:
+
+| Var | Effect |
+|---|---|
+| `MCP_OUTPUT_DIR` | Default directory for generated documents — `get_downloads_dir()` and `_downloads_dir()` both route through it, so every `_new`/export tool follows. An explicit `output_path` argument still wins. |
+| `MCP_PUBLIC_BASE_URL` | Public URL serving `MCP_OUTPUT_DIR` — results gain `public_url`. |
+| `MCP_FETCH_URLS=1` | `resolve_path()` accepts `http(s)` URLs, downloading into `MCP_OUTPUT_DIR/inbox` first, so *every* path argument accepts a link with no per-tool change. |
+
+Rules for this module:
+
+1. Never make URL fetching the default — offline-first is the contract for a
+   local install. It is opt-in, per deployment.
+2. Never drop the SSRF guard. `assert_fetchable()` refuses hosts resolving to
+   non-public addresses and is re-run on every redirect; an authenticated
+   caller must not be able to use this server to probe the network it runs on.
+3. Never let a fetch run unbounded — the size cap (`MCP_MAX_FETCH_MB`) and the
+   timeout are load-bearing, not decoration.
+4. `embed_content()` is the single hook that attaches both `public_url` and
+   `content_base64`; new document-producing tools call it instead of
+   assembling those keys by hand.
+
 ---
 
 *Last updated: 2026-04-11*

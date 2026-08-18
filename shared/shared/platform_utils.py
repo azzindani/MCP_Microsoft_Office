@@ -122,7 +122,17 @@ def get_max_search_results() -> int:
 
 
 def get_downloads_dir() -> Path:
-    """Return the user's Downloads directory, creating it if needed."""
+    """Return MCP_OUTPUT_DIR when set, else the user's Downloads directory.
+
+    Every _new/export tool's default output path flows through here, so a
+    container deployment that bind-mounts MCP_OUTPUT_DIR gets every generated
+    document in a directory the caller can actually reach. Unset — the local
+    stdio case — this stays the original ~/Downloads behaviour.
+    """
+    if os.environ.get("MCP_OUTPUT_DIR", "").strip():
+        from shared.exchange import get_output_dir
+
+        return get_output_dir()
     if is_windows():
         # Try USERPROFILE\Downloads first; fall back to home
         base = Path(os.environ.get("USERPROFILE", str(Path.home())))
