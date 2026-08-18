@@ -229,6 +229,9 @@ def fetch_url(url: str, dest_dir: Path | None = None) -> Path:
     try:
         with os.fdopen(handle, "wb") as stream:
             stream.write(payload)
+        # mkstemp creates 0600 and os.replace keeps it. This directory is a
+        # shared exchange — a file only its writer can read defeats the point.
+        os.chmod(temp_name, 0o644)
         os.replace(temp_name, target)
     except Exception:
         Path(temp_name).unlink(missing_ok=True)
