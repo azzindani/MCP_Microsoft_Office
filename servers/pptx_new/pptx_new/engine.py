@@ -19,6 +19,7 @@ from pptx.util import Inches, Pt  # noqa: E402,F401
 from shared.file_utils import embed_content  # noqa: E402
 from shared.platform_utils import open_file, resolve_output_path  # noqa: E402
 from shared.progress import fail, info, ok  # noqa: E402
+from shared.slide_text import strip_list_markers  # noqa: E402
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -165,7 +166,7 @@ def create_from_outline(
                     try:
                         tf = slide.placeholders[1].text_frame  # type: ignore[reportAttributeAccessIssue]
                         tf.clear()
-                        tf.text = content
+                        tf.text = strip_list_markers(content)
                     except (IndexError, KeyError, AttributeError):
                         pass
 
@@ -246,7 +247,7 @@ def create_deck_from_data(
                 try:
                     tf = slide.placeholders[1].text_frame  # type: ignore[reportAttributeAccessIssue]
                     tf.clear()
-                    tf.text = body_text
+                    tf.text = strip_list_markers(body_text)
                 except (IndexError, KeyError, AttributeError):
                     pass
 
@@ -387,7 +388,7 @@ def create_agenda(
         try:
             tf = agenda_slide.placeholders[1].text_frame  # type: ignore[reportAttributeAccessIssue]
             tf.clear()
-            tf.text = agenda_text
+            tf.text = strip_list_markers(agenda_text)
         except (IndexError, KeyError, AttributeError):
             pass
 
@@ -516,7 +517,7 @@ def create_from_docx(
                     try:
                         tf = slide.placeholders[1].text_frame  # type: ignore[reportAttributeAccessIssue]
                         tf.clear()
-                        tf.text = content_text
+                        tf.text = strip_list_markers(content_text)
                     except (IndexError, KeyError, AttributeError):
                         pass
 

@@ -10,6 +10,7 @@ from shared.live_edit import notify_reload
 from shared.platform_utils import open_file
 from shared.progress import fail, info, ok
 from shared.receipt import append_receipt
+from shared.slide_text import strip_list_markers
 from shared.version_control import get_history, snapshot
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -711,7 +712,7 @@ def add_text_box(
         slide = prs.slides[slide_index]
         txBox = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
         tf = txBox.text_frame
-        tf.text = text
+        tf.text = strip_list_markers(text)
 
         prs.save(str(path))
         if open_after:
