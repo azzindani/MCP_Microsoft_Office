@@ -106,6 +106,45 @@ def _find_shape(
 # ---------------------------------------------------------------------------
 
 
+def _match_chart_text_to_slide(chart: Any, slide: Any) -> str:
+    """Colour every piece of chart text to contrast with the slide behind it.
+
+    Returns the hex applied, or "" when the slide background is unknown and the
+    chart is left at python-pptx's defaults.
+    """
+    background = slide_background_hex(slide)
+    if background is None:
+        return ""
+
+    readable = "FFFFFF" if contrast_ratio("FFFFFF", background) >= contrast_ratio("000000", background) else "000000"
+    rgb = RGBColor.from_string(readable)
+
+    # chart.font cascades to anything that has not been styled individually;
+    # the axes are set explicitly because their tick labels usually have been.
+    try:
+        chart.font.color.rgb = rgb
+    except (AttributeError, TypeError, ValueError):
+        pass
+
+    for axis_name in ("category_axis", "value_axis"):
+        try:
+            getattr(chart, axis_name).tick_labels.font.color.rgb = rgb
+        except (AttributeError, TypeError, ValueError):
+            # Pie charts have no axes; nothing to colour.
+            continue
+
+    try:
+        if chart.has_title:
+            for para in chart.chart_title.text_frame.paragraphs:
+                para.font.color.rgb = rgb
+                for run in para.runs:
+                    run.font.color.rgb = rgb
+    except (AttributeError, TypeError, ValueError):
+        pass
+
+    return readable
+
+
 def set_background(
     file_path: str,
     slide_index: int,
@@ -487,19 +526,13 @@ def add_chart(
         if title:
             chart_shape.chart.has_title = True
             chart_shape.chart.chart_title.text_frame.text = title
-            # A chart's title defaults to near-black. Dropped onto a dark slide
-            # background it is unreadable, which is how the swept deck ended up
-            # with a black title on navy. Follow the slide instead.
-            background = slide_background_hex(slide)
-            if background is not None:
-                readable = (
-                    "FFFFFF"
-                    if contrast_ratio("FFFFFF", background) >= contrast_ratio("000000", background)
-                    else "000000"
-                )
-                for para in chart_shape.chart.chart_title.text_frame.paragraphs:
-                    for run in para.runs:
-                        run.font.color.rgb = RGBColor.from_string(readable)
+
+        # Every piece of text python-pptx puts in a chart defaults to near-black:
+        # the title, the category names, the value ticks and the legend. Dropped
+        # on a dark slide they are all unreadable. Colouring only the title, as
+        # the first pass here did, left "Instagram / LinkedIn / Google" and the
+        # 0-10 axis black on navy -- visible in the render, and still wrong.
+        _match_chart_text_to_slide(chart_shape.chart, slide)
 
         prs.save(str(path))
         if open_after:

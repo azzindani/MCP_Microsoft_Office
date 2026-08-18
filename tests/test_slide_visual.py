@@ -211,3 +211,60 @@ class TestBackgroundOnEverySlide:
         set_background(str(deck), -1, color_hex="1B2A47")
         result = set_font_all_slides(str(deck), color_hex="FFFFFF")
         assert result.get("unreadable_slides") is None
+
+
+class TestChartTextFollowsTheSlide:
+    """Colouring only the chart title left the category names and the value
+    ticks black on a navy slide -- visible in the render and still wrong."""
+
+    def _deck_with_chart(self, tmp_path, background: str | None):
+        from pptx_design.engine import add_chart, set_background
+
+        deck = tmp_path / "c.pptx"
+        p = Presentation()
+        p.slides.add_slide(p.slide_layouts[6])
+        p.save(deck)
+        if background:
+            set_background(str(deck), 0, color_hex=background)
+        add_chart(
+            str(deck),
+            slide_index=0,
+            chart_type="bar",
+            data={"categories": ["Instagram", "LinkedIn"], "series": {"Spends": [5, 3]}},
+            title="Spends by Platform",
+        )
+        chart = next(s for s in Presentation(str(deck)).slides[0].shapes if s.has_chart).chart
+        return chart
+
+    def test_axis_labels_go_light_on_a_dark_slide(self, tmp_path):
+        chart = self._deck_with_chart(tmp_path, "1B2A47")
+        assert str(chart.category_axis.tick_labels.font.color.rgb) == "FFFFFF"
+        assert str(chart.value_axis.tick_labels.font.color.rgb) == "FFFFFF"
+
+    def test_the_title_goes_light_too(self, tmp_path):
+        chart = self._deck_with_chart(tmp_path, "1B2A47")
+        colors = {
+            str(p.font.color.rgb) for p in chart.chart_title.text_frame.paragraphs if p.font.color.rgb is not None
+        }
+        assert colors == {"FFFFFF"}
+
+    def test_axis_labels_go_dark_on_a_light_slide(self, tmp_path):
+        chart = self._deck_with_chart(tmp_path, "FFFFFF")
+        assert str(chart.category_axis.tick_labels.font.color.rgb) == "000000"
+
+    def test_a_pie_chart_has_no_axes_and_must_not_crash(self, tmp_path):
+        from pptx_design.engine import add_chart, set_background
+
+        deck = tmp_path / "pie.pptx"
+        p = Presentation()
+        p.slides.add_slide(p.slide_layouts[6])
+        p.save(deck)
+        set_background(str(deck), 0, color_hex="1B2A47")
+        result = add_chart(
+            str(deck),
+            slide_index=0,
+            chart_type="pie",
+            data={"categories": ["A", "B"], "series": {"S": [1, 2]}},
+            title="Split",
+        )
+        assert result["success"] is True
