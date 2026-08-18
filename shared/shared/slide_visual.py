@@ -169,13 +169,23 @@ def fit_to_slide(
     return left, top, width, height, note
 
 
-_DEFAULT_BODY_PT = 18.0
-# Rough advance width of a proportional face as a fraction of point size, and
-# the usual line-height multiplier. Only used to estimate how many lines a
-# paragraph wraps to -- being a little out moves a shape by a fraction of an
-# inch, which is far better than the alternative of measuring nothing.
-_CHAR_WIDTH_RATIO = 0.5
+# PowerPoint renders level-1 body text at 28pt in the stock layouts, not the
+# 18pt first assumed here. Getting that wrong made a three-bullet placeholder
+# measure 2.69in when it drew 4.6in, and the table landed on top of two of the
+# bullets -- visible in the render, with the geometry insisting it was clear.
+_DEFAULT_BODY_PT = 28.0
+# Advance width of a proportional face as a fraction of point size, and the
+# usual line-height multiplier, used to estimate how many lines a paragraph
+# wraps to. 0.72 is calibrated against a rendered slide: a 37-character bullet
+# in a 9in placeholder at 28pt wraps to two lines, i.e. ~33 characters per
+# line. A narrower guess counted it as one and put a table over the next
+# bullet.
+_CHAR_WIDTH_RATIO = 0.72
 _LINE_SPACING = 1.25
+# Deliberately overestimate. The two failure modes are not symmetric: too small
+# and shapes overlap and the slide is unreadable, too large and there is a bit
+# of extra whitespace. Bias towards the whitespace.
+_HEIGHT_SAFETY = 1.1
 
 
 def _text_height(shape, width_in: float) -> float:
@@ -197,7 +207,7 @@ def _text_height(shape, width_in: float) -> float:
                 break
         chars_per_line = max(1, int(width_in * 72 / (size_pt * _CHAR_WIDTH_RATIO)))
         lines += max(1, -(-len(text) // chars_per_line))  # ceil division
-    drawn = lines * _DEFAULT_BODY_PT * _LINE_SPACING / 72.0
+    drawn = lines * _DEFAULT_BODY_PT * _LINE_SPACING * _HEIGHT_SAFETY / 72.0
     # Never claim more than the frame itself allows.
     return min(drawn, (shape.height or 0) / 914400)
 
