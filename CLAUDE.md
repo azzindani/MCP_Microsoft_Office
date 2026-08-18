@@ -734,6 +734,14 @@ repo. This is exactly how the `Invalid Host header` regression (see
 "Transport and Deployment" below) was actually caught — `pytest` alone could
 not have found it.
 
+
+`tests/test_smoke_test_covers_every_tool.py` keeps that script honest: it reads
+every `@mcp.tool()` name out of the server modules' AST and fails if one never
+appears in `remote_smoke_test.sh`. Offline, so it runs in CI. It exists because
+a harness-driven sweep was once told to "list the tools then call each" for two
+servers, listed some and called none -- 19 tools silently unexercised, with the
+run still reporting a clean pass.
+
 ---
 
 ## 16. MCP tool schema rules
