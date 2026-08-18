@@ -21,6 +21,12 @@ services:
     image: ${OFFICE_IMAGE:-mcp-microsoft-office:latest}
     container_name: mcp-office
     restart: unless-stopped
+    # export_pdf shells out to LibreOffice, which spawns gpg/gpgconf helpers of
+    # its own. subprocess.run reaps soffice, but those grandchildren are
+    # orphaned onto PID 1 -- and PID 1 here is unified_server.py, which does not
+    # reap adopted children. They accumulate as zombies for the life of the
+    # container, one small batch per PDF export. tini as PID 1 reaps them.
+    init: true
     ports:
       - "${OFFICE_HOST_PORT:-8830}:8830"
     environment:
