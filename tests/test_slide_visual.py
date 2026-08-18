@@ -163,3 +163,51 @@ class TestAddChartUsesIt:
         shape = next(s for s in check.slides[0].shapes if s.has_chart)
         assert int(shape.top or 0) + int(shape.height or 0) <= int(check.slide_height or 0)
         assert int(shape.left or 0) + int(shape.width or 0) <= int(check.slide_width or 0)
+
+
+class TestBackgroundOnEverySlide:
+    """set_background took one slide while set_font_all_slides took all of them,
+    so "make this deck dark" needed a call per slide -- which is exactly how a
+    deck ended up dark on slide 0, untouched white on slide 1, and white text on
+    both. slide_index=-1 makes the two operations symmetric."""
+
+    def _deck(self, tmp_path):
+        deck = tmp_path / "d.pptx"
+        p = Presentation()
+        for _ in range(3):
+            p.slides.add_slide(p.slide_layouts[6])
+        p.save(deck)
+        return deck
+
+    def test_minus_one_paints_every_slide(self, tmp_path):
+        from pptx_design.engine import set_background
+
+        deck = self._deck(tmp_path)
+        result = set_background(str(deck), -1, color_hex="1B2A47")
+        assert result["success"] is True
+
+        check = Presentation(str(deck))
+        assert [slide_background_hex(s) for s in check.slides] == ["1B2A47"] * 3
+
+    def test_a_single_index_still_paints_only_that_slide(self, tmp_path):
+        from pptx_design.engine import set_background
+
+        deck = self._deck(tmp_path)
+        set_background(str(deck), 1, color_hex="1B2A47")
+
+        check = Presentation(str(deck))
+        assert [slide_background_hex(s) for s in check.slides] == [None, "1B2A47", None]
+
+    def test_out_of_range_is_still_rejected(self, tmp_path):
+        from pptx_design.engine import set_background
+
+        result = set_background(str(self._deck(tmp_path)), 99, color_hex="1B2A47")
+        assert result["success"] is False
+
+    def test_the_pairing_that_broke_the_deck_now_produces_readable_text(self, tmp_path):
+        from pptx_design.engine import set_background, set_font_all_slides
+
+        deck = self._deck(tmp_path)
+        set_background(str(deck), -1, color_hex="1B2A47")
+        result = set_font_all_slides(str(deck), color_hex="FFFFFF")
+        assert result.get("unreadable_slides") is None

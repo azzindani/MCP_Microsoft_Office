@@ -137,21 +137,31 @@ def set_background(
         backup = snapshot(str(path))
         progress.append(ok("Snapshot saved", Path(backup).name))
 
-        slide, err = _check_slide(prs, slide_index, progress, backup)
-        if err:
-            return err
+        # slide_index=-1 means every slide. Without it, "make this deck dark"
+        # took one call per slide, while set_font_all_slides coloured all of
+        # them in one -- which is exactly how a deck ended up with a dark slide
+        # 1, an untouched white slide 2 and white text on both.
+        if slide_index == -1:
+            targets = list(prs.slides)
+            scope = f"all {len(targets)} slides"
+        else:
+            slide, err = _check_slide(prs, slide_index, progress, backup)
+            if err:
+                return err
+            targets = [slide]
+            scope = f"slide {slide_index}"
 
         if color_hex:
             clean = color_hex.lstrip("#")
-            background = slide.background
-            fill = background.fill
-            fill.solid()
-            fill.fore_color.rgb = RGBColor(
-                int(clean[0:2], 16),
-                int(clean[2:4], 16),
-                int(clean[4:6], 16),
-            )
-            progress.append(ok(f"Set background color #{clean}", f"slide {slide_index}"))
+            for target in targets:
+                fill = target.background.fill
+                fill.solid()
+                fill.fore_color.rgb = RGBColor(
+                    int(clean[0:2], 16),
+                    int(clean[2:4], 16),
+                    int(clean[4:6], 16),
+                )
+            progress.append(ok(f"Set background color #{clean}", scope))
 
         elif image_path:
             img_path = Path(image_path).resolve()
@@ -167,13 +177,14 @@ def set_background(
                 }
             slide_width = prs.slide_width
             slide_height = prs.slide_height
-            slide.shapes.add_picture(str(img_path), 0, 0, slide_width, slide_height)
-            # Move image to back (index 0 in spTree after two required elements)
-            sp_tree = slide.shapes._spTree
-            pic_el = sp_tree[-1]
-            sp_tree.remove(pic_el)
-            sp_tree.insert(2, pic_el)
-            progress.append(ok("Set background image", img_path.name))
+            for target in targets:
+                target.shapes.add_picture(str(img_path), 0, 0, slide_width, slide_height)
+                # Move image to back (index 0 in spTree after two required elements)
+                sp_tree = target.shapes._spTree
+                pic_el = sp_tree[-1]
+                sp_tree.remove(pic_el)
+                sp_tree.insert(2, pic_el)
+            progress.append(ok("Set background image", f"{img_path.name} on {scope}"))
 
         prs.save(str(path))
         if open_after:

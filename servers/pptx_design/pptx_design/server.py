@@ -50,7 +50,7 @@ def set_background(
     color_hex: str = "",
     image_path: str = "",
 ) -> dict:
-    """Set slide background to solid color (hex) or image file."""
+    """Set slide background to color/image. slide_index -1 = all slides."""
     return engine.set_background(file_path, slide_index, color_hex, image_path, open_after=True)
 
 
