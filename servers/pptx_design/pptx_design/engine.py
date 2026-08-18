@@ -14,7 +14,14 @@ from pptx.util import Inches, Pt
 from shared.file_utils import embed_content, hint_for_error, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_pdf_converter, open_file, resolve_output_path
-from shared.progress import fail, ok
+from shared.progress import fail, ok, warn
+from shared.slide_visual import (
+    contrast_ratio,
+    contrast_warning,
+    fit_to_slide,
+    slide_background_hex,
+    unreadable_slides,
+)
 from shared.version_control import snapshot
 
 # ---------------------------------------------------------------------------
@@ -449,6 +456,13 @@ def add_chart(
         for series_def in series:
             chart_data.add_series(series_def["name"], series_def["values"])
 
+        # python-pptx places a shape wherever it is told, including past the edge
+        # of the slide. A chart drawn that way loses its lower category labels
+        # and the caller is told nothing, so fit the box and report the move.
+        left, top, width, height, fit_note = fit_to_slide(prs, left, top, width, height)
+        if fit_note:
+            progress.append(warn("Chart repositioned to fit the slide", fit_note))
+
         xl_chart_type = CHART_TYPE_MAP[chart_type]
         chart_shape = slide.shapes.add_chart(
             xl_chart_type,
@@ -462,6 +476,19 @@ def add_chart(
         if title:
             chart_shape.chart.has_title = True
             chart_shape.chart.chart_title.text_frame.text = title
+            # A chart's title defaults to near-black. Dropped onto a dark slide
+            # background it is unreadable, which is how the swept deck ended up
+            # with a black title on navy. Follow the slide instead.
+            background = slide_background_hex(slide)
+            if background is not None:
+                readable = (
+                    "FFFFFF"
+                    if contrast_ratio("FFFFFF", background) >= contrast_ratio("000000", background)
+                    else "000000"
+                )
+                for para in chart_shape.chart.chart_title.text_frame.paragraphs:
+                    for run in para.runs:
+                        run.font.color.rgb = RGBColor.from_string(readable)
 
         prs.save(str(path))
         if open_after:
@@ -840,6 +867,13 @@ def set_font_all_slides(
             )
         )
 
+        # set_background works one slide at a time, this works on all of them.
+        # Set a dark background on slide 1 and white text everywhere and slide 2
+        # gets white-on-white: applied successfully, and completely unreadable.
+        unreadable = unreadable_slides(prs, color_hex) if color_hex else []
+        if unreadable:
+            progress.append(warn("Text may be unreadable", contrast_warning(unreadable, color_hex)))
+
         result: dict[str, Any] = {
             "success": True,
             "op": "set_font_all_slides",
@@ -852,6 +886,9 @@ def set_font_all_slides(
             "backup": backup,
             "progress": progress,
         }
+        if unreadable:
+            result["unreadable_slides"] = unreadable
+            result["hint"] = contrast_warning(unreadable, color_hex)
         result["token_estimate"] = len(str(result)) // 4
         return result
 

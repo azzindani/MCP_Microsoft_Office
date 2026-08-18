@@ -1,0 +1,140 @@
+"""Two ways a deck goes wrong that no return value revealed.
+
+Both were found by rendering a swept deck to PDF and looking at it. Every tool
+involved returned success:true and produced structurally valid pptx.
+
+- `add_chart` handed its inch box straight to python-pptx, which placed the
+  chart past the bottom edge of the slide. Two of five category labels were cut
+  off and nothing said so.
+- `set_background` sets one slide; `set_font_all_slides` sets every slide. Dark
+  background on slide 1 plus white text everywhere left slide 2 with white text
+  on white -- present, "successful", invisible.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+from pptx import Presentation
+
+from shared.slide_visual import (
+    MIN_CONTRAST,
+    contrast_ratio,
+    contrast_warning,
+    fit_to_slide,
+    slide_background_hex,
+    unreadable_slides,
+)
+
+
+@pytest.fixture()
+def prs() -> Any:
+    # Presentation is a factory function, not a class, so it cannot annotate.
+    p = Presentation()
+    for _ in range(2):
+        p.slides.add_slide(p.slide_layouts[6])  # blank
+    return p
+
+
+def _paint(slide, hex_color: str) -> None:
+    fill = slide.background.fill
+    fill.solid()
+    from pptx.dml.color import RGBColor
+
+    fill.fore_color.rgb = RGBColor.from_string(hex_color)
+
+
+class TestContrastMaths:
+    def test_black_on_white_is_the_maximum(self):
+        assert round(contrast_ratio("000000", "FFFFFF"), 1) == 21.0
+
+    def test_a_colour_against_itself_is_the_minimum(self):
+        assert contrast_ratio("FFFFFF", "FFFFFF") == 1.0
+
+    def test_white_on_navy_is_readable(self):
+        assert contrast_ratio("FFFFFF", "1B2A47") > MIN_CONTRAST
+
+
+class TestUnreadableSlides:
+    def test_white_text_on_a_white_slide_is_reported_invisible(self, prs):
+        _paint(prs.slides[0], "FFFFFF")
+        offenders = unreadable_slides(prs, "FFFFFF")
+        assert [o["slide"] for o in offenders] == [0]
+        assert offenders[0]["invisible"] is True
+
+    def test_white_text_on_a_dark_slide_is_fine(self, prs):
+        _paint(prs.slides[0], "1B2A47")
+        assert unreadable_slides(prs, "FFFFFF") == []
+
+    def test_the_mixed_deck_that_caused_this(self, prs):
+        """Slide 0 dark, slide 1 left at default: white everywhere flags only 1."""
+        _paint(prs.slides[0], "1B2A47")
+        _paint(prs.slides[1], "FFFFFF")
+        assert [o["slide"] for o in unreadable_slides(prs, "FFFFFF")] == [1]
+
+    def test_a_slide_that_inherits_its_background_is_never_guessed_at(self, prs):
+        """No explicit fill means no warning -- a false positive would be worse
+        than silence, because it would flag text the user can read."""
+        assert slide_background_hex(prs.slides[0]) is None
+        assert unreadable_slides(prs, "FFFFFF") == []
+
+    def test_the_warning_names_the_slides_and_the_fix(self, prs):
+        _paint(prs.slides[1], "FFFFFF")
+        message = contrast_warning(unreadable_slides(prs, "FFFFFF"), "FFFFFF")
+        assert "1" in message
+        assert "set_background" in message
+
+
+class TestFitToSlide:
+    def test_a_box_inside_the_canvas_is_untouched(self, prs):
+        left, top, width, height, note = fit_to_slide(prs, 1.0, 1.0, 4.0, 3.0)
+        assert (left, top, width, height) == (1.0, 1.0, 4.0, 3.0)
+        assert note == ""
+
+    def test_a_chart_hanging_off_the_bottom_is_pulled_back(self, prs):
+        slide_h = prs.slide_height / 914400
+        _, top, _, height, note = fit_to_slide(prs, 1.0, slide_h - 1.0, 6.0, 4.5)
+        assert top + height <= slide_h
+        assert note
+
+    def test_a_box_larger_than_the_slide_is_shrunk(self, prs):
+        slide_w = prs.slide_width / 914400
+        slide_h = prs.slide_height / 914400
+        left, top, width, height, note = fit_to_slide(prs, 0.0, 0.0, slide_w * 2, slide_h * 2)
+        assert left + width <= slide_w
+        assert top + height <= slide_h
+        assert note
+
+    def test_the_note_says_what_moved(self, prs):
+        _, _, _, _, note = fit_to_slide(prs, 20.0, 20.0, 6.0, 4.5)
+        assert "slide" in note.lower()
+
+
+class TestAddChartUsesIt:
+    def test_an_overflowing_chart_is_fitted_and_reported(self, tmp_path):
+        from pptx_design.engine import add_chart
+
+        deck = tmp_path / "d.pptx"
+        p = Presentation()
+        p.slides.add_slide(p.slide_layouts[6])
+        p.save(deck)
+
+        result = add_chart(
+            str(deck),
+            slide_index=0,
+            chart_type="bar",
+            data={"categories": ["A", "B"], "series": {"S": [1, 2]}},
+            title="Off the edge",
+            left=1.0,
+            top=6.0,
+            width=6.0,
+            height=4.5,
+        )
+        assert result["success"] is True
+        assert any("fit" in str(step).lower() for step in result["progress"])
+
+        check = Presentation(str(deck))
+        shape = next(s for s in check.slides[0].shapes if s.has_chart)
+        assert int(shape.top or 0) + int(shape.height or 0) <= int(check.slide_height or 0)
+        assert int(shape.left or 0) + int(shape.width or 0) <= int(check.slide_width or 0)

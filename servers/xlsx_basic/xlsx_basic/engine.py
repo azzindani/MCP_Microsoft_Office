@@ -193,8 +193,13 @@ def read_cell(file_path: str, sheet_name: str, cell_address: str) -> dict[str, A
                 "token_estimate": 20,
             }
 
-        # Load with data_only=True to get evaluated value
-        wb_val = openpyxl.load_workbook(str(path), data_only=True)
+        # read_only is not an optimisation here, it is what keeps the server
+        # alive. Without it openpyxl builds a Python object for every cell in
+        # the file, so reading one cell out of a 16,834 x 16 sheet allocated
+        # ~510 MB against this container's 512 MB limit and killed the process
+        # -- taking all twelve Office sub-servers down with it, since they
+        # share one container. Streaming the same read peaks at 37 MB.
+        wb_val = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
         if sheet_name not in wb_val.sheetnames:
             wb_val.close()
             progress.append(fail(f"Sheet '{sheet_name}' not found"))
@@ -209,8 +214,9 @@ def read_cell(file_path: str, sheet_name: str, cell_address: str) -> dict[str, A
         value = ws_val[addr].value
         wb_val.close()
 
-        # Load without data_only to get formula string
-        wb_form = openpyxl.load_workbook(str(path), data_only=False)
+        # Second pass for the formula string: the cached value and the formula
+        # never come from the same load, so both are needed -- but both stream.
+        wb_form = openpyxl.load_workbook(str(path), read_only=True, data_only=False)
         ws_form = wb_form[sheet_name]
         raw = ws_form[addr].value
         formula = raw if isinstance(raw, str) and raw.startswith("=") else None
@@ -288,8 +294,10 @@ def read_cell_range(file_path: str, sheet_name: str, range_address: str) -> dict
                 "token_estimate": 20,
             }
 
-        # Load both forms for value + formula
-        wb_val = openpyxl.load_workbook(str(path), data_only=True)
+        # Streamed for the same reason as read_cell: this range is capped at 200
+        # cells, but a non-read_only load materialises the whole sheet regardless
+        # of how little of it the caller asked for.
+        wb_val = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
         if sheet_name not in wb_val.sheetnames:
             wb_val.close()
             progress.append(fail(f"Sheet '{sheet_name}' not found"))
@@ -302,7 +310,7 @@ def read_cell_range(file_path: str, sheet_name: str, range_address: str) -> dict
             }
         ws_val = wb_val[sheet_name]
 
-        wb_form = openpyxl.load_workbook(str(path), data_only=False)
+        wb_form = openpyxl.load_workbook(str(path), read_only=True, data_only=False)
         ws_form = wb_form[sheet_name]
 
         data: list[list[dict[str, Any]]] = []
