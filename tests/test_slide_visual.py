@@ -17,6 +17,7 @@ from typing import Any
 
 import pytest
 from pptx import Presentation
+from pptx.util import Inches
 
 from shared.slide_visual import (
     MIN_CONTRAST,
@@ -268,3 +269,97 @@ class TestChartTextFollowsTheSlide:
             title="Split",
         )
         assert result["success"] is True
+
+
+class TestNewShapesDoNotLandOnExistingContent:
+    """add_table and add_chart both default to top=2.0in, which is where a
+    layout puts its body text. A swept deck ended up with bullets, a table and
+    a chart stacked in the same region -- three shapes, none of them readable,
+    and all 24 tools in that phase reported PASS."""
+
+    def _slide_with_text(self, tmp_path, text="Total spend across 16834 rows"):
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        deck = tmp_path / "t.pptx"
+        p = Presentation()
+        slide = p.slides.add_slide(p.slide_layouts[1])  # title + content
+        slide.shapes.title.text = "Spend Overview"
+        slide.placeholders[1].text_frame.text = text
+        p.save(deck)
+        return deck
+
+    def test_a_table_is_pushed_below_the_bullets(self, tmp_path):
+        from pptx_design.engine import add_table
+
+        deck = self._slide_with_text(tmp_path)
+        result = add_table(str(deck), 0, 2, 2, [["a", "b"], ["c", "d"]], top=2.0)
+        assert result["success"] is True
+
+        slide = Presentation(str(deck)).slides[0]
+        table = next(s for s in slide.shapes if s.has_table)
+        body = slide.placeholders[1]
+        # Below where the text is drawn -- not below the placeholder frame,
+        # which is the layout's full body area whether or not it is filled.
+        assert table.top > body.top, "table starts above the body text"
+        assert table.top > Inches(2.0), "table was not moved off the requested position"
+
+    def test_a_chart_is_pushed_below_the_bullets(self, tmp_path):
+        from pptx_design.engine import add_chart
+
+        deck = self._slide_with_text(tmp_path)
+        result = add_chart(str(deck), 0, "bar", {"categories": ["A"], "series": {"S": [1]}}, top=2.0, height=2.0)
+        assert result["success"] is True
+
+        slide = Presentation(str(deck)).slides[0]
+        chart = next(s for s in slide.shapes if s.has_chart)
+        body = slide.placeholders[1]
+        assert chart.top > body.top
+        assert chart.top > Inches(2.0)
+
+    def test_more_text_pushes_the_shape_further_down(self, tmp_path):
+        """The point of measuring the drawn text rather than the frame: a wall
+        of bullets must displace more than a single line does."""
+        from pptx_design.engine import add_table
+
+        short_deck = self._slide_with_text(tmp_path / "s", "One line")
+        long_deck = self._slide_with_text(tmp_path / "l", "\n".join(f"Bullet number {i}" for i in range(8)))
+
+        add_table(str(short_deck), 0, 2, 2, [["a", "b"], ["c", "d"]], top=2.0)
+        add_table(str(long_deck), 0, 2, 2, [["a", "b"], ["c", "d"]], top=2.0)
+
+        short_top = next(s for s in Presentation(str(short_deck)).slides[0].shapes if s.has_table).top
+        long_top = next(s for s in Presentation(str(long_deck)).slides[0].shapes if s.has_table).top
+        assert long_top > short_top, "displacement ignores how much text there is"
+
+    def test_the_move_is_reported(self, tmp_path):
+        from pptx_design.engine import add_table
+
+        deck = self._slide_with_text(tmp_path)
+        result = add_table(str(deck), 0, 2, 2, [["a", "b"], ["c", "d"]], top=2.0)
+        assert any("reposition" in str(s).lower() for s in result["progress"])
+
+    def test_an_empty_placeholder_does_not_push_anything_down(self, tmp_path):
+        """An unfilled layout placeholder renders as nothing. Treating it as
+        content would shove every shape to the bottom of an empty slide."""
+        from pptx_design.engine import add_table
+
+        deck = tmp_path / "e.pptx"
+        p = Presentation()
+        p.slides.add_slide(p.slide_layouts[1])  # placeholders present but empty
+        p.save(deck)
+
+        result = add_table(str(deck), 0, 2, 2, [["a", "b"], ["c", "d"]], top=2.0)
+        assert result["success"] is True
+        table = next(s for s in Presentation(str(deck)).slides[0].shapes if s.has_table)
+        assert table.top == Inches(2.0), "an empty placeholder displaced the table"
+
+    def test_a_blank_slide_keeps_the_requested_position(self, tmp_path):
+        from pptx_design.engine import add_table
+
+        deck = tmp_path / "b.pptx"
+        p = Presentation()
+        p.slides.add_slide(p.slide_layouts[6])  # blank
+        p.save(deck)
+
+        add_table(str(deck), 0, 2, 2, [["a", "b"], ["c", "d"]], top=2.0)
+        table = next(s for s in Presentation(str(deck)).slides[0].shapes if s.has_table)
+        assert table.top == Inches(2.0)

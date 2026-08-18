@@ -167,3 +167,117 @@ def fit_to_slide(
         f"at ({left:.2f}, {top:.2f})."
     )
     return left, top, width, height, note
+
+
+_DEFAULT_BODY_PT = 18.0
+# Rough advance width of a proportional face as a fraction of point size, and
+# the usual line-height multiplier. Only used to estimate how many lines a
+# paragraph wraps to -- being a little out moves a shape by a fraction of an
+# inch, which is far better than the alternative of measuring nothing.
+_CHAR_WIDTH_RATIO = 0.5
+_LINE_SPACING = 1.25
+
+
+def _text_height(shape, width_in: float) -> float:
+    """Estimate the height a text frame actually draws, in inches.
+
+    A placeholder's frame is its *maximum* extent, not its content: the default
+    layout gives the body 4.95in of a 7.5in slide whether it holds one line or
+    twenty. Measuring the frame made a single-line bullet look like it filled
+    the slide, so nothing could ever be placed below it.
+    """
+    frame = shape.text_frame
+    lines = 0
+    for para in frame.paragraphs:
+        text = "".join(run.text for run in para.runs) or ""
+        size_pt = _DEFAULT_BODY_PT
+        for run in para.runs:
+            if run.font.size is not None:
+                size_pt = run.font.size.pt
+                break
+        chars_per_line = max(1, int(width_in * 72 / (size_pt * _CHAR_WIDTH_RATIO)))
+        lines += max(1, -(-len(text) // chars_per_line))  # ceil division
+    drawn = lines * _DEFAULT_BODY_PT * _LINE_SPACING / 72.0
+    # Never claim more than the frame itself allows.
+    return min(drawn, (shape.height or 0) / 914400)
+
+
+def _occupied_bottom(slide, left: float, width: float, margin: float) -> float:
+    """Return the lowest bottom edge, in inches, of content already on the slide.
+
+    Only shapes that overlap the new box horizontally count -- something in a
+    side column should not push a chart down the page. Text shapes are measured
+    by what they draw rather than by their frame, and empty placeholders are
+    skipped entirely: an unfilled layout placeholder renders as nothing, and
+    treating it as content would shove every shape off the bottom of the slide.
+    """
+    bottom = 0.0
+    for shape in slide.shapes:
+        try:
+            s_left = (shape.left or 0) / 914400
+            s_top = (shape.top or 0) / 914400
+            s_width = (shape.width or 0) / 914400
+            s_height = (shape.height or 0) / 914400
+        except (AttributeError, TypeError):
+            continue
+        if s_width <= 0 or s_height <= 0:
+            continue
+
+        if getattr(shape, "has_text_frame", False):
+            if not shape.text_frame.text.strip():
+                continue  # empty placeholder or textbox draws nothing
+            s_height = _text_height(shape, s_width)
+
+        # No horizontal overlap means no collision.
+        if s_left + s_width <= left + margin or s_left >= left + width - margin:
+            continue
+        bottom = max(bottom, s_top + s_height)
+    return bottom
+
+
+def place_below_content(
+    prs,
+    slide,
+    left: float,
+    top: float,
+    width: float,
+    height: float,
+    margin: float = 0.2,
+    gap: float = 0.15,
+) -> tuple[float, float, float, float, str]:
+    """Fit a box to the slide *and* keep it clear of what is already there.
+
+    fit_to_slide only knows about the slide edges, so a chart and a table added
+    to a slide that already had bullet text were all placed at their default
+    top and drawn on top of each other -- three overlapping shapes, none of
+    them readable, and every call reported success. This drops the new box
+    below the existing content when it would collide, shrinking it if the
+    remaining space is tight, and says so.
+    """
+    left, top, width, height, note = fit_to_slide(prs, left, top, width, height, margin)
+
+    occupied = _occupied_bottom(slide, left, width, margin)
+    if occupied <= top:
+        return left, top, width, height, note
+
+    slide_h = prs.slide_height / 914400
+    new_top = occupied + gap
+    available = slide_h - margin - new_top
+
+    if available < 1.0:
+        # Nothing usable left below; leave the caller's position and say so
+        # rather than squeezing an illegible sliver onto the slide.
+        collision = (
+            f"Slide already has content down to {occupied:.2f}in and there is no room below it; "
+            f"the new shape will overlap. Add it to a new slide instead."
+        )
+        return left, top, width, height, f"{note} {collision}".strip()
+
+    new_height = min(height, available)
+    collision = (
+        f"Existing content reaches {occupied:.2f}in, so the box was moved from "
+        f"top {top:.2f}in to {new_top:.2f}in"
+        + (f" and shrunk to {new_height:.2f}in high" if new_height < height else "")
+        + " to avoid overlapping it."
+    )
+    return left, new_top, width, new_height, f"{note} {collision}".strip()

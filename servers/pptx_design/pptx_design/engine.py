@@ -18,7 +18,7 @@ from shared.progress import fail, ok, warn
 from shared.slide_visual import (
     contrast_ratio,
     contrast_warning,
-    fit_to_slide,
+    place_below_content,
     slide_background_hex,
     unreadable_slides,
 )
@@ -393,6 +393,13 @@ def add_table(
         if err:
             return err
 
+        # Default top is 2.0in, which lands squarely on a layout's body text.
+        # A swept deck ended up with bullets, a table and a chart stacked in the
+        # same region -- three shapes, none readable, all reported as success.
+        left, top, width, height, place_note = place_below_content(prs, slide, left, top, width, height)
+        if place_note:
+            progress.append(warn("Table repositioned", place_note))
+
         table_shape = slide.shapes.add_table(
             rows,
             cols,
@@ -506,12 +513,13 @@ def add_chart(
         for series_def in series:
             chart_data.add_series(series_def["name"], series_def["values"])
 
-        # python-pptx places a shape wherever it is told, including past the edge
-        # of the slide. A chart drawn that way loses its lower category labels
-        # and the caller is told nothing, so fit the box and report the move.
-        left, top, width, height, fit_note = fit_to_slide(prs, left, top, width, height)
+        # python-pptx places a shape wherever it is told: past the edge of the
+        # slide, or on top of whatever is already there. A chart drawn that way
+        # loses its lower category labels, or lands on the body text and buries
+        # it. Both happened in swept decks, both reported success.
+        left, top, width, height, fit_note = place_below_content(prs, slide, left, top, width, height)
         if fit_note:
-            progress.append(warn("Chart repositioned to fit the slide", fit_note))
+            progress.append(warn("Chart repositioned", fit_note))
 
         xl_chart_type = CHART_TYPE_MAP[chart_type]
         chart_shape = slide.shapes.add_chart(
