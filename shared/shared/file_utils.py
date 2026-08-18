@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from shared.exchange import (
+    apply_default_mode,
     attach_public_url,
     fetch_url,
     get_inbox_dir,
@@ -21,6 +22,7 @@ from shared.exchange import (
 )
 
 __all__ = [
+    "apply_default_mode",
     "attach_public_url",
     "embed_content",
     "fetch_url",
@@ -226,4 +228,5 @@ def write_mcp_json(path: str, data: dict[str, Any]) -> None:
     ) as tmp:
         tmp.write(content)
         tmp_path = tmp.name
+    apply_default_mode(tmp_path)
     shutil.move(tmp_path, str(p))

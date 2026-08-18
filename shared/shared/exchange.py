@@ -73,6 +73,33 @@ _TYPE_SUFFIXES = {
 }
 
 
+def _umask_default_mode() -> int:
+    """Return the mode a plain open() would create: 0o666 masked by the umask.
+
+    Read once at import, while the process is still single-threaded — reading
+    a umask requires setting it, which is process-wide and would otherwise
+    race any thread creating a file at that instant.
+    """
+    current = os.umask(0o022)
+    os.umask(current)
+    return 0o666 & ~current
+
+
+# Temp-file helpers (mkstemp, NamedTemporaryFile) create 0600 by design, and a
+# rename preserves it. That is wrong for anything written into a *shared*
+# directory: the file server in front of it, and every sibling service, have
+# to be able to read what lands there. Atomic writers apply this instead.
+DEFAULT_FILE_MODE = _umask_default_mode()
+
+
+def apply_default_mode(path: Path | str) -> None:
+    """Relax a temp file's 0600 to what a plain open() would have produced."""
+    try:
+        os.chmod(path, DEFAULT_FILE_MODE)
+    except OSError:
+        pass
+
+
 def _flag(name: str) -> bool:
     """Return True when an env var is set to a truthy string."""
     return os.environ.get(name, "").strip().lower() in _TRUTHY
@@ -229,9 +256,7 @@ def fetch_url(url: str, dest_dir: Path | None = None) -> Path:
     try:
         with os.fdopen(handle, "wb") as stream:
             stream.write(payload)
-        # mkstemp creates 0600 and os.replace keeps it. This directory is a
-        # shared exchange — a file only its writer can read defeats the point.
-        os.chmod(temp_name, 0o644)
+        apply_default_mode(temp_name)
         os.replace(temp_name, target)
     except Exception:
         Path(temp_name).unlink(missing_ok=True)

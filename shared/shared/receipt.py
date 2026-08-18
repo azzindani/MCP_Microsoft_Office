@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from shared.exchange import apply_default_mode
+
 
 def append_receipt(
     file_path: str,
@@ -55,6 +57,7 @@ def append_receipt(
         ) as tmp:
             json.dump(data, tmp, indent=2, ensure_ascii=False)
             tmp_path = tmp.name
+        apply_default_mode(tmp_path)
         shutil.move(tmp_path, str(receipt_path))
 
     except Exception:
