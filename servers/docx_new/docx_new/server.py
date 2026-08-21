@@ -75,7 +75,7 @@ def create_from_sections(
 @mcp.tool()
 def create_from_template(
     template_path: str,
-    substitutions: dict,
+    substitutions: dict = {},  # noqa: B006 -- read-only; engine only iterates it
     output_path: str = "",
     return_content: bool = False,
 ) -> dict:

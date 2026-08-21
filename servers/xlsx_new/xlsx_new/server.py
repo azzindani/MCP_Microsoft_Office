@@ -83,7 +83,7 @@ def create_report(
 @mcp.tool()
 def create_from_template(
     template_path: str,
-    replacements: dict,
+    replacements: dict = {},  # noqa: B006 -- read-only; engine only iterates it
     output_path: str = "",
     return_content: bool = False,
 ) -> dict:
