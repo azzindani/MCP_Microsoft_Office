@@ -6,7 +6,7 @@ from typing import Any
 from shared.file_utils import hint_for_error, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import open_file
-from shared.progress import fail, index_range, ok
+from shared.progress import describe_error, fail, index_range, ok
 from shared.receipt import append_receipt
 from shared.version_control import snapshot
 
@@ -43,7 +43,7 @@ def _wrong_type(path: Path, expected: str, progress: list[dict[str, Any]]) -> di
 def _error(msg: str, hint: str, progress: list[dict[str, Any]], backup: str | None = None) -> dict[str, Any]:
     result: dict[str, Any] = {
         "success": False,
-        "error": msg,
+        "error": describe_error(msg),
         "hint": hint,
         "progress": progress,
         "token_estimate": len(str(progress)) // 4,

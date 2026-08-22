@@ -79,3 +79,21 @@ def index_range(total: int, noun: str) -> str:
     is the next move. Non-empty output is unchanged: "(0-3)".
     """
     return f"(0-{total - 1})" if total > 0 else f"— this file has no {noun}"
+
+
+def describe_error(message: str, fallback: str = "the tool raised an error with no message") -> str:
+    """Never let a failure be reported with an empty `error` field.
+
+    Some exceptions carry nothing to print. python-docx raises
+    UnrecognizedImageError bare, so str(exc) is ""; str(KeyError("")) is the two
+    characters ''. Passing either straight into the response gives the caller
+    `"error": ""`, which reads as a forgotten field rather than a reason, and
+    leaves them nothing to act on. Both have now reached a caller in real
+    sweeps -- add_image on a text file named .png, and a chart tool indexing a
+    column named "" -- so the guard lives in the error constructor rather than
+    being remembered at each raise site.
+    """
+    text = message.strip()
+    if text in ("", "''", '""'):
+        return fallback
+    return message

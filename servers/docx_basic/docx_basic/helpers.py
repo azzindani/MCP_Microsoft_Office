@@ -10,7 +10,7 @@ from shared.address_resolver import AddressError, resolve_docx_address
 from shared.doc_diff import diff_docx
 from shared.file_utils import resolve_path
 from shared.live_edit import notify_reload
-from shared.progress import fail, ok, undo, warn
+from shared.progress import describe_error, fail, ok, undo, warn
 from shared.receipt import append_receipt, read_receipt_log
 from shared.version_control import get_history, restore, snapshot
 
@@ -48,7 +48,7 @@ def _wrong_type(path: Path, expected: str, progress: list) -> dict[str, Any]:
 def _error(msg: str, hint: str, progress: list) -> dict[str, Any]:
     return {
         "success": False,
-        "error": msg,
+        "error": describe_error(msg),
         "hint": hint,
         "progress": progress,
         "token_estimate": 15,

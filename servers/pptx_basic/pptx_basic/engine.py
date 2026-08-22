@@ -8,7 +8,7 @@ from shared.doc_diff import diff_pptx
 from shared.file_utils import hint_for_error, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import open_file
-from shared.progress import fail, index_range, info, ok
+from shared.progress import describe_error, fail, index_range, info, ok
 from shared.receipt import append_receipt
 from shared.slide_text import strip_list_markers
 from shared.version_control import get_history, snapshot
@@ -42,7 +42,7 @@ def _error(msg: str, hint: str, progress: list[dict[str, Any]], backup: str | No
     result: dict[str, Any] = {
         "success": False,
         "progress": progress,
-        "error": msg,
+        "error": describe_error(msg),
         "hint": hint,
         "token_estimate": len(str(progress)) // 4,
     }

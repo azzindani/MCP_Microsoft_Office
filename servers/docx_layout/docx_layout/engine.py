@@ -7,7 +7,7 @@ from typing import Any
 from shared.file_utils import embed_content, hint_for_error, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_pdf_converter, open_file, resolve_output_path
-from shared.progress import fail, index_range, info, ok
+from shared.progress import describe_error, fail, index_range, info, ok
 from shared.receipt import append_receipt
 from shared.version_control import snapshot
 
@@ -41,7 +41,7 @@ def _wrong_type(path: Path, expected: str, progress: list[dict[str, Any]]) -> di
 def _error(msg: str, hint: str, progress: list[dict[str, Any]], backup: str | None = None) -> dict[str, Any]:
     result: dict[str, Any] = {
         "success": False,
-        "error": msg,
+        "error": describe_error(msg),
         "hint": hint,
         "progress": progress,
         "token_estimate": len(str(progress)) // 4,
@@ -371,7 +371,39 @@ def add_image(
 
         para = doc.paragraphs[paragraph_index] if total else doc.add_paragraph()
         run = para.add_run()
-        run.add_picture(str(img_path), width=Inches(width_inches))
+        # python-docx raises UnrecognizedImageError bare, with no message at
+        # all, so str(exc) is "" and the generic handler below returned a
+        # failure whose `error` was an empty string -- under a hint offering to
+        # undo a change that had not happened. The extension check above only
+        # reads the suffix, so a text file named .png reaches here: a sweep
+        # wrote base64 to q2_dot.png without decoding it and got exactly that
+        # blank answer back.
+        try:
+            from docx.image.exceptions import (  # type: ignore[import-untyped]
+                InvalidImageStreamError,
+                UnexpectedEndOfFileError,
+                UnrecognizedImageError,
+            )
+
+            image_errors: tuple[type[BaseException], ...] = (
+                InvalidImageStreamError,
+                UnexpectedEndOfFileError,
+                UnrecognizedImageError,
+            )
+        except ImportError:  # pragma: no cover - defensive
+            image_errors = ()
+
+        try:
+            run.add_picture(str(img_path), width=Inches(width_inches))
+        except image_errors:
+            progress.append(fail("Not a readable image", img_path.name))
+            return _error(
+                f"Not a readable image: {img_path.name}",
+                f"The name ends in {img_path.suffix} but the contents are not a valid image — "
+                "check it is the real file and not a placeholder or undecoded base64 text.",
+                progress,
+                backup,
+            )
         progress.append(
             ok(
                 f"Inserted image into paragraph {paragraph_index}",
