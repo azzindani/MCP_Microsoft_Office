@@ -9,6 +9,7 @@ from pptx import Presentation
 from pptx.chart.data import ChartData
 from pptx.dml.color import RGBColor
 from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION  # type: ignore[attr-defined]
+from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
 from shared.file_utils import embed_content, hint_for_error, resolve_path
@@ -680,6 +681,30 @@ def duplicate_slide(
         # so a copied slide listed its shapes back to front.
         for shape in slide.shapes:
             new_slide.shapes._spTree.append(copy.deepcopy(shape.element))
+
+        # A slide's background lives in <p:bg> on its own <p:cSld>, not in the
+        # shape tree, so copying shapes leaves the duplicate showing the
+        # layout's background instead of the source's. A sweep set every slide
+        # navy, duplicated one, then set all text white -- and the copy came out
+        # white on white. Nothing in the response said the background had been
+        # dropped, because nothing knew.
+        src_bg = slide._element.find(qn("p:cSld")).find(qn("p:bg"))  # type: ignore[union-attr]
+        if src_bg is not None:
+            new_cSld = new_slide._element.find(qn("p:cSld"))
+            existing = new_cSld.find(qn("p:bg"))  # type: ignore[union-attr]
+            if existing is not None:
+                new_cSld.remove(existing)  # type: ignore[union-attr]
+            new_cSld.insert(0, copy.deepcopy(src_bg))  # type: ignore[union-attr]
+
+        # Speaker notes are a separate part with its own relationship, so they
+        # are not reached by copying the shape tree either -- the duplicate came
+        # back with none. The text is what a note carries; cloning the whole
+        # notesSlide part to preserve its run formatting would mean rebuilding
+        # the package relationship by hand for a gain no one has asked for.
+        if slide.has_notes_slide:
+            notes = slide.notes_slide.notes_text_frame.text
+            if notes:
+                new_slide.notes_slide.notes_text_frame.text = notes
 
         new_idx = len(prs.slides) - 1
 
