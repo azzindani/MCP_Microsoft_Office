@@ -347,7 +347,9 @@ def create_from_template(
             "template": str(src),
             "output": str(dst),
             "output_name": dst.name,
-            "cells_replaced": replaced_count,
+            # Named to match docx and pptx: reading one tier's response must not
+            # KeyError on another's. The cell-level detail is in progress.
+            "substitutions_applied": replaced_count,
             "progress": progress,
         }
         embed_content(result, dst, return_content)

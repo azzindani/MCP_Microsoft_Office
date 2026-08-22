@@ -69,6 +69,22 @@ class TestTheMappingIsOptionalEverywhere:
             required = [name for name, p in sig.parameters.items() if p.default is inspect.Parameter.empty]
             assert required == ["template_path"], f"{module.__name__} demands more than a template"
 
+    def test_all_three_report_the_count_the_same_way(self):
+        """xlsx returned cells_replaced while docx and pptx returned
+        substitutions_applied, so code reading one tier's response raised
+        KeyError on another. Caught by a re-test after the parameter rename --
+        the request was consistent by then, the response was not."""
+        import inspect
+
+        from docx_new import engine as docx_engine
+        from pptx_new import engine as pptx_engine
+        from xlsx_new import engine as xlsx_engine
+
+        for mod in (docx_engine, xlsx_engine, pptx_engine):
+            src = inspect.getsource(mod.create_from_template)
+            assert '"substitutions_applied"' in src, f"{mod.__name__} names the count something else"
+            assert '"cells_replaced"' not in src
+
     def test_all_three_call_the_mapping_the_same_thing(self):
         """A caller who learns this tool on one tier must not be wrong on the
         next two. It used to be substitutions / replacements / nothing."""

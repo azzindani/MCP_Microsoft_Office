@@ -126,7 +126,7 @@ def test_create_from_template_replaces_matching_cell_values(tmp_path: Path) -> N
     out = tmp_path / "filled.xlsx"
     result = create_from_template(str(BUDGET_SIMPLE), str(out), {"North": "N. Region"}, open_after=False)
     assert result["success"] is True
-    assert result["cells_replaced"] == 1
+    assert result["substitutions_applied"] == 1
 
     wb = openpyxl.load_workbook(str(out))
     ws = wb["Q3 Revenue"]
