@@ -638,6 +638,40 @@ def add_chart(
         }
 
 
+_RELS_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+
+
+def _relink(element: Any, src_part: Any, dst_part: Any) -> None:
+    """Re-point a copied shape's relationship ids at the new slide.
+
+    A chart or a picture is not self-contained XML: the <p:graphicFrame> or
+    <p:pic> holds an r:id / r:embed pointing at a relationship on the slide
+    *part*. Deep-copying the element copies the id and leaves the relationship
+    behind, so the duplicate ended up with a shape that read_slide still calls a
+    chart -- has_chart is True -- while touching it raised "no relationship with
+    key 'rId2'" and PowerPoint drew nothing. A sweep duplicated a slide holding
+    a chart and a table; the copy rendered the table and an empty space.
+
+    The relationship is remade against the destination, pointing at the same
+    part. Sharing rather than cloning is deliberate: PowerPoint does the same
+    for a repeated image, and nothing in this server edits an existing chart in
+    place -- add_chart always builds a new one -- so there is no way for an edit
+    to one copy to surprise the other.
+    """
+    for node in element.iter():
+        for key, value in list(node.attrib.items()):
+            if not key.startswith(f"{{{_RELS_NS}}}") or not value:
+                continue
+            try:
+                rel = src_part.rels[value]
+            except KeyError:  # pragma: no cover - a source that is already broken
+                continue
+            if rel.is_external:
+                node.set(key, dst_part.relate_to(rel.target_ref, rel.reltype, is_external=True))
+            else:
+                node.set(key, dst_part.relate_to(rel.target_part, rel.reltype))
+
+
 def duplicate_slide(
     file_path: str,
     slide_index: int,
@@ -680,7 +714,9 @@ def duplicate_slide(
         # Inserting each at a fixed index put every new shape ahead of the last,
         # so a copied slide listed its shapes back to front.
         for shape in slide.shapes:
-            new_slide.shapes._spTree.append(copy.deepcopy(shape.element))
+            element = copy.deepcopy(shape.element)
+            _relink(element, slide.part, new_slide.part)
+            new_slide.shapes._spTree.append(element)
 
         # A slide's background lives in <p:bg> on its own <p:cSld>, not in the
         # shape tree, so copying shapes leaves the duplicate showing the

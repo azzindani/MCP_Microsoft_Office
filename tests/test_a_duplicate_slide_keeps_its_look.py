@@ -18,13 +18,26 @@ relationship by hand for a gain nobody has asked for.
 
 from __future__ import annotations
 
+import struct
+import zlib
 from pathlib import Path
 
 import pytest
 from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.oxml.ns import qn
 
-from pptx_design.engine import duplicate_slide, set_background  # type: ignore[reportMissingImports]
+from pptx_design.engine import (  # type: ignore[reportMissingImports]
+    add_chart,
+    add_image_to_all_slides,
+    duplicate_slide,
+    set_background,
+)
+
+
+def _png_chunk(tag: bytes, payload: bytes) -> bytes:
+    return struct.pack(">I", len(payload)) + tag + payload + struct.pack(">I", zlib.crc32(tag + payload) & 0xFFFFFFFF)
+
 
 NAVY = "1F3864"
 TITLE = "Where the money went"
@@ -101,6 +114,77 @@ class TestTheNotesTravelWithTheCopy:
         prs.save(str(path))
         assert duplicate_slide(str(path), 0)["success"] is True
         assert notes_of(str(path), 1) in (None, "")
+
+
+class TestAChartTravelsWithTheCopy:
+    """The copy claimed to hold a chart and could not draw one.
+
+    A chart is not self-contained XML: the <p:graphicFrame> holds an r:id into a
+    relationship on the slide part. Deep-copying the element copied the id and
+    left the relationship behind, so read_slide reported a chart -- has_chart
+    was True -- while reading it raised "no relationship with key 'rId2'" and
+    LibreOffice rendered an empty space. A sweep duplicated a slide holding a
+    chart and a table and got back the table alone.
+    """
+
+    @pytest.fixture()
+    def charted(self, tmp_path: Path) -> str:
+        path = tmp_path / "chart.pptx"
+        prs = Presentation()
+        prs.slides.add_slide(prs.slide_layouts[5])
+        prs.save(str(path))
+        r = add_chart(
+            str(path),
+            0,
+            "bar",
+            {"categories": ["Google Ads", "Facebook Ads"], "series": {"Spend": [1939000, 564100]}},
+            title="Spend by platform",
+        )
+        assert r["success"] is True, r.get("error")
+        return str(path)
+
+    def test_the_copy_still_has_a_chart_shape(self, charted: str):
+        assert duplicate_slide(charted, 0)["success"] is True
+        copy_shapes = Presentation(charted).slides[1].shapes
+        assert any(s.has_chart for s in copy_shapes)
+
+    def test_the_chart_can_actually_be_read(self, charted: str):
+        duplicate_slide(charted, 0)
+        chart = next(s.chart for s in Presentation(charted).slides[1].shapes if s.has_chart)  # type: ignore[reportAttributeAccessIssue]
+        assert [s.name for s in chart.plots[0].series] == ["Spend"]
+
+    def test_it_carries_the_same_numbers(self, charted: str):
+        duplicate_slide(charted, 0)
+        prs = Presentation(charted)
+        got = []
+        for index in (0, 1):
+            chart = next(s.chart for s in prs.slides[index].shapes if s.has_chart)  # type: ignore[reportAttributeAccessIssue]
+            got.append(list(chart.plots[0].series[0].values))
+        assert got[0] == got[1] == [1939000, 564100], got
+
+
+class TestAnImageTravelsWithTheCopy:
+    @pytest.fixture()
+    def with_image(self, deck: str, tmp_path: Path) -> str:
+        png = tmp_path / "logo.png"
+        png.write_bytes(
+            b"\x89PNG\r\n\x1a\n"
+            + _png_chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
+            + _png_chunk(b"IDAT", zlib.compress(b"\x00\xff\xff\xff"))
+            + _png_chunk(b"IEND", b"")
+        )
+        assert add_image_to_all_slides(deck, str(png))["success"] is True
+        return deck
+
+    def test_the_copy_still_shows_it(self, with_image: str):
+        duplicate_slide(with_image, 0)
+        pictures = [s for s in Presentation(with_image).slides[1].shapes if s.shape_type == MSO_SHAPE_TYPE.PICTURE]
+        assert pictures, [s.name for s in Presentation(with_image).slides[1].shapes]
+
+    def test_its_bytes_are_reachable(self, with_image: str):
+        duplicate_slide(with_image, 0)
+        picture = next(s for s in Presentation(with_image).slides[1].shapes if s.shape_type == MSO_SHAPE_TYPE.PICTURE)
+        assert len(picture.image.blob) > 0  # type: ignore[reportAttributeAccessIssue]
 
 
 class TestWhatWasAlreadyRightStaysRight:
