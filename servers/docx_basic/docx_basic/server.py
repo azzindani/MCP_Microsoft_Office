@@ -61,7 +61,7 @@ def get_document_index(file_path: str) -> dict:
 
 @mcp.tool()
 def fetch_section(file_path: str, address: str) -> dict:
-    """Fetch content of addressed section or paragraph only."""
+    """Fetch one addressed section or paragraph. address: '§1' or '§1.p3'."""
     return engine.fetch_section(file_path, address)
 
 

@@ -179,7 +179,15 @@ def fetch_section_content(doc: Any, address: str) -> dict[str, Any]:
     # Sectioned document
     section_match = re.match(r"^§(\d+)$", address)
     if not section_match:
-        raise AddressError(f"Invalid section address: '{address}'")
+        # The sibling resolver above already names the notation on a bad
+        # address; this one just said the address was invalid. A section number
+        # is written with a section sign -- not a character anyone types by
+        # accident, and not one a caller can guess: '1', 'p1', 'section:1' and
+        # 'Introduction' all arrive here and all got the same bare sentence.
+        raise AddressError(
+            f"Invalid section address: '{address}'. Use §N for a section, e.g. '§1', "
+            "or §N.pM for a paragraph inside one, e.g. '§1.p3'."
+        )
 
     sections = index_data["sections"]
     section_num = int(section_match.group(1))
