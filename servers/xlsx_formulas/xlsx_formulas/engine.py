@@ -11,7 +11,7 @@ from openpyxl.utils import get_column_letter, range_boundaries
 from openpyxl.workbook.defined_name import DefinedName
 from openpyxl.worksheet.datavalidation import DataValidation
 
-from shared.file_utils import hint_for_error, resolve_path
+from shared.file_utils import hint_for_error, resolve_path, sheet_names_hint
 from shared.live_edit import notify_reload
 from shared.platform_utils import open_file
 from shared.progress import fail, ok, warn
@@ -82,11 +82,12 @@ def _check_sheet(
 ) -> tuple[Any, dict[str, Any] | None]:
     """Return (ws, None) or (None, error_dict) if sheet missing."""
     if sheet_name not in wb.sheetnames:
+        available_sheets = list(wb.sheetnames)
         progress.append(fail(f"Sheet '{sheet_name}' not found"))
         return None, {
             "success": False,
             "error": f"Sheet '{sheet_name}' not found",
-            "hint": "Use list_sheets to get available sheet names.",
+            "hint": sheet_names_hint(available_sheets),
             "backup": backup,
             "progress": progress,
             "token_estimate": 15,
@@ -203,11 +204,12 @@ def set_named_range(
         progress.append(ok("Snapshot saved", Path(backup).name))
 
         if sheet_name not in wb.sheetnames:
+            available_sheets = list(wb.sheetnames)
             progress.append(fail(f"Sheet '{sheet_name}' not found"))
             return {
                 "success": False,
                 "error": f"Sheet '{sheet_name}' not found",
-                "hint": "Use list_sheets to get available sheet names.",
+                "hint": sheet_names_hint(available_sheets),
                 "backup": backup,
                 "progress": progress,
                 "token_estimate": 15,
@@ -801,13 +803,14 @@ def convert_to_values(
         wb_values = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
 
         if sheet_name not in wb.sheetnames:
+            available_sheets = list(wb.sheetnames)
             progress.append(fail(f"Sheet '{sheet_name}' not found"))
             wb.close()
             wb_values.close()
             return {
                 "success": False,
                 "error": f"Sheet '{sheet_name}' not found",
-                "hint": "Use list_sheets to get available sheet names.",
+                "hint": sheet_names_hint(available_sheets),
                 "progress": progress,
                 "token_estimate": 15,
             }

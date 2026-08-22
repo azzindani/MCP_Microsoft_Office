@@ -100,9 +100,13 @@ class TestReadsStillReturnTheRightThing:
         assert all(len(row) == 2 for row in result["data"])
 
     def test_a_missing_sheet_still_reports_cleanly(self, workbook):
+        # The hint used to point at list_sheets; it now spends the names the
+        # already-open workbook has, so recovery is one call instead of two.
+        real = openpyxl.load_workbook(workbook).sheetnames
         result = read_cell(str(workbook), "NoSuchSheet", "A1")
         assert result["success"] is False
-        assert "list_sheets" in result["hint"]
+        assert "NoSuchSheet" in result["error"]
+        assert all(name in result["hint"] for name in real), result["hint"]
 
 
 class TestConvertToValuesDoesNotDoubleTheMemory:

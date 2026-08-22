@@ -34,6 +34,7 @@ __all__ = [
     "read_mcp_json",
     "resolve_path",
     "safe_copy",
+    "sheet_names_hint",
     "url_fetch_enabled",
     "write_mcp_json",
 ]
@@ -142,6 +143,26 @@ def hint_for_error(e: Exception, path: Path | None = None) -> str:
         name = path.name if path else "the file"
         return f"'{name}' is open in Word, Excel, or PowerPoint. Close it and try again."
     return "Use restore_version to undo if a snapshot was taken."
+
+
+# Every "Sheet 'X' not found" in the xlsx servers answered "Use list_sheets to
+# get available sheet names." -- a second call to learn something the workbook
+# already open in front of it knows. Every other server in the fleet names the
+# alternatives inline (read_column_stats lists the columns, fs_write lists the
+# valid ops), so a caller that guessed a sheet name wrong spends one round trip
+# rather than two.
+_SHEET_HINT_LIMIT = 12
+
+
+def sheet_names_hint(sheet_names: list[str]) -> str:
+    """Hint naming the sheets that exist. Read sheetnames before closing the wb."""
+    if not sheet_names:
+        return "The workbook has no sheets. Use add_sheet to create one."
+    shown = ", ".join(sheet_names[:_SHEET_HINT_LIMIT])
+    extra = len(sheet_names) - _SHEET_HINT_LIMIT
+    if extra > 0:
+        return f"Available sheets: {shown} (+{extra} more). Use list_sheets for the full list."
+    return f"Available sheets: {shown}"
 
 
 # mimetypes.guess_type() depends on the OS's registered MIME db (registry on

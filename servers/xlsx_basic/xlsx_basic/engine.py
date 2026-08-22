@@ -10,7 +10,7 @@ from typing import Any
 import openpyxl
 from openpyxl.utils import column_index_from_string, get_column_letter, range_boundaries
 
-from shared.file_utils import hint_for_error, resolve_path
+from shared.file_utils import hint_for_error, resolve_path, sheet_names_hint
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_max_cells, get_max_search_results, open_file
 from shared.progress import fail, ok, warn
@@ -121,12 +121,13 @@ def get_sheet_summary(file_path: str, sheet_name: str) -> dict[str, Any]:
 
         wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
         if sheet_name not in wb.sheetnames:
+            available_sheets = list(wb.sheetnames)
             wb.close()
             progress.append(fail(f"Sheet '{sheet_name}' not found"))
             return {
                 "success": False,
                 "error": f"Sheet '{sheet_name}' not found",
-                "hint": "Use list_sheets to get available sheet names.",
+                "hint": sheet_names_hint(available_sheets),
                 "progress": progress,
                 "token_estimate": 15,
             }
@@ -220,12 +221,13 @@ def read_cell(file_path: str, sheet_name: str, cell_address: str) -> dict[str, A
         # share one container. Streaming the same read peaks at 37 MB.
         wb_val = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
         if sheet_name not in wb_val.sheetnames:
+            available_sheets = list(wb_val.sheetnames)
             wb_val.close()
             progress.append(fail(f"Sheet '{sheet_name}' not found"))
             return {
                 "success": False,
                 "error": f"Sheet '{sheet_name}' not found",
-                "hint": "Use list_sheets to get available sheet names.",
+                "hint": sheet_names_hint(available_sheets),
                 "progress": progress,
                 "token_estimate": 15,
             }
@@ -318,12 +320,13 @@ def read_cell_range(file_path: str, sheet_name: str, range_address: str) -> dict
         # of how little of it the caller asked for.
         wb_val = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
         if sheet_name not in wb_val.sheetnames:
+            available_sheets = list(wb_val.sheetnames)
             wb_val.close()
             progress.append(fail(f"Sheet '{sheet_name}' not found"))
             return {
                 "success": False,
                 "error": f"Sheet '{sheet_name}' not found",
-                "hint": "Use list_sheets to get available sheet names.",
+                "hint": sheet_names_hint(available_sheets),
                 "progress": progress,
                 "token_estimate": 15,
             }
@@ -411,12 +414,13 @@ def search_cells(
 
         wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
         if sheet_name not in wb.sheetnames:
+            available_sheets = list(wb.sheetnames)
             wb.close()
             progress.append(fail(f"Sheet '{sheet_name}' not found"))
             return {
                 "success": False,
                 "error": f"Sheet '{sheet_name}' not found",
-                "hint": "Use list_sheets to get available sheet names.",
+                "hint": sheet_names_hint(available_sheets),
                 "progress": progress,
                 "token_estimate": 15,
             }
@@ -504,11 +508,12 @@ def set_cell(
 
         wb = openpyxl.load_workbook(str(path))
         if sheet_name not in wb.sheetnames:
+            available_sheets = list(wb.sheetnames)
             progress.append(fail(f"Sheet '{sheet_name}' not found"))
             return {
                 "success": False,
                 "error": f"Sheet '{sheet_name}' not found",
-                "hint": "Use list_sheets to get available sheet names.",
+                "hint": sheet_names_hint(available_sheets),
                 "backup": backup,
                 "progress": progress,
                 "token_estimate": 15,
@@ -584,11 +589,12 @@ def set_range(
 
         wb = openpyxl.load_workbook(str(path))
         if sheet_name not in wb.sheetnames:
+            available_sheets = list(wb.sheetnames)
             progress.append(fail(f"Sheet '{sheet_name}' not found"))
             return {
                 "success": False,
                 "error": f"Sheet '{sheet_name}' not found",
-                "hint": "Use list_sheets to get available sheet names.",
+                "hint": sheet_names_hint(available_sheets),
                 "backup": backup,
                 "progress": progress,
                 "token_estimate": 15,
@@ -663,11 +669,12 @@ def insert_row(file_path: str, sheet_name: str, row_index: int, open_after: bool
 
         wb = openpyxl.load_workbook(str(path))
         if sheet_name not in wb.sheetnames:
+            available_sheets = list(wb.sheetnames)
             progress.append(fail(f"Sheet '{sheet_name}' not found"))
             return {
                 "success": False,
                 "error": f"Sheet '{sheet_name}' not found",
-                "hint": "Use list_sheets to get available sheet names.",
+                "hint": sheet_names_hint(available_sheets),
                 "backup": backup,
                 "progress": progress,
                 "token_estimate": 15,
@@ -725,11 +732,12 @@ def delete_row(file_path: str, sheet_name: str, row_index: int, open_after: bool
 
         wb = openpyxl.load_workbook(str(path))
         if sheet_name not in wb.sheetnames:
+            available_sheets = list(wb.sheetnames)
             progress.append(fail(f"Sheet '{sheet_name}' not found"))
             return {
                 "success": False,
                 "error": f"Sheet '{sheet_name}' not found",
-                "hint": "Use list_sheets to get available sheet names.",
+                "hint": sheet_names_hint(available_sheets),
                 "backup": backup,
                 "progress": progress,
                 "token_estimate": 15,

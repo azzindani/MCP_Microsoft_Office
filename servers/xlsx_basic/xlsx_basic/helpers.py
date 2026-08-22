@@ -10,7 +10,7 @@ from typing import Any
 import openpyxl
 from openpyxl.utils import column_index_from_string, get_column_letter
 
-from shared.file_utils import hint_for_error, resolve_path
+from shared.file_utils import hint_for_error, resolve_path, sheet_names_hint
 from shared.live_edit import notify_reload
 from shared.platform_utils import open_file
 from shared.progress import fail, info, ok
@@ -99,11 +99,12 @@ def sort_sheet(
 
         wb = openpyxl.load_workbook(str(path))
         if sheet_name not in wb.sheetnames:
+            available_sheets = list(wb.sheetnames)
             progress.append(fail(f"Sheet '{sheet_name}' not found"))
             return {
                 "success": False,
                 "error": f"Sheet '{sheet_name}' not found",
-                "hint": "Use list_sheets to get available sheet names.",
+                "hint": sheet_names_hint(available_sheets),
                 "backup": backup,
                 "progress": progress,
                 "token_estimate": 15,
@@ -212,11 +213,12 @@ def rename_sheet(
 
         wb = openpyxl.load_workbook(str(path))
         if old_name not in wb.sheetnames:
+            available_sheets = list(wb.sheetnames)
             progress.append(fail(f"Sheet '{old_name}' not found"))
             return {
                 "success": False,
                 "error": f"Sheet '{old_name}' not found",
-                "hint": "Use list_sheets to get available sheet names.",
+                "hint": sheet_names_hint(available_sheets),
                 "backup": backup,
                 "progress": progress,
                 "token_estimate": 15,
@@ -297,12 +299,13 @@ def find_duplicates(
 
         wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
         if sheet_name not in wb.sheetnames:
+            available_sheets = list(wb.sheetnames)
             wb.close()
             progress.append(fail(f"Sheet '{sheet_name}' not found"))
             return {
                 "success": False,
                 "error": f"Sheet '{sheet_name}' not found",
-                "hint": "Use list_sheets to get available sheet names.",
+                "hint": sheet_names_hint(available_sheets),
                 "progress": progress,
                 "token_estimate": 15,
             }
@@ -394,11 +397,12 @@ def copy_sheet(
 
         wb = openpyxl.load_workbook(str(path))
         if source_sheet not in wb.sheetnames:
+            available_sheets = list(wb.sheetnames)
             progress.append(fail(f"Sheet '{source_sheet}' not found"))
             return {
                 "success": False,
                 "error": f"Sheet '{source_sheet}' not found",
-                "hint": "Use list_sheets to get available sheet names.",
+                "hint": sheet_names_hint(available_sheets),
                 "backup": backup,
                 "progress": progress,
                 "token_estimate": 15,
