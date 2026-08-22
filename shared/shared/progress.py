@@ -66,3 +66,16 @@ def format_progress(steps: list[dict[str, Any]]) -> str:
             line += f" ({s['detail']})"
         lines.append(line)
     return "\n".join(lines)
+
+
+def index_range(total: int, noun: str) -> str:
+    """Describe the valid index range, or say the collection is empty.
+
+    Twenty-seven call sites hand-built this as f"(0-{total - 1})", which reads
+    "(0--1)" when there is nothing to index. A coverage sweep hit an empty
+    document and got "Table index 0 out of range (0--1)" from four tools in a
+    row; the caller cannot tell from that whether it picked a bad index or the
+    document simply has no tables, so it has no way to work out that add_table()
+    is the next move. Non-empty output is unchanged: "(0-3)".
+    """
+    return f"(0-{total - 1})" if total > 0 else f"— this file has no {noun}"

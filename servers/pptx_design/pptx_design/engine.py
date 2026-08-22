@@ -14,7 +14,7 @@ from pptx.util import Inches, Pt
 from shared.file_utils import embed_content, hint_for_error, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_pdf_converter, open_file, resolve_output_path
-from shared.progress import fail, ok, warn
+from shared.progress import fail, index_range, ok, warn
 from shared.slide_visual import (
     NoRoomOnSlide,
     contrast_ratio,
@@ -74,7 +74,7 @@ def _check_slide(
         progress.append(fail(f"Slide index {slide_index} out of range", f"Presentation has {count} slide(s)"))
         return None, {
             "success": False,
-            "error": f"slide_index {slide_index} out of range (0-{count - 1})",
+            "error": f"slide_index {slide_index} out of range {index_range(count, 'slides')}",
             "hint": "Use read_presentation to get current slide count.",
             "backup": backup,
             "progress": progress,

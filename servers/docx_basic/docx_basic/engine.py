@@ -15,7 +15,7 @@ from shared.file_utils import hint_for_error, resolve_path
 from shared.handover import make_context, make_handover
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_max_paragraphs, get_max_search_results, open_file
-from shared.progress import fail, info, ok, warn
+from shared.progress import fail, index_range, info, ok, warn
 from shared.version_control import snapshot
 
 from .helpers import (
@@ -313,7 +313,7 @@ def read_paragraph(file_path: str, index: int) -> dict[str, Any]:
             progress.append(fail(f"Index {index} out of range"))
             return {
                 "success": False,
-                "error": f"paragraph_index {index} out of range (0-{total - 1})",
+                "error": f"paragraph_index {index} out of range {index_range(total, 'items')}",
                 "hint": "Use get_document_outline to see valid paragraph indices.",
                 "progress": progress,
                 "token_estimate": 20,
@@ -599,7 +599,7 @@ def insert_paragraph(
             progress.append(fail(f"Index {after_index} out of range"))
             return {
                 "success": False,
-                "error": f"paragraph_index {after_index} out of range (0-{total - 1})",
+                "error": f"paragraph_index {after_index} out of range {index_range(total, 'items')}",
                 "hint": "Use read_document to get current paragraph count.",
                 "progress": progress,
                 "token_estimate": 15,
@@ -716,7 +716,7 @@ def delete_paragraph(
             progress.append(fail(f"Index {target_idx} out of range"))
             return {
                 "success": False,
-                "error": f"paragraph_index {target_idx} out of range (0-{total - 1})",
+                "error": f"paragraph_index {target_idx} out of range {index_range(total, 'items')}",
                 "hint": "Use read_document to get current paragraph count.",
                 "progress": progress,
                 "token_estimate": 15,

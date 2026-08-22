@@ -6,7 +6,7 @@ from typing import Any
 from shared.file_utils import hint_for_error, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import open_file
-from shared.progress import fail, ok
+from shared.progress import fail, index_range, ok
 from shared.receipt import append_receipt
 from shared.version_control import snapshot
 
@@ -143,8 +143,8 @@ def read_table(file_path: str, table_index: int) -> dict[str, Any]:
                 )
             )
             return _error(
-                f"Table index {table_index} out of range (0-{len(tables) - 1})",
-                "Use list_tables to see available tables.",
+                f"Table index {table_index} out of range {index_range(len(tables), 'tables')}",
+                "Add one with add_table() first." if not tables else "Use list_tables to see available tables.",
                 progress,
             )
 
@@ -263,8 +263,8 @@ def read_table_row(file_path: str, table_index: int, row: int) -> dict[str, Any]
         if table_index < 0 or table_index >= len(tables):
             progress.append(fail(f"Table index {table_index} out of range"))
             return _error(
-                f"Table index {table_index} out of range (0-{len(tables) - 1})",
-                "Use list_tables to see available tables.",
+                f"Table index {table_index} out of range {index_range(len(tables), 'tables')}",
+                "Add one with add_table() first." if not tables else "Use list_tables to see available tables.",
                 progress,
             )
 
@@ -274,7 +274,7 @@ def read_table_row(file_path: str, table_index: int, row: int) -> dict[str, Any]
         if row < 0 or row >= rows:
             progress.append(fail(f"Row {row} out of range"))
             return _error(
-                f"Row {row} out of range (0-{rows - 1})",
+                f"Row {row} out of range {index_range(rows, 'rows')}",
                 "Use read_table to see the full table structure.",
                 progress,
             )
@@ -322,8 +322,8 @@ def set_cell(
         if table_index < 0 or table_index >= len(tables):
             progress.append(fail(f"Table index {table_index} out of range"))
             return _error(
-                f"Table index {table_index} out of range (0-{len(tables) - 1})",
-                "Use list_tables to see available tables.",
+                f"Table index {table_index} out of range {index_range(len(tables), 'tables')}",
+                "Add one with add_table() first." if not tables else "Use list_tables to see available tables.",
                 progress,
             )
 
@@ -331,16 +331,16 @@ def set_cell(
         rows, cols = _table_dims(tbl)
 
         if row < 0 or row >= rows:
-            progress.append(fail(f"Row {row} out of range (0-{rows - 1})"))
+            progress.append(fail(f"Row {row} out of range {index_range(rows, 'rows')}"))
             return _error(
-                f"Row index {row} out of range (0-{rows - 1})",
+                f"Row index {row} out of range {index_range(rows, 'rows')}",
                 "Use read_table to see the full table structure.",
                 progress,
             )
         if col < 0 or col >= cols:
-            progress.append(fail(f"Col {col} out of range (0-{cols - 1})"))
+            progress.append(fail(f"Col {col} out of range {index_range(cols, 'columns')}"))
             return _error(
-                f"Col index {col} out of range (0-{cols - 1})",
+                f"Col index {col} out of range {index_range(cols, 'columns')}",
                 "Use read_table to see the full table structure.",
                 progress,
             )
@@ -413,8 +413,8 @@ def add_row(file_path: str, table_index: int, data: list[str], open_after: bool 
         if table_index < 0 or table_index >= len(tables):
             progress.append(fail(f"Table index {table_index} out of range"))
             return _error(
-                f"Table index {table_index} out of range (0-{len(tables) - 1})",
-                "Use list_tables to see available tables.",
+                f"Table index {table_index} out of range {index_range(len(tables), 'tables')}",
+                "Add one with add_table() first." if not tables else "Use list_tables to see available tables.",
                 progress,
             )
 
@@ -495,8 +495,8 @@ def delete_row(file_path: str, table_index: int, row: int, open_after: bool = Fa
         if table_index < 0 or table_index >= len(tables):
             progress.append(fail(f"Table index {table_index} out of range"))
             return _error(
-                f"Table index {table_index} out of range (0-{len(tables) - 1})",
-                "Use list_tables to see available tables.",
+                f"Table index {table_index} out of range {index_range(len(tables), 'tables')}",
+                "Add one with add_table() first." if not tables else "Use list_tables to see available tables.",
                 progress,
             )
 
@@ -504,9 +504,9 @@ def delete_row(file_path: str, table_index: int, row: int, open_after: bool = Fa
         rows, cols = _table_dims(tbl)
 
         if row < 0 or row >= rows:
-            progress.append(fail(f"Row {row} out of range (0-{rows - 1})"))
+            progress.append(fail(f"Row {row} out of range {index_range(rows, 'rows')}"))
             return _error(
-                f"Row index {row} out of range (0-{rows - 1})",
+                f"Row index {row} out of range {index_range(rows, 'rows')}",
                 "Use read_table to see the full table structure.",
                 progress,
             )
@@ -596,7 +596,7 @@ def add_table(
         if after_paragraph_index < 0 or after_paragraph_index >= total_paras:
             progress.append(fail(f"Paragraph index {after_paragraph_index} out of range"))
             return _error(
-                f"Paragraph index {after_paragraph_index} out of range (0-{total_paras - 1})",
+                f"Paragraph index {after_paragraph_index} out of range {index_range(total_paras, 'paragraphs')}",
                 "Use read_document to see paragraph indices.",
                 progress,
             )
@@ -686,8 +686,8 @@ def delete_table(file_path: str, table_index: int, open_after: bool = False) -> 
         if table_index < 0 or table_index >= len(tables):
             progress.append(fail(f"Table index {table_index} out of range"))
             return _error(
-                f"Table index {table_index} out of range (0-{len(tables) - 1})",
-                "Use list_tables to see available tables.",
+                f"Table index {table_index} out of range {index_range(len(tables), 'tables')}",
+                "Add one with add_table() first." if not tables else "Use list_tables to see available tables.",
                 progress,
             )
 

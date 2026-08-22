@@ -12,7 +12,7 @@ from openpyxl.utils import column_index_from_string
 from shared.file_utils import hint_for_error, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import open_file
-from shared.progress import fail, ok
+from shared.progress import fail, index_range, ok
 from shared.version_control import snapshot
 
 # ---------------------------------------------------------------------------
@@ -235,7 +235,7 @@ def delete_chart(
             progress.append(fail(f"Chart index {chart_index} out of range", f"Sheet has {len(charts)} chart(s)"))
             return {
                 "success": False,
-                "error": f"chart_index {chart_index} out of range (0-{len(charts) - 1})",
+                "error": f"chart_index {chart_index} out of range {index_range(len(charts), 'charts')}",
                 "hint": "Use add_chart to see chart indices.",
                 "backup": backup,
                 "progress": progress,
@@ -305,7 +305,7 @@ def update_chart(
             progress.append(fail(f"Chart index {chart_index} out of range", f"Sheet has {len(charts)} chart(s)"))
             return {
                 "success": False,
-                "error": f"chart_index {chart_index} out of range (0-{len(charts) - 1})",
+                "error": f"chart_index {chart_index} out of range {index_range(len(charts), 'charts')}",
                 "hint": "Use add_chart to see chart indices.",
                 "backup": backup,
                 "progress": progress,

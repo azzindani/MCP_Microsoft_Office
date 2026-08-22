@@ -7,7 +7,7 @@ from typing import Any
 from shared.file_utils import embed_content, hint_for_error, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_pdf_converter, open_file, resolve_output_path
-from shared.progress import fail, info, ok
+from shared.progress import fail, index_range, info, ok
 from shared.receipt import append_receipt
 from shared.version_control import snapshot
 
@@ -54,7 +54,7 @@ def _error(msg: str, hint: str, progress: list[dict[str, Any]], backup: str | No
 def _out_of_range(idx: int, total: int, progress: list[dict[str, Any]], backup: str | None = None) -> dict[str, Any]:
     progress.append(fail(f"Paragraph index {idx} out of range", f"0-{total - 1}"))
     return _error(
-        f"paragraph_index {idx} out of range (0-{total - 1})",
+        f"paragraph_index {idx} out of range {index_range(total, 'paragraphs')}",
         "Use read_document to get current paragraph count.",
         progress,
         backup,

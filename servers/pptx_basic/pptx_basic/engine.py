@@ -8,7 +8,7 @@ from shared.doc_diff import diff_pptx
 from shared.file_utils import hint_for_error, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import open_file
-from shared.progress import fail, info, ok
+from shared.progress import fail, index_range, info, ok
 from shared.receipt import append_receipt
 from shared.slide_text import strip_list_markers
 from shared.version_control import get_history, snapshot
@@ -140,7 +140,7 @@ def read_slide(file_path: str, slide_index: int) -> dict[str, Any]:
         if slide_index < 0 or slide_index >= total:
             progress.append(fail(f"Slide index {slide_index} out of range"))
             return _error(
-                f"slide_index {slide_index} out of range (0-{total - 1})",
+                f"slide_index {slide_index} out of range {index_range(total, 'slides')}",
                 "Use read_presentation to get current slide count.",
                 progress,
             )
@@ -266,7 +266,7 @@ def read_slide_text(file_path: str, slide_index: int) -> dict[str, Any]:
         if slide_index < 0 or slide_index >= total:
             progress.append(fail(f"Slide index {slide_index} out of range"))
             return _error(
-                f"slide_index {slide_index} out of range (0-{total - 1})",
+                f"slide_index {slide_index} out of range {index_range(total, 'slides')}",
                 "Use read_presentation to get current slide count.",
                 progress,
             )
@@ -310,7 +310,7 @@ def set_text(
         if slide_index < 0 or slide_index >= total:
             progress.append(fail(f"Slide index {slide_index} out of range"))
             return _error(
-                f"slide_index {slide_index} out of range (0-{total - 1})",
+                f"slide_index {slide_index} out of range {index_range(total, 'slides')}",
                 "Use read_presentation to get current slide count.",
                 progress,
             )
@@ -514,7 +514,7 @@ def delete_slide(file_path: str, slide_index: int, open_after: bool = False) -> 
         if slide_index < 0 or slide_index >= total:
             progress.append(fail(f"Slide index {slide_index} out of range"))
             return _error(
-                f"slide_index {slide_index} out of range (0-{total - 1})",
+                f"slide_index {slide_index} out of range {index_range(total, 'slides')}",
                 "Use read_presentation to get current slide count.",
                 progress,
             )
@@ -601,7 +601,7 @@ def reorder_slide(file_path: str, from_index: int, to_index: int, open_after: bo
             if idx < 0 or idx >= total:
                 progress.append(fail(f"{label} {idx} out of range"))
                 return _error(
-                    f"{label} {idx} out of range (0-{total - 1})",
+                    f"{label} {idx} out of range {index_range(total, 'slides')}",
                     "Use read_presentation to get current slide count.",
                     progress,
                 )
@@ -701,7 +701,7 @@ def add_text_box(
         if slide_index < 0 or slide_index >= total:
             progress.append(fail(f"Slide index {slide_index} out of range"))
             return _error(
-                f"slide_index {slide_index} out of range (0-{total - 1})",
+                f"slide_index {slide_index} out of range {index_range(total, 'slides')}",
                 "Use read_presentation to get current slide count.",
                 progress,
             )
