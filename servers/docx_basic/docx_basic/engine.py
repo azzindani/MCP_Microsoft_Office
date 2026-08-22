@@ -710,6 +710,26 @@ def delete_paragraph(
         total = len(paras)
         progress.append(ok(f"Opened {path.name}", f"{total} paragraphs"))
 
+        # Both selectors are optional in the schema, so the call the schema
+        # documents -- file_path and nothing else -- reached the range check
+        # below carrying the unset default and answered "paragraph_index -1 out
+        # of range (0-6)": an index the caller never wrote, under a hint
+        # offering to count the paragraphs. Nothing said the tool needs to be
+        # told which paragraph to delete.
+        if paragraph_index < 0 and not match_text:
+            progress.append(fail("No paragraph chosen"))
+            return {
+                "success": False,
+                "error": "Nothing to delete: give paragraph_index or match_text",
+                "hint": (
+                    "delete_paragraph(file_path, paragraph_index=3) deletes by position; "
+                    "delete_paragraph(file_path, match_text='...') deletes the first paragraph "
+                    "containing that text. Use get_document_outline to see the paragraphs."
+                ),
+                "progress": progress,
+                "token_estimate": 30,
+            }
+
         # Find target index
         target_idx = paragraph_index
         if match_text:
