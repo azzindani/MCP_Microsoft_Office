@@ -18,7 +18,7 @@ from pptx.util import Inches, Pt  # noqa: E402,F401
 
 from shared.file_utils import embed_content  # noqa: E402
 from shared.platform_utils import open_file, resolve_output_path  # noqa: E402
-from shared.progress import fail, info, ok  # noqa: E402
+from shared.progress import fail, info, ok, warn  # noqa: E402
 from shared.slide_text import strip_list_markers  # noqa: E402
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
@@ -120,6 +120,49 @@ def create_presentation(
         return _error(str(exc), "Check output_path is writable.", progress)
 
 
+# Both deck builders take "a list of slide dicts" and each invented its own key
+# names: create_from_outline read title/content, create_deck_from_data read
+# heading/bullets. data_slides is typed list[dict[str, Any]], so tools/list shows
+# an opaque array and the caller cannot discover which spelling a tool wants --
+# it guesses, and the wrong guess returns success:true with every slide title
+# blank. Both spellings are now accepted by both tools, and a slide that yields
+# no heading at all says so in progress instead of going quietly.
+_HEADING_KEYS = ("title", "heading")
+_BODY_KEYS = ("content", "bullets", "body", "text")
+
+
+def _slide_heading(item: dict[str, Any]) -> str:
+    for key in _HEADING_KEYS:
+        value = item.get(key)
+        if value:
+            return str(value)
+    return ""
+
+
+def _slide_body(item: dict[str, Any]) -> str:
+    """Return the slide body, joining a list of bullets into lines."""
+    for key in _BODY_KEYS:
+        value = item.get(key)
+        if not value:
+            continue
+        if isinstance(value, (list, tuple)):
+            return "\n".join(str(v) for v in value)
+        return str(value)
+    return ""
+
+
+def _note_unnamed(progress: list[dict[str, Any]], index: int, item: dict[str, Any]) -> None:
+    """A slide with no recognised heading key is almost always a typo, not intent."""
+    if _slide_heading(item) or not isinstance(item, dict):
+        return
+    progress.append(
+        warn(
+            f"Slide {index} has no heading",
+            f"keys seen: {', '.join(sorted(map(str, item)))} — use 'title' or 'heading'",
+        )
+    )
+
+
 def create_from_outline(
     output_path: str,
     slides: list[dict[str, Any]],
@@ -133,7 +176,7 @@ def create_from_outline(
     if not slides:
         return _error(
             "slides list is empty",
-            "Provide at least one slide dict with a 'title' key.",
+            "Provide at least one slide dict with a 'title' (or 'heading') key.",
             progress,
         )
 
@@ -145,9 +188,10 @@ def create_from_outline(
         slide_count = 0
 
         for i, slide_def in enumerate(slides):
-            raw_title = slide_def.get("title", "")
-            content = slide_def.get("content", "")
-            layout_hint = slide_def.get("layout", "content").lower()
+            _note_unnamed(progress, i + 1, slide_def)
+            raw_title = _slide_heading(slide_def)
+            content = _slide_body(slide_def)
+            layout_hint = str(slide_def.get("layout", "content")).lower()
 
             if layout_hint == "title":
                 # Layout index 0 — Title Slide (title + subtitle)
@@ -216,7 +260,7 @@ def create_deck_from_data(
     if not data_slides:
         return _error(
             "data_slides list is empty",
-            "Provide at least one dict with 'heading' and 'bullets' keys.",
+            "Provide at least one dict with a 'title' (or 'heading') and 'bullets' keys.",
             progress,
         )
 
@@ -235,9 +279,10 @@ def create_deck_from_data(
         # Subsequent slides: title + content
         content_layout = prs.slide_layouts[1]
         for i, item in enumerate(data_slides):
-            heading = item.get("heading", "")
-            bullets = item.get("bullets", [])
-            body_text = "\n".join(str(b) for b in bullets)
+            _note_unnamed(progress, i + 2, item)
+            heading = _slide_heading(item)
+            body_text = _slide_body(item)
+            bullets = item.get("bullets") or ([] if not body_text else body_text.split("\n"))
 
             slide = prs.slides.add_slide(content_layout)
             _set_placeholder_text(slide, 0, heading)

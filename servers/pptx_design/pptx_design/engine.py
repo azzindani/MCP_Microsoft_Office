@@ -8,7 +8,7 @@ from typing import Any
 from pptx import Presentation
 from pptx.chart.data import ChartData
 from pptx.dml.color import RGBColor
-from pptx.enum.chart import XL_CHART_TYPE  # type: ignore[attr-defined]
+from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION  # type: ignore[attr-defined]
 from pptx.util import Inches, Pt
 
 from shared.file_utils import embed_content, hint_for_error, resolve_path
@@ -34,6 +34,30 @@ CHART_TYPE_MAP: dict[str, Any] = {
     "line": XL_CHART_TYPE.LINE,
     "pie": XL_CHART_TYPE.PIE,
 }
+
+
+def _axis_number_format(values: list[Any]) -> str:
+    """Pick a tick format that fits, the way the fleet's other charts already do.
+
+    Left unformatted, a spend axis printed "500000 / 1000000 / 2500000". The
+    labels were too wide for the plot, so they came out rotated 45 degrees, and
+    on a chart squeezed under a bullet list half of them were dropped
+    altogether. Each trailing comma in an Excel format divides by a thousand, so
+    the same axis reads "0.5M / 1M / 2.5M" and stays level. The K/M thresholds
+    match the ones the Data_Analyst charts use, so a figure looks the same in a
+    deck as on the dashboard it was copied from.
+    """
+    peak = 0.0
+    for v in values:
+        try:
+            peak = max(peak, abs(float(v)))
+        except (TypeError, ValueError):
+            continue
+    if peak >= 1_000_000:
+        return '#,##0.#,,"M"'
+    if peak >= 10_000:
+        return '#,##0.#,"K"'
+    return "#,##0.##"
 
 
 # ---------------------------------------------------------------------------
@@ -559,6 +583,22 @@ def add_chart(
         if title:
             chart_shape.chart.has_title = True
             chart_shape.chart.chart_title.text_frame.text = title
+
+        # A pie has no value axis, and a single-series chart names itself in its
+        # title -- a legend there is one more thing to read for no information.
+        if chart_type == "pie" or len(series) > 1:
+            chart_shape.chart.has_legend = True
+            chart_shape.chart.legend.position = XL_LEGEND_POSITION.BOTTOM
+            chart_shape.chart.legend.include_in_layout = False
+
+        if chart_type != "pie":
+            try:
+                ticks = chart_shape.chart.value_axis.tick_labels
+                ticks.number_format = _axis_number_format([v for s in series for v in s["values"]])
+                ticks.number_format_is_linked = False
+            except (AttributeError, ValueError, NotImplementedError):
+                # Not every chart type python-pptx builds exposes a value axis.
+                pass
 
         # Every piece of text python-pptx puts in a chart defaults to near-black:
         # the title, the category names, the value ticks and the legend. Dropped
