@@ -116,6 +116,52 @@ def _parse_cell_range(range_str: str) -> tuple[int, int, int, int]:
     )
 
 
+def _is_number(value: Any) -> bool:
+    """bool is an int subclass, and a checkbox column is not chart data."""
+    return isinstance(value, int | float) and not isinstance(value, bool)
+
+
+def _bind_data(chart: Any, ws: Any, data_range: str) -> bool:
+    """Attach a range to a chart, treating a leading text column as labels.
+
+    add_data(titles_from_data=True) makes EVERY column in the range a value
+    series and never sets the category axis. For the ordinary shape -- one
+    column of names beside one or more columns of numbers -- that plotted the
+    names themselves as a numeric series (a flat row of zeros) and numbered the
+    category axis 1, 2, 3, so the names appeared nowhere on the chart.
+    "A1:B3" over Platform/Spend produced two series, one of them the word
+    "Google Ads" charted as a quantity.
+
+    A first column is labels when it holds text and no numbers; then it becomes
+    the categories and the rest become the data. An all-numeric first column is
+    left as a series, which is what a scatter's x-values need. Returns whether
+    a label column was found, so the caller can say so.
+    """
+    cell_range = data_range.split("!", 1)[1] if "!" in data_range else data_range
+    try:
+        min_row, min_col, max_row, max_col = _parse_cell_range(cell_range)
+    except (ValueError, IndexError):
+        chart.add_data(_parse_range_ref(ws, data_range), titles_from_data=True)
+        return False
+
+    body = [ws.cell(row=r, column=min_col).value for r in range(min_row + 1, max_row + 1)]
+    labelled = (
+        max_col > min_col
+        and any(isinstance(v, str) and v.strip() for v in body)
+        and not any(_is_number(v) for v in body)
+    )
+    if not labelled:
+        chart.add_data(_parse_range_ref(ws, data_range), titles_from_data=True)
+        return False
+
+    chart.add_data(
+        Reference(ws, min_col=min_col + 1, min_row=min_row, max_col=max_col, max_row=max_row),
+        titles_from_data=True,
+    )
+    chart.set_categories(Reference(ws, min_col=min_col, min_row=min_row + 1, max_row=max_row))
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Tool implementations
 # ---------------------------------------------------------------------------
@@ -166,8 +212,7 @@ def add_chart(
         chart.width = width
         chart.height = height
 
-        data_ref = _parse_range_ref(ws, data_range)
-        chart.add_data(data_ref, titles_from_data=True)
+        labelled = _bind_data(chart, ws, data_range)
 
         anchor = anchor_cell.upper()
         ws.add_chart(chart, anchor)
@@ -178,7 +223,10 @@ def add_chart(
             open_file(path)
 
         progress.append(notify_reload(str(path), "xlsx"))
-        progress.append(ok(f"Created {chart_type} chart '{title}'", f"anchored at {anchor}"))
+        placement = f"anchored at {anchor}"
+        if labelled:
+            placement += ", first column used as labels"
+        progress.append(ok(f"Created {chart_type} chart '{title}'", placement))
 
         result: dict[str, Any] = {
             "success": True,
@@ -319,10 +367,10 @@ def update_chart(
             progress.append(ok(f"Updated chart title to '{title}'"))
 
         if data_range:
-            data_ref = _parse_range_ref(ws, data_range)
             chart.series.clear()
-            chart.add_data(data_ref, titles_from_data=True)
-            progress.append(ok("Updated chart data range", data_range))
+            labelled = _bind_data(chart, ws, data_range)
+            detail = f"{data_range} (first column used as labels)" if labelled else data_range
+            progress.append(ok("Updated chart data range", detail))
 
         wb.save(str(path))
         wb.close()
