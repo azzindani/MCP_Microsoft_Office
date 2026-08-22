@@ -79,6 +79,26 @@ def _fit_columns(ws: Any, scan_rows: int = 200, max_width: int = 60) -> None:
         ws.column_dimensions[get_column_letter(col_idx)].width = min(width + 2, max_width)
 
 
+def _fit_to_one_page_wide(ws: Any) -> None:
+    """Print the sheet's full width on a single page.
+
+    _fit_columns above sizes columns to their contents, which is what makes a
+    generated sheet readable -- and on a document-shaped sheet it can push the
+    total past the printable width. create_invoice's description column
+    auto-fits to 41 characters, taking the table to 77 characters (~7.7in)
+    against roughly 6.9in of printable A4, so the Total column printed on a
+    second page: every amount, the subtotal and the grand total, separated from
+    the labels that named them. The money was on page 2 of a two-page invoice.
+
+    Scaling to one page wide is what a person does in Excel for this, and it is
+    inert when the content already fits. Only applied to sheets meant to be read
+    as a document -- a raw data export of 16 columns would be scaled to nothing.
+    """
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0  # 0 = as many pages tall as it needs
+
+
 _LEADING_ZERO_RE = re.compile(r"^-?0\d")
 
 
@@ -278,6 +298,7 @@ def create_report(
 
         for sheet in wb.worksheets:
             _fit_columns(sheet)
+            _fit_to_one_page_wide(sheet)
         wb.save(str(path))
         progress.append(ok(f"Saved {path.name}", f"{sheet_count + 1} sheets total"))
 
@@ -614,6 +635,7 @@ def create_invoice(
         progress.append(ok("Written subtotal, tax, and total rows"))
 
         _fit_columns(ws)
+        _fit_to_one_page_wide(ws)
         wb.save(str(out_path))
         progress.append(ok(f"Saved {out_path.name}"))
 
