@@ -34,10 +34,19 @@ FROM python:${PYTHON_VERSION} AS runtime
 # libreoffice-writer/-impress back export_pdf (docx_layout, pptx_design) —
 # both tools shell out to `libreoffice --headless --convert-to pdf`; without
 # this the tool call always fails with "No PDF converter available" in every
-# Docker/remote deployment. Scoped to writer+impress (not the full
-# libreoffice metapackage) to avoid pulling in calc/draw/base too.
+# Docker/remote deployment. Scoped to the component packages rather than the
+# libreoffice metapackage, which would also drag in base and its java stack.
+#
+# -calc carries no tool of its own: nothing exports an .xlsx to PDF. It is here
+# so a workbook this server produces can be rendered and looked at. Every other
+# artifact could be: a .docx or .pptx goes through Writer/Impress, an .html
+# through a browser. A spreadsheet could not, so Excel output was the one kind
+# that could only ever be checked structurally — and a chart can satisfy every
+# structural assertion while being unreadable. That gap hid add_chart plotting
+# its own category labels as a data series (4c10812): valid file, correct
+# ranges, success:true, and a chart with the platform names nowhere on it.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libreoffice-writer libreoffice-impress \
+    libreoffice-writer libreoffice-impress libreoffice-calc \
     && rm -rf /var/lib/apt/lists/*
 RUN groupadd -r app && useradd -r -g app app \
     && mkdir -p /home/app && chown app:app /home/app
