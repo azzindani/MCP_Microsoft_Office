@@ -358,13 +358,18 @@ def add_image(
         total = len(doc.paragraphs)
         progress.append(ok(f"Opened {path.name}", f"{total} paragraphs"))
 
-        if paragraph_index < 0 or paragraph_index >= total:
+        # An image needs a paragraph to live in, and a brand-new document has
+        # none -- so every index was out of range and nothing could put the
+        # first image into a freshly created file. add_image is the only tool
+        # that adds an image at all, so there was no way round it. Give the
+        # image a paragraph of its own instead of refusing.
+        if total and (paragraph_index < 0 or paragraph_index >= total):
             return _out_of_range(paragraph_index, total, progress)
 
         backup = snapshot(str(path))
         progress.append(ok("Snapshot saved", Path(backup).name))
 
-        para = doc.paragraphs[paragraph_index]
+        para = doc.paragraphs[paragraph_index] if total else doc.add_paragraph()
         run = para.add_run()
         run.add_picture(str(img_path), width=Inches(width_inches))
         progress.append(

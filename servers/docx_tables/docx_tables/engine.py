@@ -593,7 +593,15 @@ def add_table(
         total_paras = len(paragraphs)
         progress.append(ok(f"Opened {path.name}", f"{total_paras} paragraphs"))
 
-        if after_paragraph_index < 0 or after_paragraph_index >= total_paras:
+        # A brand-new document has no paragraphs at all, so every anchor index --
+        # including 0 and -1 -- used to be "out of range" and the only tool that
+        # can create a table was unreachable on the one file that most needs it.
+        # create_document() then add_table() is the obvious two-step, and it
+        # failed; the hint sent the caller to read_document, which returns an
+        # empty list. With no paragraphs there is exactly one place a table can
+        # go, so there is nothing to disambiguate: it goes in the empty body,
+        # which is where python-docx has already put it below.
+        if total_paras and (after_paragraph_index < 0 or after_paragraph_index >= total_paras):
             progress.append(fail(f"Paragraph index {after_paragraph_index} out of range"))
             return _error(
                 f"Paragraph index {after_paragraph_index} out of range {index_range(total_paras, 'paragraphs')}",
@@ -613,20 +621,24 @@ def add_table(
                 for c_idx in range(min(cols, len(data[r_idx]))):
                     _set_cell_text(tbl.rows[r_idx].cells[c_idx], data[r_idx][c_idx])
 
-        # Move the table element to appear after the target paragraph
-        anchor_para = paragraphs[after_paragraph_index]._element  # type: ignore[attr-defined]
-        tbl_element = tbl._element  # type: ignore[attr-defined]
-        # Remove from current position (end of body)
-        tbl_element.getparent().remove(tbl_element)
-        # Insert after the anchor paragraph
-        anchor_para.addnext(tbl_element)
+        # Move the table element to appear after the target paragraph. With no
+        # paragraphs there is no anchor to move to, and python-docx has already
+        # appended it to the body, which is the only position available.
+        if total_paras:
+            anchor_para = paragraphs[after_paragraph_index]._element  # type: ignore[attr-defined]
+            tbl_element = tbl._element  # type: ignore[attr-defined]
+            # Remove from current position (end of body)
+            tbl_element.getparent().remove(tbl_element)
+            # Insert after the anchor paragraph
+            anchor_para.addnext(tbl_element)
 
         doc.save(str(path))
         if open_after:
             open_file(path)
+        placed = f"after paragraph {after_paragraph_index}" if total_paras else "in the empty document"
         progress.append(
             ok(
-                f"Inserted {rows}×{cols} table after paragraph {after_paragraph_index}",
+                f"Inserted {rows}×{cols} table {placed}",
                 f"{'with data' if data else 'empty'}",
             )
         )
@@ -637,7 +649,7 @@ def add_table(
             tool="add_table",
             server="docx-tables",
             args={"after_paragraph_index": after_paragraph_index, "rows": rows, "cols": cols},
-            result=f"✔ Inserted {rows}×{cols} table after paragraph {after_paragraph_index}",
+            result=f"✔ Inserted {rows}×{cols} table {placed}",
             backup=backup,
             success=True,
         )

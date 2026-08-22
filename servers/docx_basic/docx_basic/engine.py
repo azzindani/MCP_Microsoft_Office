@@ -595,7 +595,15 @@ def insert_paragraph(
         total = len(paras)
         progress.append(ok(f"Opened {path.name}", f"{total} paragraphs"))
 
-        if after_index < -1 or after_index >= total:
+        # A brand-new document has no paragraphs, so there was no anchor to
+        # insert after and every index failed. -1 -- the documented "insert at
+        # the beginning" value, and the one a caller reaches for on an empty
+        # file -- failed worst: it passed this guard, reached doc.paragraphs[0]
+        # below and surfaced IndexError to the caller as "list index out of
+        # range", with a hint offering to undo a change that never happened.
+        # With no paragraphs there is exactly one position, so any index means
+        # it and there is nothing to reject.
+        if total and (after_index < -1 or after_index >= total):
             progress.append(fail(f"Index {after_index} out of range"))
             return {
                 "success": False,
@@ -618,11 +626,18 @@ def insert_paragraph(
         new_r.append(new_t)
         new_para.append(new_r)
 
-        if after_index == -1:
+        if total == 0:
+            # The body ends with a w:sectPr; appending the raw element would
+            # land the paragraph after it, which is not valid. The public API
+            # places it correctly.
+            doc.add_paragraph(text)
+        elif after_index == -1:
             # Insert at beginning
             doc.paragraphs[0]._element.addprevious(new_para)
         else:
             paras[after_index]._element.addnext(new_para)
+
+        inserted_at = 0 if total == 0 else after_index + 1
 
         # Apply style by setting it via python-docx after inserting
         # Re-read to find the new paragraph and apply style
@@ -630,7 +645,7 @@ def insert_paragraph(
 
         # Re-open and find the inserted paragraph to apply style
         doc2 = Document(str(path))
-        target_idx = after_index + 1 if after_index >= 0 else 0
+        target_idx = inserted_at
         if target_idx < len(doc2.paragraphs):
             try:
                 doc2.paragraphs[target_idx].style = doc2.styles[style]  # type: ignore[reportAttributeAccessIssue]
@@ -640,14 +655,14 @@ def insert_paragraph(
 
         if open_after:
             open_file(path)
-        progress.append(ok(f"Inserted paragraph at index {after_index + 1}", style))
+        progress.append(ok(f"Inserted paragraph at index {inserted_at}", style))
         progress.append(notify_reload(str(path), "docx"))
 
         _log_receipt(
             file_path,
             "insert_paragraph",
             {"after_index": after_index, "text": text, "style": style},
-            f"✔ Inserted paragraph at {after_index + 1}",
+            f"✔ Inserted paragraph at {inserted_at}",
             backup,
             True,
         )
@@ -655,7 +670,7 @@ def insert_paragraph(
         return {
             "success": True,
             "op": "insert_paragraph",
-            "inserted_at_index": after_index + 1,
+            "inserted_at_index": inserted_at,
             "text": text,
             "style": style,
             "backup": backup,
