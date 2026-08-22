@@ -34,6 +34,16 @@ COLOR_MAP: dict[str, str] = {
 VALID_RULES = {"greater_than", "less_than", "between", "equal_to"}
 VALID_COLORS = set(COLOR_MAP.keys())
 
+# set_conditional_format's docstring reads "rule: gt/lt/between/eq" and has done
+# since it was written: the 80-character budget cannot hold "greater_than
+# less_than between equal_to" *and* the four colour names, so the rules were
+# abbreviated. The schema carries no enum and no description, so that line is
+# the only vocabulary a caller ever sees -- and a coverage sweep read it, sent
+# rule="gt", and was told "Unknown rule: gt". Rather than drop the colours from
+# the documentation to make room, the short forms the docs promise are accepted.
+# auto_sum already normalises its own function_name the same way.
+RULE_ALIASES = {"gt": "greater_than", "lt": "less_than", "eq": "equal_to"}
+
 
 def _validate_cell(address: str) -> bool:
     return bool(_CELL_RE.match(address.upper()))
@@ -250,12 +260,13 @@ def set_conditional_format(
     progress: list[dict[str, Any]] = []
     backup: str | None = None
     try:
+        rule = RULE_ALIASES.get(rule, rule)
         if rule not in VALID_RULES:
             progress.append(fail(f"Unknown rule: {rule}"))
             return {
                 "success": False,
                 "error": f"Unknown rule: {rule}",
-                "hint": f"Allowed rules: {', '.join(sorted(VALID_RULES))}",
+                "hint": "Allowed rules: between, equal_to (eq), greater_than (gt), less_than (lt)",
                 "progress": progress,
                 "token_estimate": 15,
             }
