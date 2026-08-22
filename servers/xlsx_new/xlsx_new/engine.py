@@ -286,11 +286,11 @@ def create_report(
 def create_from_template(
     template_path: str,
     output_path: str,
-    replacements: dict[str, Any],
+    substitutions: dict[str, Any],
     open_after: bool = True,
     return_content: bool = False,
 ) -> dict[str, Any]:
-    """Copy a .xlsx template, replace matching cell values, save to output_path."""
+    """Copy a .xlsx template, apply {key: value} substitutions, save to output_path."""
     progress: list[dict[str, Any]] = []
     try:
         src = Path(template_path).resolve()
@@ -323,14 +323,14 @@ def create_from_template(
         for sheet in wb.worksheets:
             for row in sheet.iter_rows():
                 for cell in row:
-                    if cell.value is not None and cell.value in replacements:
-                        cell.value = replacements[cell.value]  # type: ignore[reportArgumentType]
+                    if cell.value is not None and cell.value in substitutions:
+                        cell.value = substitutions[cell.value]  # type: ignore[reportArgumentType]
                         replaced_count += 1
 
         progress.append(
             ok(
                 f"Replaced {replaced_count} cell value(s)",
-                f"{len(replacements)} replacement key(s) searched",
+                f"{len(substitutions)} substitution key(s) searched",
             )
         )
 

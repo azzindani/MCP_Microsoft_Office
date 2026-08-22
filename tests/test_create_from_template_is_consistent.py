@@ -18,9 +18,9 @@ engines iterate the mapping without mutating it, so an empty one is meaningful:
 copy the file, substitute nothing. CLAUDE.md agrees -- "For optional parameters,
 use a primitive default value" -- so requiring it was the outlier, not pptx.
 
-The mapping is still named `substitutions` on docx and `replacements` on xlsx.
-That is a deployed public parameter name, so renaming it is a breaking change
-and is deliberately NOT done here; this only removes the needless requirement.
+Follow-up: the mapping was also named differently per tier -- `substitutions` on
+docx, `replacements` on xlsx, and absent entirely on pptx. All three now take
+`substitutions`, and pptx actually applies them instead of only copying the file.
 """
 
 from __future__ import annotations
@@ -44,7 +44,8 @@ def _tool_fn(tool):
 
 TIERS = [
     pytest.param(docx_server, "substitutions", id="docx"),
-    pytest.param(xlsx_server, "replacements", id="xlsx"),
+    pytest.param(xlsx_server, "substitutions", id="xlsx"),
+    pytest.param(pptx_server, "substitutions", id="pptx"),
 ]
 
 
@@ -61,11 +62,20 @@ class TestTheMappingIsOptionalEverywhere:
         sig = inspect.signature(_tool_fn(module.create_from_template))
         assert sig.parameters[param].default == {}
 
-    def test_pptx_still_needs_only_the_template(self):
-        """pptx was already right; this guards against 'fixing' it the wrong way."""
-        sig = inspect.signature(_tool_fn(pptx_server.create_from_template))
-        required = [name for name, p in sig.parameters.items() if p.default is inspect.Parameter.empty]
-        assert required == ["template_path"]
+    def test_only_the_template_path_is_ever_required(self):
+        """Copying a template unchanged is a complete request on every tier."""
+        for module in (docx_server, xlsx_server, pptx_server):
+            sig = inspect.signature(_tool_fn(module.create_from_template))
+            required = [name for name, p in sig.parameters.items() if p.default is inspect.Parameter.empty]
+            assert required == ["template_path"], f"{module.__name__} demands more than a template"
+
+    def test_all_three_call_the_mapping_the_same_thing(self):
+        """A caller who learns this tool on one tier must not be wrong on the
+        next two. It used to be substitutions / replacements / nothing."""
+        for module in (docx_server, xlsx_server, pptx_server):
+            sig = inspect.signature(_tool_fn(module.create_from_template))
+            assert "substitutions" in sig.parameters, f"{module.__name__} names the mapping something else"
+            assert "replacements" not in sig.parameters
 
     @pytest.mark.parametrize("module,param", TIERS)
     def test_template_path_is_still_required(self, module, param: str):
@@ -91,7 +101,7 @@ class TestCopyingATemplateUnchangedWorks:
         assert result["success"] is True, result.get("error")
         assert out.is_file()
 
-    def test_xlsx_copies_with_no_replacements(self, tmp_path: Path):
+    def test_xlsx_copies_with_no_substitutions(self, tmp_path: Path):
         src = _blank_xlsx(tmp_path)
         out = tmp_path / "copy.xlsx"
         result = _tool_fn(xlsx_server.create_from_template)(str(src), output_path=str(out))

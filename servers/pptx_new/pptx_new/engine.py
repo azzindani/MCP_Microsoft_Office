@@ -283,13 +283,57 @@ def create_deck_from_data(
         return _error(str(exc), "Check output_path is writable and data_slides is valid.", progress)
 
 
+def _substitute_in_text_frame(text_frame: Any, substitutions: dict) -> int:
+    applied = 0
+    for para in text_frame.paragraphs:
+        for run in para.runs:
+            original = run.text
+            updated = original
+            for old, new in substitutions.items():
+                if str(old) in updated:
+                    updated = updated.replace(str(old), str(new))
+            if updated != original:
+                run.text = updated
+                applied += 1
+    return applied
+
+
+def _substitute_in_shape(shape: Any, substitutions: dict) -> int:
+    """Replace placeholder text inside a shape, run by run.
+
+    Assigning to text_frame.text would flatten the run structure and lose every
+    font, colour and size the template author set -- the rule pptx_basic's
+    _set_shape_text already follows. Replacing within each run keeps that
+    formatting, so a filled template still looks like the template.
+
+    Recurses into grouped shapes and table cells, which is where template
+    placeholders usually live.
+    """
+    applied = 0
+    if hasattr(shape, "shapes"):  # grouped shape
+        for child in shape.shapes:
+            applied += _substitute_in_shape(child, substitutions)
+        return applied
+
+    if getattr(shape, "has_table", False):
+        for row in shape.table.rows:
+            for cell in row.cells:
+                applied += _substitute_in_text_frame(cell.text_frame, substitutions)
+        return applied
+
+    if getattr(shape, "has_text_frame", False):
+        applied += _substitute_in_text_frame(shape.text_frame, substitutions)
+    return applied
+
+
 def create_from_template(
     template_path: str,
     output_path: str,
+    substitutions: dict | None = None,
     open_after: bool = True,
     return_content: bool = False,
 ) -> dict[str, Any]:
-    """Copy an existing .pptx as a new presentation starting point."""
+    """Copy an existing .pptx and apply {key: value} text substitutions."""
     progress: list[dict[str, Any]] = []
     tmpl = Path(template_path)
     path = resolve_output_path(output_path, "presentation.pptx")
@@ -320,6 +364,22 @@ def create_from_template(
         slide_count = len(prs.slides)
         progress.append(ok(f"Template has {slide_count} slide(s)"))
 
+        subs = substitutions or {}
+        if not isinstance(subs, dict):
+            return _error(
+                "substitutions must be a dict",
+                'Pass a dict like {"PLACEHOLDER": "replacement value"}.',
+                progress,
+            )
+
+        applied = 0
+        for slide in prs.slides:
+            for shape in slide.shapes:
+                applied += _substitute_in_shape(shape, subs)
+        if subs:
+            prs.save(str(path))
+            progress.append(ok(f"Applied {applied} substitution(s)", f"{len(subs)} key(s) searched"))
+
         if open_after:
             open_file(path)
             progress.append(ok("Opened in default application"))
@@ -332,6 +392,7 @@ def create_from_template(
             "template": str(tmpl),
             "template_name": tmpl.name,
             "slide_count": slide_count,
+            "substitutions_applied": applied,
             "progress": progress,
         }
         embed_content(result, path, return_content)

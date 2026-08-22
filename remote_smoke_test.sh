@@ -173,7 +173,7 @@ run xlsx-new create_workbook "{\"sheet_name\":\"Main\",\"output_path\":\"$D/blan
 run xlsx-new create_from_data "{\"sheet_name\":\"Sales\",\"headers\":[\"Region\",\"Units\",\"Revenue\"],\"rows\":[[\"APAC\",120,1450.5],[\"EMEA\",95,1120.2],[\"AMER\",80,990.75]],\"output_path\":\"$XLSX\"}" "create the main sales workbook"
 run xlsx-new create_report "{\"title\":\"Q1 Report\",\"sheets\":[{\"name\":\"Summary\",\"headers\":[\"Metric\",\"Value\"],\"rows\":[[\"Total Revenue\",3561.45]]}],\"output_path\":\"$D/report.xlsx\"}" "create a report workbook"
 run xlsx-new create_from_data "{\"sheet_name\":\"Main\",\"headers\":[\"Name\",\"Balance\"],\"rows\":[[\"{{name}}\",\"{{balance}}\"]],\"output_path\":\"$XLSX_TPL\"}" "create a template workbook with placeholders"
-run xlsx-new create_from_template "{\"template_path\":\"$XLSX_TPL\",\"replacements\":{\"{{name}}\":\"Alex\",\"{{balance}}\":\"100\"},\"output_path\":\"$D/xlsx_from_template.xlsx\"}" "fill in the workbook template"
+run xlsx-new create_from_template "{\"template_path\":\"$XLSX_TPL\",\"substitutions\":{\"{{name}}\":\"Alex\",\"{{balance}}\":\"100\"},\"output_path\":\"$D/xlsx_from_template.xlsx\"}" "fill in the workbook template"
 run xlsx-new create_from_csv "{\"csv_path\":\"$CSV\",\"sheet_name\":\"Imported\",\"output_path\":\"$D/from_csv.xlsx\"}" "import the CSV into a workbook"
 run xlsx-new create_invoice "{\"company_name\":\"Acme Co\",\"client_name\":\"Beta LLC\",\"invoice_number\":\"INV-001\",\"items\":[{\"description\":\"Consulting\",\"quantity\":10,\"unit_price\":100}],\"output_path\":\"$D/invoice.xlsx\"}" "create an invoice"
 
@@ -221,7 +221,7 @@ run pptx-new create_from_outline "{\"slides\":[{\"title\":\"Welcome\",\"bullets\
 run pptx-new create_deck_from_data "{\"title\":\"Metrics\",\"data_slides\":[{\"title\":\"Revenue by Region\",\"headers\":[\"Region\",\"Revenue\"],\"rows\":[[\"APAC\",1450.5],[\"EMEA\",1120.2]]}],\"output_path\":\"$D/data_deck.pptx\"}" "build a deck from tabular data"
 run pptx-new create_agenda "{\"meeting_title\":\"Q1 Review\",\"date\":\"2026-01-15\",\"items\":[{\"topic\":\"Welcome\",\"duration\":\"5 min\",\"owner\":\"Ops Team\"},{\"topic\":\"Revenue Review\",\"duration\":\"15 min\",\"owner\":\"Finance\"},{\"topic\":\"Q&A\",\"duration\":\"10 min\",\"owner\":\"All\"}],\"presenter\":\"Ops Team\",\"output_path\":\"$D/agenda.pptx\"}" "create an agenda deck"
 run pptx-new create_from_outline "{\"slides\":[{\"title\":\"{{name}}'s Slide\",\"bullets\":[\"{{note}}\"]}],\"output_path\":\"$PPTX_TPL\"}" "create a template deck with placeholders"
-run pptx-new create_from_template "{\"template_path\":\"$PPTX_TPL\",\"output_path\":\"$D/from_template.pptx\"}" "instantiate the deck template"
+run pptx-new create_from_template "{\"template_path\":\"$PPTX_TPL\",\"substitutions\":{\"Coverage\":\"Filled\"},\"output_path\":\"$D/from_template.pptx\"}" "instantiate the deck template"
 run pptx-new create_from_docx "{\"docx_path\":\"$DOCX\",\"max_slides\":5,\"output_path\":\"$D/from_docx.pptx\"}" "turn the report doc into slides"
 
 echo

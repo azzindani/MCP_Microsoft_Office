@@ -80,11 +80,14 @@ def create_deck_from_data(
 @mcp.tool()
 def create_from_template(
     template_path: str,
+    substitutions: dict = {},  # noqa: B006 -- read-only; engine only iterates it
     output_path: str = "",
     return_content: bool = False,
 ) -> dict:
-    """Copy .pptx template to output_path as starting point."""
-    return engine.create_from_template(template_path, output_path, open_after=True, return_content=return_content)
+    """Copy .pptx template, fill {key: value} substitutions, save."""
+    return engine.create_from_template(
+        template_path, output_path, substitutions, open_after=True, return_content=return_content
+    )
 
 
 @mcp.tool()

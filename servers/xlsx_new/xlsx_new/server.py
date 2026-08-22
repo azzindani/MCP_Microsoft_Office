@@ -83,13 +83,13 @@ def create_report(
 @mcp.tool()
 def create_from_template(
     template_path: str,
-    replacements: dict = {},  # noqa: B006 -- read-only; engine only iterates it
+    substitutions: dict = {},  # noqa: B006 -- read-only; engine only iterates it
     output_path: str = "",
     return_content: bool = False,
 ) -> dict:
-    """Copy .xlsx template, replace cell values, save to output_path."""
+    """Copy .xlsx template, fill {key: value} substitutions, save."""
     return engine.create_from_template(
-        template_path, output_path, replacements, open_after=True, return_content=return_content
+        template_path, output_path, substitutions, open_after=True, return_content=return_content
     )
 
 
