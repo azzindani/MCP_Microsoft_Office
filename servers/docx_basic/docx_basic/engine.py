@@ -313,7 +313,7 @@ def read_paragraph(file_path: str, index: int) -> dict[str, Any]:
             progress.append(fail(f"Index {index} out of range"))
             return {
                 "success": False,
-                "error": f"paragraph_index {index} out of range {index_range(total, 'items')}",
+                "error": f"paragraph_index {index} out of range {index_range(total, 'paragraphs')}",
                 "hint": "Use get_document_outline to see valid paragraph indices.",
                 "progress": progress,
                 "token_estimate": 20,
@@ -599,7 +599,7 @@ def insert_paragraph(
             progress.append(fail(f"Index {after_index} out of range"))
             return {
                 "success": False,
-                "error": f"paragraph_index {after_index} out of range {index_range(total, 'items')}",
+                "error": f"paragraph_index {after_index} out of range {index_range(total, 'paragraphs')}",
                 "hint": "Use read_document to get current paragraph count.",
                 "progress": progress,
                 "token_estimate": 15,
@@ -716,7 +716,7 @@ def delete_paragraph(
             progress.append(fail(f"Index {target_idx} out of range"))
             return {
                 "success": False,
-                "error": f"paragraph_index {target_idx} out of range {index_range(total, 'items')}",
+                "error": f"paragraph_index {target_idx} out of range {index_range(total, 'paragraphs')}",
                 "hint": "Use read_document to get current paragraph count.",
                 "progress": progress,
                 "token_estimate": 15,

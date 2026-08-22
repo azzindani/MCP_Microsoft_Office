@@ -126,6 +126,19 @@ class TestTheOtherEnginesGotTheSameTreatment:
         assert "no slides" in r["error"]
         assert "(0--1)" not in r["error"]
 
+    def test_a_document_with_no_paragraphs_names_paragraphs(self, empty_docx: str):
+        """The first pass at this said "this file has no items". The 27 sites
+        were rewritten by a script that read the noun from the label in each
+        message, and in docx_basic the message sits inside a `return {` dict
+        literal -- so the pattern matched "return" as the label and fell through
+        to a generic noun. The rewrite itself was correct; only the word was
+        wrong, and only a caller reading the sentence would have noticed."""
+        from docx_basic import engine
+
+        r = engine.read_paragraph(empty_docx, 99)
+        assert r["success"] is False
+        assert "no paragraphs" in r["error"], r["error"]
+
     def test_no_engine_still_builds_the_range_by_hand(self):
         """The point of a shared helper is that nobody keeps a private copy."""
         root = Path(__file__).resolve().parents[1] / "servers"
@@ -135,3 +148,15 @@ class TestTheOtherEnginesGotTheSameTreatment:
             if re.search(r"out of range \(0-\{", p.read_text(encoding="utf-8"))
         ]
         assert not offenders, f"these still hand-build the range: {offenders}"
+
+    def test_no_call_site_settles_for_a_vague_noun(self):
+        """ "this file has no items" tells the reader nothing they did not
+        already know. Every call must name the collection it means."""
+        root = Path(__file__).resolve().parents[1] / "servers"
+        vague = {"items", "things", "entries", "elements", "objects"}
+        offenders = []
+        for path in root.rglob("engine.py"):
+            for noun in re.findall(r"index_range\([^)]*,\s*['\"]([a-z_]+)['\"]\)", path.read_text(encoding="utf-8")):
+                if noun in vague:
+                    offenders.append(f"{path.relative_to(root)}: {noun!r}")
+        assert not offenders, f"these do not name what is missing: {offenders}"
