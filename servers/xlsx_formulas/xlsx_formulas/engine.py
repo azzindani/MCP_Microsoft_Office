@@ -13,7 +13,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 
 from shared.file_utils import hint_for_error, resolve_path, sheet_names_hint
 from shared.live_edit import notify_reload
-from shared.platform_utils import open_file
+from shared.platform_utils import get_max_cells, open_file
 from shared.progress import fail, ok, warn
 from shared.version_control import snapshot
 
@@ -865,11 +865,20 @@ def convert_to_values(
                 f"{converted} formula{'s' if converted != 1 else ''} replaced",
             )
         )
+        # Every skipped cell address was listed in full, twice -- once joined
+        # into this warning and once as the response field. A sweep converting a
+        # filled-down column over 16,834 rows skipped all of them (openpyxl
+        # writes no cached value), so the response carried ~33,000 cell
+        # references: 260 KB, a token_estimate near 65,000, against the ~10-12k
+        # context this server is built for. The count is the information; the
+        # addresses are a sample.
+        cap = get_max_cells()
+        skipped_shown = skipped[:cap]
         if skipped:
             progress.append(
                 warn(
                     f"Skipped {len(skipped)} formula cell(s) with no cached value",
-                    ", ".join(skipped),
+                    ", ".join(skipped_shown) + (" ..." if len(skipped) > cap else ""),
                 )
             )
         progress.append(notify_reload(str(path), "xlsx"))
@@ -879,7 +888,9 @@ def convert_to_values(
             "sheet": sheet_name,
             "range": range_address,
             "formulas_converted": converted,
-            "skipped_no_cached_value": skipped,
+            "skipped_no_cached_value": skipped_shown,
+            "skipped_count": len(skipped),
+            "truncated": len(skipped) > cap,
             "backup": backup,
             "progress": progress,
         }
