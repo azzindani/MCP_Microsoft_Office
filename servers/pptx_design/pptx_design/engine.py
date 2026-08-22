@@ -665,10 +665,21 @@ def duplicate_slide(
         src_layout = slide.slide_layout
         new_slide = prs.slides.add_slide(src_layout)
 
-        # Copy all shapes from the source slide
+        # add_slide() clones the layout's placeholders into the new slide, and
+        # the loop below then copies the source's own placeholders across with
+        # their text -- so every duplicate ended up holding both. A copied slide
+        # carried two shapes named "Title 1", one populated and one empty, and
+        # read_slide reported four shapes where the original had two, with
+        # nothing to say which one an edit should address. The copies are the
+        # ones that carry the content, so the layout's go.
+        for cloned in list(new_slide.shapes):
+            cloned.element.getparent().remove(cloned.element)
+
+        # Copy all shapes from the source slide, keeping their original order.
+        # Inserting each at a fixed index put every new shape ahead of the last,
+        # so a copied slide listed its shapes back to front.
         for shape in slide.shapes:
-            new_el = copy.deepcopy(shape.element)
-            new_slide.shapes._spTree.insert(2, new_el)
+            new_slide.shapes._spTree.append(copy.deepcopy(shape.element))
 
         new_idx = len(prs.slides) - 1
 
