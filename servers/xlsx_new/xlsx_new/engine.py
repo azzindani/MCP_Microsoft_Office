@@ -53,6 +53,32 @@ def _write_rows(ws: Any, rows: list[list[Any]], start_row: int = 2) -> None:
             ws.cell(row=row_idx, column=col_idx, value=value)
 
 
+def _fit_columns(ws: Any, scan_rows: int = 200, max_width: int = 60) -> None:
+    """Widen each column to fit what is in it.
+
+    openpyxl leaves every column at the default 8.43 characters, so a sheet
+    these tools created was unreadable the moment anyone looked at it: a report
+    header row rendered as "platform spends impressioclicks" -- "impressions"
+    running into the column beside it -- and "Google Ads" as "Google Ad". The
+    values are all in the file, which is why every structural check passed; it
+    shows up only in a render or a print.
+
+    Only the first `scan_rows` rows are measured, so create_from_csv on a
+    16,834-row export does not walk the whole sheet to size four columns, and
+    the width is capped so one long cell cannot push the rest off the page.
+    """
+    from openpyxl.utils import get_column_letter
+
+    widths: dict[int, int] = {}
+    for row in ws.iter_rows(min_row=1, max_row=min(ws.max_row, scan_rows)):
+        for cell in row:
+            text = str(cell.value) if cell.value is not None else ""
+            if text and len(text) > widths.get(cell.column, 0):
+                widths[cell.column] = len(text)
+    for col_idx, width in widths.items():
+        ws.column_dimensions[get_column_letter(col_idx)].width = min(width + 2, max_width)
+
+
 _LEADING_ZERO_RE = re.compile(r"^-?0\d")
 
 
@@ -168,6 +194,7 @@ def create_from_data(
             )
         )
 
+        _fit_columns(ws)
         wb.save(str(path))
         progress.append(ok(f"Saved {path.name}"))
 
@@ -249,6 +276,8 @@ def create_report(
                 )
             )
 
+        for sheet in wb.worksheets:
+            _fit_columns(sheet)
         wb.save(str(path))
         progress.append(ok(f"Saved {path.name}", f"{sheet_count + 1} sheets total"))
 
@@ -423,6 +452,7 @@ def create_from_csv(
                 if is_header_row:
                     cell.font = Font(bold=True)
 
+        _fit_columns(ws)
         wb.save(str(out_path))
         progress.append(ok(f"Saved {out_path.name}", f"{row_count} data row(s)"))
 
@@ -478,6 +508,27 @@ def create_invoice(
                 "success": False,
                 "error": "items must be a non-empty list",
                 "hint": ('Pass a list like [{"description":"Widget","quantity":2,"unit_price":50.0}].'),
+                "progress": progress,
+                "token_estimate": _token_estimate(progress),
+            }
+
+        # tax_rate is a fraction: the label multiplies it by 100 and the formula
+        # multiplies the subtotal by it directly. Nothing said so -- the schema
+        # has no descriptions and the docstring has no room -- so a sweep passed
+        # 5.0 meaning 5%, and got a finished invoice reading "Tax (500.0%)" with
+        # a total of 15,060,713 against a subtotal of 2,510,119. success: true.
+        # No tax anywhere is above 100%, so a rate above 1 is a unit mistake and
+        # is worth refusing rather than quietly billing five times the goods.
+        if tax_rate < 0 or tax_rate > 1:
+            progress.append(fail(f"tax_rate {tax_rate} is not a fraction"))
+            return {
+                "success": False,
+                "error": f"tax_rate must be a fraction between 0 and 1, got {tax_rate}",
+                "hint": (
+                    f"Pass 0.05 for 5%, not 5. For {tax_rate}% use tax_rate={tax_rate / 100:g}."
+                    if tax_rate > 1
+                    else "Pass 0.05 for 5%. Use 0 for no tax."
+                ),
                 "progress": progress,
                 "token_estimate": _token_estimate(progress),
             }
@@ -562,6 +613,7 @@ def create_invoice(
 
         progress.append(ok("Written subtotal, tax, and total rows"))
 
+        _fit_columns(ws)
         wb.save(str(out_path))
         progress.append(ok(f"Saved {out_path.name}"))
 
