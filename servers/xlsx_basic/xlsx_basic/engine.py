@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import openpyxl
-from openpyxl.utils import column_index_from_string
+from openpyxl.utils import column_index_from_string, get_column_letter, range_boundaries
 
 from shared.file_utils import hint_for_error, resolve_path
 from shared.live_edit import notify_reload
@@ -19,6 +19,25 @@ from shared.version_control import snapshot
 from .helpers import _cell_count_for_range, _last_cell, _validate_cell, _validate_range
 
 logger = logging.getLogger(__name__)
+
+
+def _coord(row: int, col: int) -> str:
+    """Address of a cell from its 1-based position.
+
+    Every read here streams the sheet (read_only=True), and a streaming
+    worksheet yields EmptyCell for a blank cell. EmptyCell carries a value of
+    None but has no .coordinate, so reading the address off the cell raised
+    "'EmptyCell' object has no attribute 'coordinate'" and failed the whole
+    call -- get_sheet_summary on any sheet with a gap in its header row, and
+    read_cell_range on any range containing one blank cell. A coverage sweep
+    hit the first of those on a workbook whose columns ran A-P and then X.
+
+    xlsx_formulas' convert_to_values already derives its coordinates from the
+    range bounds for exactly this reason. Deriving them here too means no
+    caller of this module can reintroduce the crash by dropping a None check.
+    """
+    return f"{get_column_letter(col)}{row}"
+
 
 # ---------------------------------------------------------------------------
 # Tool implementations
@@ -124,14 +143,14 @@ def get_sheet_summary(file_path: str, sheet_name: str) -> dict[str, Any]:
 
         for row_idx, row in enumerate(ws.iter_rows(values_only=False), start=1):
             if row_idx == 1:
-                for cell in row:
-                    header_row.append({"cell": cell.coordinate, "value": cell.value})
+                for col_idx, cell in enumerate(row, start=1):
+                    header_row.append({"cell": _coord(row_idx, col_idx), "value": cell.value})
             else:
                 # First column sample — up to 5 non-empty values
                 if sample_count < 5 and row:
                     first_cell = row[0]
                     if first_cell.value is not None:
-                        first_col_sample.append({"cell": first_cell.coordinate, "value": first_cell.value})
+                        first_col_sample.append({"cell": _coord(row_idx, 1), "value": first_cell.value})
                         sample_count += 1
 
         wb.close()
@@ -313,15 +332,19 @@ def read_cell_range(file_path: str, sheet_name: str, range_address: str) -> dict
         wb_form = openpyxl.load_workbook(str(path), read_only=True, data_only=False)
         ws_form = wb_form[sheet_name]
 
+        # _validate_range above requires both endpoints, so the bounds are
+        # always concrete; the coercion is for the type checker.
+        min_col, min_row, _max_col, _max_row = (int(b or 1) for b in range_boundaries(rng))
+
         data: list[list[dict[str, Any]]] = []
-        for row_val, row_form in zip(ws_val[rng], ws_form[rng]):
+        for row_offset, (row_val, row_form) in enumerate(zip(ws_val[rng], ws_form[rng])):
             row_data = []
-            for cell_v, cell_f in zip(row_val, row_form):
+            for col_offset, (cell_v, cell_f) in enumerate(zip(row_val, row_form)):
                 raw = cell_f.value
                 formula = raw if isinstance(raw, str) and raw.startswith("=") else None
                 row_data.append(
                     {
-                        "cell": cell_v.coordinate,
+                        "cell": _coord(min_row + row_offset, min_col + col_offset),
                         "value": cell_v.value,
                         "formula": formula,
                     }
@@ -403,11 +426,11 @@ def search_cells(
         query_lower = query.lower()
         total_scanned = 0
 
-        for row in ws.iter_rows(values_only=False):
-            for cell in row:
+        for row_idx, row in enumerate(ws.iter_rows(values_only=False), start=1):
+            for col_idx, cell in enumerate(row, start=1):
                 total_scanned += 1
                 if cell.value is not None and query_lower in str(cell.value).lower():
-                    matches.append({"cell": cell.coordinate, "value": cell.value})
+                    matches.append({"cell": _coord(row_idx, col_idx), "value": cell.value})
                     if len(matches) >= cap:
                         break
             if len(matches) >= cap:
