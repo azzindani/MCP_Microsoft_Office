@@ -93,7 +93,7 @@ def add_table(
     cols: int,
     data: list[list[str]] | None = None,
 ) -> dict:
-    """Insert new table after paragraph N. data is optional rows×cols list."""
+    """Insert table after paragraph N. -1 = before the first. data is optional."""
     return engine.add_table(file_path, after_paragraph_index, rows, cols, data, open_after=True)
 
 

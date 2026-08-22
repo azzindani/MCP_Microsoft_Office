@@ -108,7 +108,7 @@ def insert_paragraph(
     text: str,
     style: str = "Body Text",
 ) -> dict:
-    """Insert paragraph after index N with the given style."""
+    """Insert paragraph after index N. -1 inserts before the first paragraph."""
     return engine.insert_paragraph(file_path, after_index, text, style, open_after=True)
 
 
