@@ -20,6 +20,7 @@ from shared.file_utils import embed_content  # noqa: E402
 from shared.platform_utils import open_file, resolve_output_path  # noqa: E402
 from shared.progress import describe_error, fail, info, ok, warn  # noqa: E402
 from shared.slide_text import strip_list_markers  # noqa: E402
+from shared.template_fill import ordered_pairs, resolve_targets, substitute_once  # noqa: E402
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -328,22 +329,52 @@ def create_deck_from_data(
         return _error(str(exc), "Check output_path is writable and data_slides is valid.", progress)
 
 
-def _substitute_in_text_frame(text_frame: Any, substitutions: dict) -> int:
+def _deck_text(prs: Any) -> str:
+    """Every run of text a substitution can reach, as one string.
+
+    Only used to decide what a key should match, so joining is enough.
+    """
+    parts: list[str] = []
+
+    def _walk(shape: Any) -> None:
+        if hasattr(shape, "shapes"):
+            for child in shape.shapes:
+                _walk(child)
+            return
+        if getattr(shape, "has_table", False):
+            for row in shape.table.rows:
+                for cell in row.cells:
+                    parts.extend(r.text for p in cell.text_frame.paragraphs for r in p.runs)
+            return
+        if getattr(shape, "has_text_frame", False):
+            parts.extend(r.text for p in shape.text_frame.paragraphs for r in p.runs)
+
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            _walk(shape)
+    return "\n".join(parts)
+
+
+def _substitute_in_text_frame(text_frame: Any, pairs: list[tuple[str, str]]) -> int:
+    """Replace every target in one pass per run.
+
+    A sequential pass over the keys let one key consume another -- `platform`
+    eating the middle of `platform_spend`, leaving a slide reading
+    "Google Ads_spend" -- and let a value produced by one key be re-replaced by
+    the next. substitute_once() matches all targets in a single regex pass, so
+    neither can happen.
+    """
     applied = 0
     for para in text_frame.paragraphs:
         for run in para.runs:
-            original = run.text
-            updated = original
-            for old, new in substitutions.items():
-                if str(old) in updated:
-                    updated = updated.replace(str(old), str(new))
-            if updated != original:
+            updated, _ = substitute_once(run.text, pairs)
+            if updated != run.text:
                 run.text = updated
                 applied += 1
     return applied
 
 
-def _substitute_in_shape(shape: Any, substitutions: dict) -> int:
+def _substitute_in_shape(shape: Any, pairs: list[tuple[str, str]]) -> int:
     """Replace placeholder text inside a shape, run by run.
 
     Assigning to text_frame.text would flatten the run structure and lose every
@@ -357,17 +388,17 @@ def _substitute_in_shape(shape: Any, substitutions: dict) -> int:
     applied = 0
     if hasattr(shape, "shapes"):  # grouped shape
         for child in shape.shapes:
-            applied += _substitute_in_shape(child, substitutions)
+            applied += _substitute_in_shape(child, pairs)
         return applied
 
     if getattr(shape, "has_table", False):
         for row in shape.table.rows:
             for cell in row.cells:
-                applied += _substitute_in_text_frame(cell.text_frame, substitutions)
+                applied += _substitute_in_text_frame(cell.text_frame, pairs)
         return applied
 
     if getattr(shape, "has_text_frame", False):
-        applied += _substitute_in_text_frame(shape.text_frame, substitutions)
+        applied += _substitute_in_text_frame(shape.text_frame, pairs)
     return applied
 
 
@@ -417,10 +448,22 @@ def create_from_template(
                 progress,
             )
 
+        # Resolve what each key should match against the whole deck before
+        # replacing anything -- a key that only appears delimited is matched in
+        # that form, so a caller passing `platform` at a `{platform}` template
+        # no longer leaves the braces behind.
+        targets, notes = resolve_targets(_deck_text(prs), subs)
+        for note in notes:
+            progress.append(info(note))
+        pairs = ordered_pairs(targets, subs)
+        for key in subs:
+            if str(key) not in targets:
+                progress.append(warn(f"Placeholder '{key}' not found in template"))
+
         applied = 0
         for slide in prs.slides:
             for shape in slide.shapes:
-                applied += _substitute_in_shape(shape, subs)
+                applied += _substitute_in_shape(shape, pairs)
         if subs:
             prs.save(str(path))
             progress.append(ok(f"Applied {applied} substitution(s)", f"{len(subs)} key(s) searched"))

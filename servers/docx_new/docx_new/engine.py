@@ -15,6 +15,7 @@ if str(_ROOT) not in sys.path:
 from shared.file_utils import embed_content  # noqa: E402
 from shared.platform_utils import open_file, resolve_output_path  # noqa: E402
 from shared.progress import fail, info, ok, warn  # noqa: E402
+from shared.template_fill import ordered_pairs, resolve_targets, sentinel_for  # noqa: E402
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -41,6 +42,20 @@ def _count_occurrences(doc: Any, needle: str) -> int:
             for cell in row.cells:
                 n += sum(1 for p in cell.paragraphs if needle in p.text)
     return n
+
+
+def _all_text(doc: Any) -> str:
+    """Every paragraph the substitution pass can reach, as one string.
+
+    Only used to decide what a key should match, so joining is enough -- a
+    placeholder never spans two paragraphs.
+    """
+    parts = [p.text for p in doc.paragraphs]
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                parts.extend(p.text for p in cell.paragraphs)
+    return "\n".join(parts)
 
 
 def _ensure_parent(path: Path) -> None:
@@ -285,23 +300,39 @@ def create_from_template(
                 'Pass a dict like {"PLACEHOLDER": "replacement value"}.',
             )
 
+        # Decide what to search for before touching anything: a key that only
+        # appears delimited is matched in that form, and a key that matches
+        # nothing is known to match nothing rather than having been eaten by an
+        # earlier replacement.
+        targets, notes = resolve_targets(_all_text(doc), substitutions)
+        for note in notes:
+            progress.append(info(note))
+
+        pairs = ordered_pairs(targets, substitutions)
+        counts = {target: _count_occurrences(doc, target) for target, _ in pairs}
+
+        # Two phases, because one sequential pass lets a key consume another key
+        # or a value an earlier replacement produced. Every target becomes a
+        # sentinel first; only then do sentinels become values.
+        # docxedit.replace_string operates on runs — never assigns .text directly.
+        for index, (target, _) in enumerate(pairs):
+            docxedit.replace_string(doc, target, sentinel_for(index))
+        for index, (_, value) in enumerate(pairs):
+            docxedit.replace_string(doc, sentinel_for(index), value)
+
         applied = 0
-        for old_str, new_str in substitutions.items():
-            old_s = str(old_str)
-            new_s = str(new_str)
-            # docxedit.replace_string operates on runs — never assigns .text directly
-            count = _count_occurrences(doc, old_s)
-            docxedit.replace_string(doc, old_s, new_s)
-            if count:
-                progress.append(
-                    ok(
-                        f"Replaced '{old_s}' → '{new_s}'",
-                        f"{count} occurrence{'s' if count != 1 else ''}",
-                    )
+        for target, value in pairs:
+            count = counts.get(target, 0)
+            progress.append(
+                ok(
+                    f"Replaced '{target}' → '{value}'",
+                    f"{count} occurrence{'s' if count != 1 else ''}",
                 )
-                applied += count
-            else:
-                progress.append(warn(f"Placeholder '{old_s}' not found in template"))
+            )
+            applied += count
+        for key in substitutions:
+            if str(key) not in targets:
+                progress.append(warn(f"Placeholder '{key}' not found in template"))
 
         doc.save(str(out_path))
         progress.append(ok(f"Saved {out_path.name}", f"{applied} total substitutions"))
