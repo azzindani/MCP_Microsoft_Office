@@ -6,6 +6,7 @@ from typing import Any
 
 import openpyxl
 from openpyxl.chart import AreaChart, BarChart, LineChart, PieChart, Reference, ScatterChart
+from openpyxl.chart.data_source import AxDataSource, StrRef
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import column_index_from_string
 
@@ -173,7 +174,22 @@ def _bind_data(chart: Any, ws: Any, data_range: str) -> bool:
         Reference(ws, min_col=min_col + 1, min_row=min_row, max_col=max_col, max_row=max_row),
         titles_from_data=True,
     )
-    chart.set_categories(Reference(ws, min_col=min_col, min_row=min_row + 1, max_row=max_row))
+    cats = Reference(ws, min_col=min_col, min_row=min_row + 1, max_row=max_row)
+    chart.set_categories(cats)
+
+    # openpyxl's set_categories() always writes <c:numRef>, whatever the cells
+    # hold:
+    #
+    #     for s in self.ser:
+    #         s.cat = AxDataSource(numRef=NumRef(f=labels))
+    #
+    # ECMA-376 uses <c:strRef> for text categories, and it is what Excel itself
+    # writes. Pointed at a column of names through a numRef the category axis
+    # has no numbers to read and can come out blank -- the one thing this whole
+    # branch exists to prevent. We only reach here once the column has been
+    # established to hold text and no numbers, so the reference is unambiguous.
+    for series in chart.series:
+        series.cat = AxDataSource(strRef=StrRef(f=str(cats)))
     return True
 
 

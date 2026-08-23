@@ -52,6 +52,7 @@ for p in (
     str(ROOT / "shared"),
     str(ROOT / "servers" / "xlsx_basic"),
     str(ROOT / "servers" / "xlsx_formulas"),
+    str(ROOT / "servers" / "xlsx_charts"),
 ):
     if p not in sys.path:
         sys.path.insert(0, p)
@@ -223,3 +224,33 @@ class TestASheetThatCannotBeSortedSaysSo:
         assert "merged" in r["error"].lower(), r["error"]
         assert "D2:D3" in r["error"]
         assert "Unmerge" in r["hint"]
+
+
+class TestChartCategoriesAreLabelsNotNumbers:
+    """openpyxl's set_categories() always writes <c:numRef>, whatever the cells
+    hold. ECMA-376 uses <c:strRef> for text categories and it is what Excel
+    itself writes; pointed at a column of names through a numRef the category
+    axis has no numbers to read and can come out blank -- which is exactly what
+    the label-column branch exists to prevent."""
+
+    def test_a_text_label_column_is_referenced_as_text(self, tmp_path):
+        from xlsx_charts import engine as charts_engine
+
+        p = tmp_path / "c.xlsx"
+        wb = Workbook()
+        ws = sheet(wb)
+        ws.append(["platform", "spend"])
+        ws.append(["Google Ads", 100])
+        ws.append(["Facebook Ads", 50])
+        wb.save(p)
+
+        r = charts_engine.add_chart(str(p), "S", "bar", "A1:B3", title="T", anchor_cell="E2")
+        assert r["success"] is True, r.get("error")
+
+        xml = zipfile.ZipFile(p).read("xl/charts/chart1.xml").decode()
+        cat = re.search(r"<(?:\w+:)?cat>(.*?)</(?:\w+:)?cat>", xml, re.S)
+        val = re.search(r"<(?:\w+:)?val>(.*?)</(?:\w+:)?val>", xml, re.S)
+        assert cat and "strRef" in cat.group(1), cat.group(1) if cat else "no <cat>"
+        assert "$A$2:$A$3" in cat.group(1)
+        # The numbers must stay numeric.
+        assert val and "numRef" in val.group(1), val.group(1) if val else "no <val>"

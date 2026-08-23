@@ -126,7 +126,7 @@ def create_invoice(
     output_path: str = "",
     return_content: bool = False,
 ) -> dict:
-    """Create a formatted invoice .xlsx with items, totals, and tax formula."""
+    """Create invoice .xlsx: items, totals, tax formula. tax_rate 0-1."""
     return engine.create_invoice(
         output_path,
         company_name,
