@@ -114,6 +114,15 @@ class TestCopySheetTakesEitherSpelling:
         r = copy_sheet(book, source_sheet="Data", new_name="Copy")
         assert r["success"] is True, r.get("error")
 
+    def test_a_positional_call_written_against_the_old_signature_still_works(self, book: str):
+        """Old order was (file_path, source_sheet, new_sheet_name); the new
+        first two are (sheet_name, new_name), which fills the same two roles."""
+        from xlsx_basic.server import copy_sheet
+
+        r = copy_sheet(book, "Data", "Copy")
+        assert r["success"] is True, r.get("error")
+        assert "Copy" in sheets(book)
+
     def test_the_alias_is_recorded_in_progress(self, book: str):
         from xlsx_basic.server import copy_sheet
 
@@ -159,14 +168,24 @@ class TestRenameSheetTakesEitherSpelling:
         assert r["success"] is True, r.get("error")
         assert sheets(book) == ["Renamed"]
 
-    def test_new_name_is_still_required(self, book: str):
-        """It is the one spelling both tools already agreed on."""
-        import inspect
+    def test_a_positional_call_written_against_the_old_signature_still_works(self, book: str):
+        """Adding the alias must not silently swap a caller's two arguments.
 
+        The old signature was (file_path, old_name, new_name). Putting new_name
+        in old_name's position would make rename_sheet(path, "Data", "Renamed")
+        rename "Renamed" to "Data" and report success.
+        """
         from xlsx_basic.server import rename_sheet
 
-        sig = inspect.signature(rename_sheet)
-        assert sig.parameters["new_name"].default is inspect.Parameter.empty
+        r = rename_sheet(book, "Data", "Renamed")
+        assert r["success"] is True, r.get("error")
+        assert sheets(book) == ["Renamed"]
+
+    def test_a_missing_new_name_is_refused_not_guessed(self, book: str):
+        from xlsx_basic.server import rename_sheet
+
+        r = rename_sheet(book, sheet_name="Data")
+        assert r["success"] is False and "new_name" in r["error"]
 
     def test_no_sheet_at_all_says_sheet_name(self, book: str):
         from xlsx_basic.server import rename_sheet

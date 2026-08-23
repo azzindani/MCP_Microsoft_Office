@@ -122,11 +122,15 @@ def sort_sheet(
 
 
 @mcp.tool()
-def rename_sheet(file_path: str, new_name: str, sheet_name: str = "", old_name: str = "") -> dict:
+def rename_sheet(file_path: str, old_name: str = "", new_name: str = "", sheet_name: str = "") -> dict:
     """Rename sheet_name to new_name. old_name= accepted for sheet_name."""
+    # old_name stays in its original position so a positional caller written
+    # against the previous signature still renames the sheet it meant to.
     sheet, note = pick("rename_sheet", "sheet_name", sheet_name, old_name)
     if not sheet:
         return missing("rename_sheet", "sheet_name", "old_name")
+    if not new_name.strip():
+        return missing("rename_sheet", "new_name", "new_name")
     result = _rename_sheet(file_path, sheet, new_name, open_after=True)
     if note:
         result.setdefault("progress", []).append(info(note))
