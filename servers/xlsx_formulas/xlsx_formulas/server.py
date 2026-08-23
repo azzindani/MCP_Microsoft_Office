@@ -8,6 +8,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from shared.deploy_auth import build_auth, build_oauth_bridge
+from shared.strict_args import enforce_known_arguments
 from xlsx_formulas import engine
 
 _VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
@@ -148,6 +149,12 @@ def convert_to_values(
 ) -> dict:
     """Replace formulas with their calculated values in a range."""
     return engine.convert_to_values(file_path, sheet_name, range_address, open_after=True)
+
+
+# The bundled FastMCP ignores an argument a tool does not declare, so a wrong
+# name yields a plausible answer with the argument silently dropped. Refuse it,
+# and name the ones that would have worked.
+enforce_known_arguments(mcp)
 
 
 def main() -> None:

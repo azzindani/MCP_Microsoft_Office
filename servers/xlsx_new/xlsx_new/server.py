@@ -10,6 +10,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from shared.deploy_auth import build_auth, build_oauth_bridge
+from shared.strict_args import enforce_known_arguments
 from xlsx_new import engine
 
 _VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
@@ -137,6 +138,12 @@ def create_invoice(
         open_after=True,
         return_content=return_content,
     )
+
+
+# The bundled FastMCP ignores an argument a tool does not declare, so a wrong
+# name yields a plausible answer with the argument silently dropped. Refuse it,
+# and name the ones that would have worked.
+enforce_known_arguments(mcp)
 
 
 def main() -> None:

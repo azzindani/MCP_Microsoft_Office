@@ -9,6 +9,7 @@ from starlette.responses import JSONResponse
 
 from pptx_basic import engine
 from shared.deploy_auth import build_auth, build_oauth_bridge
+from shared.strict_args import enforce_known_arguments
 
 _VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
 _HOST = os.environ.get("OFFICE_PPTX_BASIC_HOST", "127.0.0.1")
@@ -109,6 +110,12 @@ def add_text_box(
 def diff_versions(file_path: str, timestamp_a: str, timestamp_b: str = "current") -> dict:
     """Compare two presentation versions by snapshot timestamp."""
     return engine.diff_versions(file_path, timestamp_a, timestamp_b)
+
+
+# The bundled FastMCP ignores an argument a tool does not declare, so a wrong
+# name yields a plausible answer with the argument silently dropped. Refuse it,
+# and name the ones that would have worked.
+enforce_known_arguments(mcp)
 
 
 def main() -> None:

@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import inspect
 from pathlib import Path
+from typing import Any
 
 import openpyxl
 import pytest
@@ -95,12 +96,29 @@ class TestOneAxisIsEnough:
         sig = inspect.signature(server.add_pivot_table)
         assert sig.parameters["cols"].default == "", sig
 
-    def test_rows_and_values_are_still_required(self):
-        from xlsx_charts import server
+    @pytest.mark.parametrize("omit", ["source_range", "rows", "values"])
+    def test_everything_but_cols_is_still_required(self, book: str, omit: str):
+        """Pinned as behaviour, not as a signature default.
 
-        sig = inspect.signature(server.add_pivot_table)
-        for name in ("rows", "values"):
-            assert sig.parameters[name].default is inspect.Parameter.empty, name
+        This originally asserted `rows` and `values` had no default. Accepting
+        `anchor_cell` as an alias for `dest_cell` -- which sits before them --
+        forced every later parameter to take one, because a defaulted parameter
+        cannot precede a bare one. The intent was never the signature: it was
+        that omitting them is refused, and clearly. That is what is checked now.
+        """
+        args: dict[str, Any] = {
+            "file_path": book,
+            "sheet_name": "Ad Data",
+            "source_range": "A1:D5",
+            "dest_cell": "F1",
+            "rows": "platform",
+            "values": "spends",
+        }
+        args.pop(omit)
+        r = add_pivot_table(**args)
+        assert r["success"] is False
+        assert omit in r["error"], r
+        assert "cols" in r["hint"], r
 
     def test_a_one_dimensional_pivot_succeeds(self, book: str):
         r = add_pivot_table(book, "Ad Data", "A1:D5", "F1", "platform", values="spends")

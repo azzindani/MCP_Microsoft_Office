@@ -8,6 +8,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from shared.deploy_auth import build_auth, build_oauth_bridge
+from shared.strict_args import enforce_known_arguments
 from xlsx_charts import engine
 
 _VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
@@ -49,10 +50,11 @@ def add_chart(
     sheet_name: str,
     chart_type: str,
     data_range: str,
-    title: str,
-    anchor_cell: str,
+    title: str = "",
+    anchor_cell: str = "",
     width: float = 15.0,
     height: float = 10.0,
+    dest_cell: str = "",
 ) -> dict:
     """Create chart from data range. type: bar, line, pie, area, scatter."""
     return engine.add_chart(
@@ -65,6 +67,7 @@ def add_chart(
         width,
         height,
         open_after=True,
+        dest_cell=dest_cell,
     )
 
 
@@ -94,14 +97,25 @@ def update_chart(
 def add_pivot_table(
     file_path: str,
     sheet_name: str,
-    source_range: str,
-    dest_cell: str,
-    rows: str,
-    values: str,
+    source_range: str = "",
+    dest_cell: str = "",
+    rows: str = "",
+    values: str = "",
     cols: str = "",
+    anchor_cell: str = "",
 ) -> dict:
     """Sum values per rows group. cols optional: adds a second axis."""
-    return engine.add_pivot_table(file_path, sheet_name, source_range, dest_cell, rows, cols, values, open_after=True)
+    return engine.add_pivot_table(
+        file_path,
+        sheet_name,
+        source_range,
+        dest_cell,
+        rows,
+        cols,
+        values,
+        open_after=True,
+        anchor_cell=anchor_cell,
+    )
 
 
 @mcp.tool()
@@ -127,6 +141,12 @@ def set_cell_style(
         number_format,
         open_after=True,
     )
+
+
+# The bundled FastMCP ignores an argument a tool does not declare, so a wrong
+# name yields a plausible answer with the argument silently dropped. Refuse it,
+# and name the ones that would have worked.
+enforce_known_arguments(mcp)
 
 
 def main() -> None:

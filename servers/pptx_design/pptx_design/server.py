@@ -9,6 +9,7 @@ from starlette.responses import JSONResponse
 
 from pptx_design import engine
 from shared.deploy_auth import build_auth, build_oauth_bridge
+from shared.strict_args import enforce_known_arguments
 
 _VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
 _HOST = os.environ.get("OFFICE_PPTX_DESIGN_HOST", "127.0.0.1")
@@ -145,6 +146,12 @@ def set_font_all_slides(
 ) -> dict:
     """Apply font name/size/bold/color to every text run on all slides."""
     return engine.set_font_all_slides(file_path, font_name, font_size, bold, color_hex, open_after=True)
+
+
+# The bundled FastMCP ignores an argument a tool does not declare, so a wrong
+# name yields a plausible answer with the argument silently dropped. Refuse it,
+# and name the ones that would have worked.
+enforce_known_arguments(mcp)
 
 
 def main() -> None:

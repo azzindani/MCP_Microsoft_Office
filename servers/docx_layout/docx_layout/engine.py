@@ -323,9 +323,14 @@ def add_image(
     image_path: str,
     width_inches: float = 4.0,
     open_after: bool = False,
+    width: float = 0.0,
 ) -> dict[str, Any]:
     """Insert an image into paragraph N. Supported: PNG, JPG, GIF, BMP, TIFF."""
     progress: list[dict[str, Any]] = []
+    # Five sibling tools size things with a plain `width`; this is the only one
+    # that carries the unit in the name, and it is still inches either way.
+    if width:
+        width_inches = width
     backup: str | None = None
     _SUPPORTED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".tif"}
     try:

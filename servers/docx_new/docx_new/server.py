@@ -11,6 +11,7 @@ from starlette.responses import JSONResponse
 
 from docx_new import engine
 from shared.deploy_auth import build_auth, build_oauth_bridge
+from shared.strict_args import enforce_known_arguments
 
 _VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
 _HOST = os.environ.get("OFFICE_DOCX_NEW_HOST", "127.0.0.1")
@@ -128,6 +129,12 @@ def batch_create_from_template(
 ) -> dict:
     """Generate N .docx files from a template + list of {key:value} dicts."""
     return engine.batch_create_from_template(template_path, data_list, output_dir, filename_key, open_after=True)
+
+
+# The bundled FastMCP ignores an argument a tool does not declare, so a wrong
+# name yields a plausible answer with the argument silently dropped. Refuse it,
+# and name the ones that would have worked.
+enforce_known_arguments(mcp)
 
 
 def main() -> None:

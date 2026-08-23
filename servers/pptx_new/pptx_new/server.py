@@ -11,6 +11,7 @@ from starlette.responses import JSONResponse
 
 from pptx_new import engine
 from shared.deploy_auth import build_auth, build_oauth_bridge
+from shared.strict_args import enforce_known_arguments
 
 _VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
 _HOST = os.environ.get("OFFICE_PPTX_NEW_HOST", "127.0.0.1")
@@ -120,6 +121,12 @@ def create_from_docx(
 ) -> dict:
     """Convert a Word document outline into a PowerPoint presentation."""
     return engine.create_from_docx(docx_path, output_path, max_slides, open_after=True, return_content=return_content)
+
+
+# The bundled FastMCP ignores an argument a tool does not declare, so a wrong
+# name yields a plausible answer with the argument silently dropped. Refuse it,
+# and name the ones that would have worked.
+enforce_known_arguments(mcp)
 
 
 def main() -> None:

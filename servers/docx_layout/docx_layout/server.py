@@ -9,6 +9,7 @@ from starlette.responses import JSONResponse
 
 from docx_layout import engine
 from shared.deploy_auth import build_auth, build_oauth_bridge
+from shared.strict_args import enforce_known_arguments
 
 _VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
 _HOST = os.environ.get("OFFICE_DOCX_LAYOUT_HOST", "127.0.0.1")
@@ -74,9 +75,10 @@ def add_image(
     paragraph_index: int,
     image_path: str,
     width_inches: float = 4.0,
+    width: float = 0.0,
 ) -> dict:
     """Insert image into paragraph N. Formats: PNG, JPG, GIF, BMP, TIFF."""
-    return engine.add_image(file_path, paragraph_index, image_path, width_inches, open_after=True)
+    return engine.add_image(file_path, paragraph_index, image_path, width_inches, open_after=True, width=width)
 
 
 @mcp.tool()
@@ -105,6 +107,12 @@ def add_header_footer(
 def export_pdf(file_path: str, output_path: str = "", return_content: bool = False) -> dict:
     """Export .docx to PDF (needs Word/LibreOffice). return_content=bytes."""
     return engine.export_pdf(file_path, output_path, open_after=True, return_content=return_content)
+
+
+# The bundled FastMCP ignores an argument a tool does not declare, so a wrong
+# name yields a plausible answer with the argument silently dropped. Refuse it,
+# and name the ones that would have worked.
+enforce_known_arguments(mcp)
 
 
 def main() -> None:

@@ -9,10 +9,11 @@ from openpyxl.chart import AreaChart, BarChart, LineChart, PieChart, Reference, 
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import column_index_from_string
 
+from shared.arg_alias import missing, pick
 from shared.file_utils import hint_for_error, resolve_path, sheet_names_hint
 from shared.live_edit import notify_reload
 from shared.platform_utils import open_file
-from shared.progress import fail, index_range, ok
+from shared.progress import fail, index_range, info, ok
 from shared.version_control import snapshot
 
 # ---------------------------------------------------------------------------
@@ -186,14 +187,22 @@ def add_chart(
     sheet_name: str,
     chart_type: str,
     data_range: str,
-    title: str,
-    anchor_cell: str,
+    title: str = "",
+    anchor_cell: str = "",
     width: float = 15.0,
     height: float = 10.0,
     open_after: bool = False,
+    dest_cell: str = "",
 ) -> dict[str, Any]:
     """Create a chart from a data range and place it on the sheet."""
     progress: list[dict[str, Any]] = []
+    # add_pivot_table, 235 lines below in this same file, calls the cell it
+    # places its output at `dest_cell`. Nothing distinguishes the two names.
+    anchor_cell, note = pick("add_chart", "anchor_cell", anchor_cell, dest_cell)
+    if not anchor_cell:
+        return missing("add_chart", "anchor_cell", "dest_cell")
+    if note:
+        progress.append(info("Argument alias", note))
     backup: str | None = None
     try:
         if chart_type not in CHART_TYPES:
@@ -419,12 +428,13 @@ def update_chart(
 def add_pivot_table(
     file_path: str,
     sheet_name: str,
-    source_range: str,
-    dest_cell: str,
-    rows: str,
+    source_range: str = "",
+    dest_cell: str = "",
+    rows: str = "",
     cols: str = "",
     values: str = "",
     open_after: bool = False,
+    anchor_cell: str = "",
 ) -> dict[str, Any]:
     """Create a summary pivot-style table from source data.
 
@@ -434,6 +444,35 @@ def add_pivot_table(
     """
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    # add_chart, in this same file, calls the cell it places its output at
+    # `anchor_cell`. Nothing distinguishes the two names.
+    dest_cell, note = pick("add_pivot_table", "dest_cell", dest_cell, anchor_cell)
+    if not dest_cell:
+        return missing("add_pivot_table", "dest_cell", "anchor_cell")
+    if note:
+        progress.append(info("Argument alias", note))
+    # A parameter with a default cannot precede one without, so accepting
+    # anchor_cell gave these defaults in the signature. They are still required
+    # in fact -- only `cols` is genuinely optional -- and refusing here keeps
+    # the message as clear as pydantic's was.
+    required = (
+        ("source_range", source_range, "A1:D50"),
+        ("rows", rows, "a column header from source_range"),
+        ("values", values, "a column header from source_range"),
+    )
+    for field, given, example in required:
+        if not given:
+            return {
+                "success": False,
+                "op": "add_pivot_table",
+                "error": f"add_pivot_table needs {field}",
+                "hint": f"Pass {field}= ({example}). Only cols= is optional.",
+                # Refused before anything was opened, so there is nothing to
+                # restore -- but callers read this key, so say so explicitly.
+                "backup": None,
+                "progress": [fail("Missing argument", field)],
+                "token_estimate": 25,
+            }
     try:
         path = resolve_path(file_path)
         wb, err = _open_wb(path, progress)

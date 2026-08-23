@@ -13,6 +13,7 @@ from docx_basic.helpers import get_history_tool as _get_history_tool
 from docx_basic.helpers import read_receipt_tool as _read_receipt_tool
 from docx_basic.helpers import restore_version as _restore_version
 from shared.deploy_auth import build_auth, build_oauth_bridge
+from shared.strict_args import enforce_known_arguments
 
 _VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
 _HOST = os.environ.get("OFFICE_DOCX_BASIC_HOST", "127.0.0.1")
@@ -160,6 +161,12 @@ def diff_versions(file_path: str, timestamp_a: str, timestamp_b: str = "current"
 def read_receipt(file_path: str, last_n: int = 10) -> dict:
     """Show recent tool operations on this file. last_n: how many to show."""
     return _read_receipt_tool(file_path, last_n)
+
+
+# The bundled FastMCP ignores an argument a tool does not declare, so a wrong
+# name yields a plausible answer with the argument silently dropped. Refuse it,
+# and name the ones that would have worked.
+enforce_known_arguments(mcp)
 
 
 def main() -> None:
