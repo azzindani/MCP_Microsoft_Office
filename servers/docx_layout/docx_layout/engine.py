@@ -320,11 +320,14 @@ def set_paragraph_style(
         return _error(str(e), hint_for_error(e, path), progress, backup)
 
 
+DEFAULT_IMAGE_WIDTH_INCHES = 4.0
+
+
 def add_image(
     file_path: str,
     paragraph_index: int,
     image_path: str,
-    width_inches: float = 4.0,
+    width_inches: float = DEFAULT_IMAGE_WIDTH_INCHES,
     open_after: bool = False,
     width: float = 0.0,
 ) -> dict[str, Any]:
@@ -332,7 +335,13 @@ def add_image(
     progress: list[dict[str, Any]] = []
     # Five sibling tools size things with a plain `width`; this is the only one
     # that carries the unit in the name, and it is still inches either way.
-    if width:
+    #
+    # The documented name wins when both are given. This read `if width:` and so
+    # let the fallback overwrite an explicit width_inches -- the opposite of
+    # every other alias in the repo (shared/arg_alias.pick resolves primary
+    # first, and read_paragraph takes paragraph_index over index), and the
+    # opposite of what the test pinning it was named for.
+    if width and width_inches == DEFAULT_IMAGE_WIDTH_INCHES:
         width_inches = width
     backup: str | None = None
     _SUPPORTED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".tif"}

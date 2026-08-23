@@ -1,10 +1,34 @@
-"""Snapshot, patch log, and rollback for document version control."""
+"""Snapshot, patch log, and rollback for document version control.
+
+A snapshot is named for the file it came from, and until now that name dropped
+the extension: `report.docx` and `report.xlsx` sitting in the same directory both
+snapshotted to `.mcp_versions/report_{timestamp}.bak`, and the history was read
+back with a `{stem}_` prefix match. So one document's history was another
+document's history -- and on these servers a .docx, .xlsx and .pptx built for the
+same piece of work routinely share a name and a folder.
+
+Proved against the live endpoints with a CSV and a Word document beside it:
+restoring the CSV with no timestamp returned the newest snapshot under that
+stem, which was the .docx, and answered success: true. 12 bytes of CSV came back
+as 37,117 bytes of Word document.
+
+File_System already writes `{stem}_{ts}{ext}.bak`; this brings the Office
+servers in line with it and with the two other siblings. Reading stays more
+forgiving than writing so snapshots taken before this change are not stranded --
+but an extension-less legacy name is only accepted when nothing else in the
+directory shares the stem, which is exactly where it cannot be ambiguous.
+"""
 
 import os
 import shutil
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
+
+# A snapshot name is the stem, an underscore, then a UTC timestamp that always
+# begins with a four-digit year. Matching on `{stem}_` alone also lets a snapshot
+# of `report_final.docx` answer a query about `report.docx`.
+_TS_PREFIX_LEN = 4
 
 
 def _versions_dir(file_path: str) -> Path:
@@ -14,12 +38,32 @@ def _versions_dir(file_path: str) -> Path:
 
 def _backup_name(file_path: str, timestamp: str) -> str:
     """Return the backup filename for a given file and timestamp."""
-    stem = Path(file_path).stem
-    return f"{stem}_{timestamp}.bak"
+    src = Path(file_path)
+    return f"{src.stem}_{timestamp}{src.suffix}.bak"
+
+
+def _legacy_backup_name(file_path: str, timestamp: str) -> str:
+    """The pre-fix name, without the extension. Read only, never written."""
+    return f"{Path(file_path).stem}_{timestamp}.bak"
+
+
+def _legacy_is_unambiguous(file_path: str) -> bool:
+    """True when no other file beside this one shares its stem.
+
+    `report_{ts}.bak` could be a snapshot of report.docx or of report.xlsx. When
+    only one `report.*` exists there is nothing to confuse it with, so the old
+    name is still safe to offer.
+    """
+    src = Path(file_path).resolve()
+    try:
+        siblings = list(src.parent.iterdir())
+    except OSError:
+        return False
+    return not any(p.is_file() and p.stem == src.stem and p.suffix != src.suffix for p in siblings)
 
 
 def snapshot(file_path: str) -> str:
-    """Copy file_path to .mcp_versions/{stem}_{iso_timestamp}.bak.
+    """Copy file_path to .mcp_versions/{stem}_{iso_timestamp}{ext}.bak.
 
     Returns the backup path as a string.
     Raises FileNotFoundError if file_path does not exist.
@@ -43,8 +87,7 @@ def snapshot(file_path: str) -> str:
     # Collision counter: append _N if the path already exists
     counter = 1
     while backup_path.exists():
-        stem = Path(file_path).stem
-        backup_path = versions_dir / f"{stem}_{timestamp}_{counter}.bak"
+        backup_path = versions_dir / f"{src.stem}_{timestamp}_{counter}{src.suffix}.bak"
         counter += 1
 
     # Atomic write: copy to a temp file then rename
@@ -65,18 +108,20 @@ def snapshot(file_path: str) -> str:
 
 def restore(file_path: str, timestamp: str) -> bool:
     """
-    Copy .mcp_versions/{stem}_{timestamp}.bak back over file_path.
+    Copy .mcp_versions/{stem}_{timestamp}{ext}.bak back over file_path.
 
     Returns True on success, False if backup not found.
     """
-    backup_name = _backup_name(file_path, timestamp)
-    backup_path = _versions_dir(file_path) / backup_name
+    versions_dir = _versions_dir(file_path)
+    candidates = [versions_dir / _backup_name(file_path, timestamp)]
+    if _legacy_is_unambiguous(file_path):
+        candidates.append(versions_dir / _legacy_backup_name(file_path, timestamp))
 
-    if not backup_path.exists():
-        return False
-
-    shutil.copy2(str(backup_path), file_path)
-    return True
+    for backup_path in candidates:
+        if backup_path.exists():
+            shutil.copy2(str(backup_path), file_path)
+            return True
+    return False
 
 
 def get_history(file_path: str) -> list[dict]:
@@ -89,15 +134,26 @@ def get_history(file_path: str) -> list[dict]:
     if not versions_dir.exists():
         return []
 
-    stem = Path(file_path).stem
-    prefix = f"{stem}_"
-    suffix = ".bak"
+    src = Path(file_path)
+    prefix = f"{src.stem}_"
+    tails = [f"{src.suffix}.bak"]
+    if _legacy_is_unambiguous(file_path):
+        tails.append(".bak")
 
     entries = []
+    seen: set[str] = set()
     for p in versions_dir.iterdir():
-        if p.name.startswith(prefix) and p.name.endswith(suffix):
-            # Extract timestamp: remove prefix and suffix
-            timestamp = p.name[len(prefix) : -len(suffix)]
+        if not p.name.startswith(prefix) or p.name in seen:
+            continue
+        for tail in tails:
+            if not p.name.endswith(tail):
+                continue
+            timestamp = p.name[len(prefix) : -len(tail)]
+            # The timestamp always opens with a four-digit year. Without this,
+            # a snapshot of report_final.docx answers for report.docx.
+            if not (timestamp[:_TS_PREFIX_LEN].isdigit() and timestamp[_TS_PREFIX_LEN : _TS_PREFIX_LEN + 1] == "-"):
+                continue
+            seen.add(p.name)
             entries.append(
                 {
                     "timestamp": timestamp,
@@ -105,6 +161,7 @@ def get_history(file_path: str) -> list[dict]:
                     "size_bytes": p.stat().st_size,
                 }
             )
+            break
 
     # Sort newest first (ISO timestamp with hyphens sorts lexicographically)
     entries.sort(key=lambda e: e["timestamp"], reverse=True)

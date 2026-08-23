@@ -146,26 +146,50 @@ def get_downloads_dir() -> Path:
 
 def resolve_output_path(output_path: str, default_name: str) -> Path:
     """
-    Resolve an output path, defaulting to the Downloads directory.
+    Resolve an output path, snapshotting whatever is already there.
 
     Rules:
     - Empty string or bare filename (no directory) → ~/Downloads/<name>
     - Relative path (has directory component) → resolved from cwd
     - Absolute path → used as-is
 
+    Every one of this repo's 24 callers is about to write to the path it gets
+    back, so the snapshot belongs here: it is the one place a new create_* tool
+    cannot forget it, and forgetting it is exactly what happened. The three
+    `*_new` servers -- nineteen tools -- never called snapshot() at all, while
+    every editing tool on the same servers snapshots before it writes. So:
+
+        create_document(output_path=plan.docx)     # 1 snapshot from append_text
+        append_text(plan.docx, "...")
+        create_document(output_path=plan.docx)     # retry after a timeout
+        -> success: true, the paragraph gone, still 1 snapshot
+
+    The destructive operation with no undo was the one annotated
+    destructiveHint: False. It is also precisely the retry case: a client whose
+    create call times out and re-sends it discards whatever was written in
+    between, irrecoverably.
+
     Args:
         output_path: The path string provided by the caller (may be empty).
         default_name: Filename to use when output_path is empty.
     """
     if not output_path:
-        return get_downloads_dir() / default_name
+        resolved = get_downloads_dir() / default_name
+    else:
+        p = Path(output_path)
+        # Bare filename: no directory separators
+        resolved = get_downloads_dir() / p.name if p.parent == Path(".") else p.expanduser().resolve()
 
-    p = Path(output_path)
-    # Bare filename: no directory separators
-    if p.parent == Path("."):
-        return get_downloads_dir() / p.name
+    if resolved.is_file():
+        from shared.version_control import snapshot
 
-    return p.expanduser().resolve()
+        try:
+            snapshot(str(resolved))
+        except Exception:
+            # A snapshot failure must not stop the write the caller asked for.
+            pass
+
+    return resolved
 
 
 def open_file(path: Path) -> None:

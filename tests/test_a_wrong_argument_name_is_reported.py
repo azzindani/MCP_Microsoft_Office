@@ -251,6 +251,11 @@ class TestTheImageWidthHasOneName:
         assert r["width_inches"] == 3.0
 
     def test_the_documented_name_wins_when_both_are_given(self, document, image):
+        # This test's name always said the documented name wins; its assertion
+        # said 2.0, the alias. The engine read `if width: width_inches = width`,
+        # so the fallback overwrote an explicit width_inches -- the opposite of
+        # every other alias here. A caller who spells the documented name
+        # correctly must not be overridden by the spelling kept for compatibility.
         r = call(
             "docx_layout",
             "add_image",
@@ -263,4 +268,55 @@ class TestTheImageWidthHasOneName:
             },
         )
         assert r["success"] is True, r.get("error")
+        assert r["width_inches"] == 3.0
+
+    def test_the_alias_still_applies_when_the_documented_name_is_absent(self, document, image):
+        r = call(
+            "docx_layout",
+            "add_image",
+            {"file_path": document, "paragraph_index": 0, "image_path": image, "width": 2.0},
+        )
+        assert r["success"] is True, r.get("error")
         assert r["width_inches"] == 2.0
+
+    def test_the_default_still_applies_when_neither_is_given(self, document, image):
+        r = call(
+            "docx_layout",
+            "add_image",
+            {"file_path": document, "paragraph_index": 0, "image_path": image},
+        )
+        assert r["success"] is True, r.get("error")
+        assert r["width_inches"] == 4.0
+
+
+class TestTheRefusalSaysItOnce:
+    """The refusal listed every accepted name twice and mis-stated its size.
+
+    `hint` was built as `f"{hint} Accepted: {names}."` where `hint` had already
+    spelled the same list out when there was no near-miss to suggest. Against
+    the live endpoint, add_chart's refusal:
+
+        add_chart accepts: anchor_cell, chart_type, data_range, dest_cell,
+        file_path, height, sheet_name, title, width. Accepted: anchor_cell,
+        chart_type, data_range, dest_cell, file_path, height, sheet_name,
+        title, width.
+
+    214 characters where 110 say the same thing. And `token_estimate` was the
+    literal 40 whatever the response held -- under half the real size for a wide
+    tool, on servers whose entire design is a 12,000-token client budget.
+    """
+
+    def test_the_accepted_names_appear_once(self):
+        r = call("xlsx_charts", "add_chart", {"file_path": "/tmp/none.xlsx", "bogus": 1})
+        names = "chart_type"
+        assert r["hint"].count(names) == 1, r["hint"]
+
+    def test_a_near_miss_still_names_the_alternatives(self):
+        r = call("xlsx_charts", "add_chart", {"file_path": "/tmp/none.xlsx", "chart_typ": "bar"})
+        assert "chart_type" in r["hint"], r["hint"]
+        assert "Did you mean" in r["hint"], r["hint"]
+
+    def test_the_token_estimate_is_measured(self):
+        r = call("xlsx_charts", "add_chart", {"file_path": "/tmp/none.xlsx", "bogus": 1})
+        assert r["token_estimate"] >= len(str(r)) // 8, r["token_estimate"]
+        assert r["token_estimate"] != 40 or len(str(r)) // 4 == 40

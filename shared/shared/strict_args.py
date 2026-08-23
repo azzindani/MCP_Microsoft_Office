@@ -62,15 +62,24 @@ def enforce_known_arguments(mcp: Any) -> None:
             if unknown and known:
                 first = unknown[0]
                 suggestion = _did_you_mean(first, known)
-                hint = f"Did you mean {suggestion}=?" if suggestion else f"{name} accepts: {', '.join(known)}."
+                # The accepted names go in once. The first version of this
+                # appended "Accepted: <names>." to a hint that had already
+                # spelled the same list out, so add_chart's refusal shipped its
+                # nine parameter names twice -- 214 characters where 110 say the
+                # same thing, on servers whose whole point is a tight context.
+                lead = f"Did you mean {suggestion}=? " if suggestion else ""
                 refusal = {
                     "success": False,
                     "op": name,
                     "error": f"{name} does not take {', '.join(unknown)}",
-                    "hint": f"{hint} Accepted: {', '.join(known)}.",
+                    "hint": f"{lead}{name} accepts: {', '.join(known)}.",
                     "progress": [],
-                    "token_estimate": 40,
                 }
+                # Measured, not assumed: the flat 40 this used to carry was
+                # under half the real size for a wide tool, and a client that
+                # budgets from the estimate admits a response twice the size it
+                # was told to expect.
+                refusal["token_estimate"] = len(str(refusal)) // 4
                 # The server asks for the converted form. Returning the raw dict
                 # -- or worse a JSON string, which the SDK then iterates one
                 # character at a time into 1900 validation errors -- produces a
