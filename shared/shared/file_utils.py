@@ -142,6 +142,15 @@ def hint_for_error(e: Exception, path: Path | None = None) -> str:
     if isinstance(e, PermissionError):
         name = path.name if path else "the file"
         return f"'{name}' is open in Word, Excel, or PowerPoint. Close it and try again."
+    if isinstance(e, FileNotFoundError):
+        return "That path does not exist. Check the directory was created first."
+    if path is None:
+        # resolve_path() raised, so file_path never became a Path at all: a
+        # workspace:/project: alias that does not resolve, a path inside
+        # .mcp_versions/, a null byte, a URL that could not be fetched. The
+        # generic "use restore_version to undo" answer is doubly wrong here --
+        # nothing was written, and the fix is to the argument.
+        return "file_path could not be resolved. Pass an absolute path to an existing file."
     return "Use restore_version to undo if a snapshot was taken."
 
 

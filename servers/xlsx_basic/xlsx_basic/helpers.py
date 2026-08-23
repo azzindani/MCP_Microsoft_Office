@@ -69,6 +69,7 @@ def sort_sheet(
     """Sort all rows in a sheet by the values in a given column."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         col_upper = column.upper()
         try:
@@ -186,6 +187,7 @@ def rename_sheet(
     """Rename a worksheet tab from old_name to new_name."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         if not new_name:
             progress.append(fail("new_name cannot be empty"))
@@ -370,6 +372,7 @@ def copy_sheet(
     """Copy a worksheet within the same workbook to a new sheet name."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         if not new_sheet_name:
             progress.append(fail("new_sheet_name cannot be empty"))

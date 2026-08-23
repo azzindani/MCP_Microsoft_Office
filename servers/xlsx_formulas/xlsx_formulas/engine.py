@@ -111,6 +111,7 @@ def set_formula(
     progress: list[dict[str, Any]] = []
     backup: str | None = None
     addr = cell_address.upper()
+    path: Path | None = None
     try:
         if not formula.startswith("="):
             progress.append(fail("Formula must start with '='", formula))
@@ -184,6 +185,7 @@ def set_named_range(
     """Define a named range in the workbook."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         if not range_name.replace("_", "").isalnum():
             progress.append(fail(f"Invalid range name: {range_name}"))
@@ -261,6 +263,7 @@ def set_conditional_format(
     """Apply a color-based conditional formatting rule to a range."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         rule = RULE_ALIASES.get(rule, rule)
         if rule not in VALID_RULES:
@@ -373,6 +376,7 @@ def set_data_validation(
     progress: list[dict[str, Any]] = []
     backup: str | None = None
     valid_types = {"list", "decimal", "whole"}
+    path: Path | None = None
     try:
         if validation_type not in valid_types:
             progress.append(fail(f"Unknown validation type: {validation_type}"))
@@ -451,6 +455,7 @@ def freeze_panes(
     """Freeze rows/columns at cell_address. Empty string to unfreeze."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         addr = cell_address.upper() if cell_address else ""
         if addr and not _validate_cell(addr):
@@ -516,6 +521,7 @@ def set_autofilter(
     """Enable AutoFilter on the specified range."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         path = resolve_path(file_path)
         wb, err = _open_wb(path, progress)
@@ -570,6 +576,7 @@ def fill_formula_down(
     """Fill formula down from start_cell to end_row, adjusting row references."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         if not formula.startswith("="):
             progress.append(fail("Formula must start with '='", formula))
@@ -689,6 +696,7 @@ def auto_sum(
     progress: list[dict[str, Any]] = []
     backup: str | None = None
     valid_functions = {"SUM", "AVERAGE", "COUNT", "MAX", "MIN"}
+    path: Path | None = None
     try:
         fn = function_name.upper()
         if fn not in valid_functions:
@@ -778,6 +786,7 @@ def convert_to_values(
     """Replace formula cells with their calculated values in a range."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         if not _validate_range(range_address.upper()):
             progress.append(fail(f"Invalid range: {range_address}"))

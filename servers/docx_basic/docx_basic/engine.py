@@ -457,6 +457,7 @@ def replace_text(
     """Find text and replace in-place, preserving run formatting."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         import docxedit  # type: ignore[import-untyped]
         from docx import Document  # type: ignore[import-untyped]
@@ -583,6 +584,7 @@ def insert_paragraph(
     """Insert a paragraph after index N with the given style."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         from docx import Document  # type: ignore[import-untyped]
 
@@ -698,6 +700,7 @@ def delete_paragraph(
     """Delete a paragraph by index or matching text."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         from docx import Document  # type: ignore[import-untyped]
 
@@ -805,6 +808,7 @@ def append_text(file_path: str, text: str, style: str = "Body Text", open_after:
     """Append a new paragraph at document end."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         from docx import Document  # type: ignore[import-untyped]
 

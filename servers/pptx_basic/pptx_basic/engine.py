@@ -294,6 +294,7 @@ def set_text(
     """Replace text in a shape using run-level editing."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         from pptx import Presentation  # type: ignore[import-untyped]
 
@@ -403,6 +404,7 @@ def add_slide(
     """Append a new slide with layout, title, and body text."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         from pptx import Presentation  # type: ignore[import-untyped]
 
@@ -498,6 +500,7 @@ def delete_slide(file_path: str, slide_index: int, open_after: bool = False) -> 
     """Remove a slide by index."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         from pptx import Presentation  # type: ignore[import-untyped]
 
@@ -584,6 +587,7 @@ def reorder_slide(file_path: str, from_index: int, to_index: int, open_after: bo
     """Move a slide from one position to another."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         from pptx import Presentation  # type: ignore[import-untyped]
 
@@ -684,6 +688,7 @@ def add_text_box(
     """Add a text box to a slide at the specified position (inches)."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         from pptx import Presentation  # type: ignore[import-untyped]
         from pptx.util import Inches  # type: ignore[import-untyped]

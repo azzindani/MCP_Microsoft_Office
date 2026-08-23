@@ -181,6 +181,7 @@ def set_background(
     """Set slide background to a solid color or image."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         if not color_hex and not image_path:
             progress.append(fail("Must provide color_hex or image_path"))
@@ -293,6 +294,7 @@ def set_font_style(
     """Apply font name, size, bold, and/or color to all runs in a shape."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         path = resolve_path(file_path)
         prs, err = _open_prs(path, progress)
@@ -394,6 +396,7 @@ def add_table(
     """Insert a table with data on a slide."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         if rows <= 0 or cols <= 0:
             progress.append(fail("rows and cols must be positive integers"))
@@ -501,6 +504,7 @@ def add_chart(
     """Add a bar, line, or pie chart to a slide."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         if chart_type not in CHART_TYPE_MAP:
             progress.append(fail(f"Unsupported chart type: {chart_type}"))
@@ -681,6 +685,7 @@ def duplicate_slide(
     """Copy a slide and insert it at the specified position (-1 = end)."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         path = resolve_path(file_path)
         prs, err = _open_prs(path, progress)
@@ -924,6 +929,7 @@ def add_image_to_all_slides(
     """Add the same image to every slide at a fixed position."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         path = resolve_path(file_path)
         prs, err = _open_prs(path, progress)
@@ -1007,6 +1013,7 @@ def set_font_all_slides(
     """Apply font settings to every text run across all slides."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         path = resolve_path(file_path)
         prs, err = _open_prs(path, progress)

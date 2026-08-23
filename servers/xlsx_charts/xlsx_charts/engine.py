@@ -204,6 +204,7 @@ def add_chart(
     if note:
         progress.append(info("Argument alias", note))
     backup: str | None = None
+    path: Path | None = None
     try:
         if chart_type not in CHART_TYPES:
             progress.append(fail(f"Unsupported chart type: {chart_type}"))
@@ -286,6 +287,7 @@ def delete_chart(
     """Remove a chart from a sheet by its zero-based index."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         path = resolve_path(file_path)
         wb, err = _open_wb(path, progress)
@@ -356,6 +358,7 @@ def update_chart(
     """Update chart title and/or data range. Uses delete-then-add for data changes."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         path = resolve_path(file_path)
         wb, err = _open_wb(path, progress)
@@ -473,6 +476,7 @@ def add_pivot_table(
                 "progress": [fail("Missing argument", field)],
                 "token_estimate": 25,
             }
+    path: Path | None = None
     try:
         path = resolve_path(file_path)
         wb, err = _open_wb(path, progress)
@@ -641,6 +645,7 @@ def set_cell_style(
     """Apply font, fill color, and number format to a cell."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         addr = cell_address.upper()
         if not _validate_cell(addr):

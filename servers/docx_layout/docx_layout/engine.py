@@ -70,6 +70,7 @@ def set_heading(file_path: str, paragraph_index: int, level: int, open_after: bo
     """Apply Heading 1-6 style to paragraph N."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         from docx import Document  # type: ignore[import-untyped]
 
@@ -151,6 +152,7 @@ def set_font(
     """Set font attributes on all runs in paragraph N."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         from docx import Document  # type: ignore[import-untyped]
         from docx.shared import Pt  # type: ignore[import-untyped]
@@ -246,6 +248,7 @@ def set_paragraph_style(
     """Apply a named style from the document style gallery to paragraph N."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         from docx import Document  # type: ignore[import-untyped]
 
@@ -333,6 +336,7 @@ def add_image(
         width_inches = width
     backup: str | None = None
     _SUPPORTED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".tif"}
+    path: Path | None = None
     try:
         from docx import Document  # type: ignore[import-untyped]
         from docx.shared import Inches  # type: ignore[import-untyped]
@@ -470,6 +474,7 @@ def set_page_margins(
     """Set all page margins in cm for every section in the document."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         from docx import Document  # type: ignore[import-untyped]
         from docx.shared import Cm  # type: ignore[import-untyped]
@@ -546,6 +551,7 @@ def add_header_footer(
     """Set header or footer text for all sections. location: header or footer."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         from docx import Document  # type: ignore[import-untyped]
 

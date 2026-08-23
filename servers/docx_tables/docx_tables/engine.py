@@ -306,6 +306,7 @@ def set_cell(
     """Write text to a specific table cell. Snapshot taken before write."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         from docx import Document  # type: ignore[import-untyped]
 
@@ -397,6 +398,7 @@ def add_row(file_path: str, table_index: int, data: list[str], open_after: bool 
     """Append a row to table N. data is a list of cell strings."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         from docx import Document  # type: ignore[import-untyped]
 
@@ -479,6 +481,7 @@ def delete_row(file_path: str, table_index: int, row: int, open_after: bool = Fa
     """Remove a row from table N. Rows below shift up."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         from docx import Document  # type: ignore[import-untyped]
 
@@ -572,6 +575,7 @@ def add_table(
     """Insert table after paragraph N. -1 = before the first. data is optional."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         from docx import Document  # type: ignore[import-untyped]
 
@@ -696,6 +700,7 @@ def delete_table(file_path: str, table_index: int, open_after: bool = False) -> 
     """Remove table N from the document entirely."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         from docx import Document  # type: ignore[import-untyped]
 

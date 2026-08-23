@@ -481,6 +481,7 @@ def set_cell(
     progress: list[dict[str, Any]] = []
     backup: str | None = None
     addr = cell_address.upper()
+    path: Path | None = None
     try:
         if not _validate_cell(addr):
             progress.append(fail(f"Invalid cell address: {cell_address}"))
@@ -562,6 +563,7 @@ def set_range(
     progress: list[dict[str, Any]] = []
     backup: str | None = None
     addr = start_cell.upper()
+    path: Path | None = None
     try:
         if not _validate_cell(addr):
             progress.append(fail(f"Invalid start cell: {start_cell}"))
@@ -652,6 +654,7 @@ def insert_row(file_path: str, sheet_name: str, row_index: int, open_after: bool
     """Insert an empty row at row_index (1-based), shifting existing rows down."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         path = resolve_path(file_path)
         if not path.exists():
@@ -715,6 +718,7 @@ def delete_row(file_path: str, sheet_name: str, row_index: int, open_after: bool
     """Remove row at row_index (1-based), shifting remaining rows up."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         path = resolve_path(file_path)
         if not path.exists():
@@ -790,6 +794,7 @@ def add_sheet(file_path: str, sheet_name: str = "", open_after: bool = False) ->
     """Create a new worksheet, optionally with a given name."""
     progress: list[dict[str, Any]] = []
     backup: str | None = None
+    path: Path | None = None
     try:
         path = resolve_path(file_path)
         if not path.exists():
