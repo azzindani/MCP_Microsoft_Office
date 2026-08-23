@@ -837,6 +837,18 @@ def append_text(file_path: str, text: str, style: str = "Body Text", open_after:
         progress.append(ok(f"Appended paragraph at index {para_count}", style))
         progress.append(notify_reload(str(path), "docx"))
 
+        # insert_paragraph, delete_paragraph and replace_text all log; this one
+        # did not, so a document's receipt held every edit except the appends --
+        # and get_history and read_receipt both read that log.
+        _log_receipt(
+            file_path,
+            "append_text",
+            {"text": text, "style": style},
+            f"✔ Appended paragraph at index {para_count}",
+            backup,
+            True,
+        )
+
         return {
             "success": True,
             "op": "append_text",

@@ -311,6 +311,20 @@ def restore_version(file_path: str, timestamp: str, create_branch: str = "") -> 
         progress.append(undo("Restored from snapshot", timestamp))
         progress.append(notify_reload(str(path), "docx"))
 
+        # A restore replaces the document's entire contents, which makes it the
+        # single event most worth being able to look up later -- and it was the
+        # one write on this server that recorded nothing. A reader asking
+        # read_receipt "what happened to this file?" saw the edits and no sign
+        # that any of them had since been rolled back.
+        _log_receipt(
+            file_path,
+            "restore_version",
+            {"timestamp": timestamp},
+            f"✔ Restored from snapshot {timestamp}",
+            None,
+            True,
+        )
+
         return {
             "success": True,
             "op": "restore_version",
