@@ -533,9 +533,23 @@ def delete_slide(file_path: str, slide_index: int, open_after: bool = False) -> 
         backup = snapshot(str(path))
         progress.append(ok("Snapshot saved", Path(backup).name))
 
-        # Remove slide by manipulating the XML slide ID list
+        # Remove the slide's entry from the XML slide ID list, and drop the
+        # relationship that points at its part.
+        #
+        # Removing only the sldIdLst entry hides the slide from every reader --
+        # PowerPoint and python-pptx both report the right count -- while the
+        # slide part stays inside the .pptx with a live relationship naming it.
+        # A sweep unzipped a deck after deleting a slide and found
+        # ppt/slides/slide4.xml still shipping with all its text, and
+        # _rels/presentation.xml.rels still carrying rId9 -> slides/slide4.xml.
+        # Anyone handed the file could read what had been deleted from it,
+        # which for a deck circulated after removing a slide is the entire
+        # point of removing it. Dropping the relationship drops the part too:
+        # the package serialiser writes only what is still reachable.
         sldIdLst = prs.slides._sldIdLst
-        sldIdLst.remove(sldIdLst[slide_index])
+        sld_id = sldIdLst[slide_index]
+        prs.part.drop_rel(sld_id.rId)
+        sldIdLst.remove(sld_id)
 
         prs.save(str(path))
         if open_after:

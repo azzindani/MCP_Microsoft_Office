@@ -367,10 +367,17 @@ def _substitute_in_text_frame(text_frame: Any, pairs: list[tuple[str, str]]) -> 
     applied = 0
     for para in text_frame.paragraphs:
         for run in para.runs:
-            updated, _ = substitute_once(run.text, pairs)
+            updated, made = substitute_once(run.text, pairs)
             if updated != run.text:
                 run.text = updated
-                applied += 1
+                # `made`, not 1. substitute_once already counts the
+                # replacements it performed and that count was being thrown
+                # away in favour of counting *runs touched*: a slide reading
+                # "Channel {channel} delivered {impressions} impressions with
+                # CTR {ctr}" is a single run, so all three placeholders were
+                # filled correctly and the response said
+                # substitutions_applied: 1.
+                applied += made
     return applied
 
 
