@@ -11,6 +11,7 @@ from shared.arg_alias import missing, pick
 from shared.deploy_auth import build_auth, build_oauth_bridge
 from shared.progress import info
 from shared.strict_args import enforce_known_arguments
+from shared.tool_annotations import EDITS, READS
 from xlsx_basic import engine
 from xlsx_basic.helpers import copy_sheet as _copy_sheet
 from xlsx_basic.helpers import find_duplicates as _find_duplicates
@@ -50,67 +51,67 @@ async def version(request: Request) -> JSONResponse:
     return JSONResponse({"current": _VERSION})
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def list_sheets(file_path: str) -> dict:
     """List all sheets with row and column dimensions."""
     return engine.list_sheets(file_path)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def get_sheet_summary(file_path: str, sheet_name: str) -> dict:
     """Return sheet dimensions, header row, and first-column sample."""
     return engine.get_sheet_summary(file_path, sheet_name)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def read_cell(file_path: str, sheet_name: str, cell_address: str) -> dict:
     """Return value, formula, and data type for one cell."""
     return engine.read_cell(file_path, sheet_name, cell_address)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def read_cell_range(file_path: str, sheet_name: str, range_address: str) -> dict:
     """Return 2D cell array for range. Max 200 cells."""
     return engine.read_cell_range(file_path, sheet_name, range_address)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def search_cells(file_path: str, sheet_name: str, query: str, max_results: int = 20) -> dict:
     """Scan cells for text matching query. Returns matching addresses."""
     return engine.search_cells(file_path, sheet_name, query, max_results)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def set_cell(file_path: str, sheet_name: str, cell_address: str, value: str) -> dict:
     """Write a value to a single cell by address."""
     return engine.set_cell(file_path, sheet_name, cell_address, value, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def set_range(file_path: str, sheet_name: str, start_cell: str, data: list[list]) -> dict:
     """Write a 2D list of values starting at start_cell."""
     return engine.set_range(file_path, sheet_name, start_cell, data, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def insert_row(file_path: str, sheet_name: str, row_index: int) -> dict:
     """Insert empty row at row_index (1-based), shifting rows down."""
     return engine.insert_row(file_path, sheet_name, row_index, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def delete_row(file_path: str, sheet_name: str, row_index: int) -> dict:
     """Remove row at row_index (1-based), shifting remaining rows up."""
     return engine.delete_row(file_path, sheet_name, row_index, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def add_sheet(file_path: str, sheet_name: str = "") -> dict:
     """Create a new worksheet with an optional name."""
     return engine.add_sheet(file_path, sheet_name, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def sort_sheet(
     file_path: str,
     sheet_name: str,
@@ -122,7 +123,7 @@ def sort_sheet(
     return _sort_sheet(file_path, sheet_name, column, ascending, has_header, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def rename_sheet(file_path: str, old_name: str = "", new_name: str = "", sheet_name: str = "") -> dict:
     """Rename sheet_name to new_name. old_name= accepted for sheet_name."""
     # old_name stays in its original position so a positional caller written
@@ -138,7 +139,7 @@ def rename_sheet(file_path: str, old_name: str = "", new_name: str = "", sheet_n
     return result
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def find_duplicates(
     file_path: str,
     sheet_name: str,
@@ -149,7 +150,7 @@ def find_duplicates(
     return _find_duplicates(file_path, sheet_name, column, has_header)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def copy_sheet(
     file_path: str,
     sheet_name: str = "",

@@ -12,6 +12,7 @@ from starlette.responses import JSONResponse
 from docx_new import engine
 from shared.deploy_auth import build_auth, build_oauth_bridge
 from shared.strict_args import enforce_known_arguments
+from shared.tool_annotations import CREATES
 
 _VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
 _HOST = os.environ.get("OFFICE_DOCX_NEW_HOST", "127.0.0.1")
@@ -46,13 +47,13 @@ async def version(request: Request) -> JSONResponse:
     return JSONResponse({"current": _VERSION})
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def create_document(output_path: str = "", return_content: bool = False) -> dict:
     """Create blank .docx. return_content=True embeds file bytes (remote)."""
     return engine.create_document(output_path, open_after=False, return_content=return_content)
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def create_from_text(
     paragraphs: list[dict],
     output_path: str = "",
@@ -62,7 +63,7 @@ def create_from_text(
     return engine.create_from_text(output_path, paragraphs, open_after=True, return_content=return_content)
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def create_from_sections(
     title: str,
     sections: list[dict],
@@ -73,7 +74,7 @@ def create_from_sections(
     return engine.create_from_sections(output_path, title, sections, open_after=True, return_content=return_content)
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def create_from_template(
     template_path: str,
     substitutions: dict = {},  # noqa: B006 -- read-only; engine only iterates it
@@ -86,7 +87,7 @@ def create_from_template(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def create_letter(
     from_name: str,
     to_name: str,
@@ -107,7 +108,7 @@ def create_letter(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def merge_documents(
     file_paths: list,
     output_path: str = "",
@@ -120,7 +121,7 @@ def merge_documents(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def batch_create_from_template(
     template_path: str,
     data_list: list,

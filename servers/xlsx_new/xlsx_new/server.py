@@ -11,6 +11,7 @@ from starlette.responses import JSONResponse
 
 from shared.deploy_auth import build_auth, build_oauth_bridge
 from shared.strict_args import enforce_known_arguments
+from shared.tool_annotations import CREATES
 from xlsx_new import engine
 
 _VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
@@ -46,7 +47,7 @@ async def version(request: Request) -> JSONResponse:
     return JSONResponse({"current": _VERSION})
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def create_workbook(
     sheet_name: str = "Sheet1",
     output_path: str = "",
@@ -56,7 +57,7 @@ def create_workbook(
     return engine.create_workbook(output_path, sheet_name, open_after=False, return_content=return_content)
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def create_from_data(
     sheet_name: str,
     headers: list,
@@ -70,7 +71,7 @@ def create_from_data(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def create_report(
     title: str,
     sheets: list,
@@ -81,7 +82,7 @@ def create_report(
     return engine.create_report(output_path, title, sheets, open_after=True, return_content=return_content)
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def create_from_template(
     template_path: str,
     substitutions: dict = {},  # noqa: B006 -- read-only; engine only iterates it
@@ -94,7 +95,7 @@ def create_from_template(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def create_from_csv(
     csv_path: str,
     sheet_name: str = "Data",
@@ -115,7 +116,7 @@ def create_from_csv(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def create_invoice(
     company_name: str,
     client_name: str,

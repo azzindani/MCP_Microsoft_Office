@@ -12,6 +12,7 @@ from starlette.responses import JSONResponse
 from pptx_new import engine
 from shared.deploy_auth import build_auth, build_oauth_bridge
 from shared.strict_args import enforce_known_arguments
+from shared.tool_annotations import CREATES
 
 _VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
 _HOST = os.environ.get("OFFICE_PPTX_NEW_HOST", "127.0.0.1")
@@ -46,7 +47,7 @@ async def version(request: Request) -> JSONResponse:
     return JSONResponse({"current": _VERSION})
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def create_presentation(
     title: str = "",
     subtitle: str = "",
@@ -57,7 +58,7 @@ def create_presentation(
     return engine.create_presentation(output_path, title, subtitle, open_after=False, return_content=return_content)
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def create_from_outline(
     slides: list[dict],
     output_path: str = "",
@@ -67,7 +68,7 @@ def create_from_outline(
     return engine.create_from_outline(output_path, slides, open_after=True, return_content=return_content)
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def create_deck_from_data(
     title: str,
     data_slides: list[dict],
@@ -78,7 +79,7 @@ def create_deck_from_data(
     return engine.create_deck_from_data(output_path, title, data_slides, open_after=True, return_content=return_content)
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def create_from_template(
     template_path: str,
     substitutions: dict = {},  # noqa: B006 -- read-only; engine only iterates it
@@ -91,7 +92,7 @@ def create_from_template(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def create_agenda(
     meeting_title: str,
     date: str,
@@ -112,7 +113,7 @@ def create_agenda(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def create_from_docx(
     docx_path: str,
     max_slides: int = 20,

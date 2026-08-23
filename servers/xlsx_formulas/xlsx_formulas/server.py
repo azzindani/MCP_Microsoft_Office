@@ -9,6 +9,7 @@ from starlette.responses import JSONResponse
 
 from shared.deploy_auth import build_auth, build_oauth_bridge
 from shared.strict_args import enforce_known_arguments
+from shared.tool_annotations import EDITS
 from xlsx_formulas import engine
 
 _VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
@@ -44,7 +45,7 @@ async def version(request: Request) -> JSONResponse:
     return JSONResponse({"current": _VERSION})
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def set_formula(
     file_path: str,
     sheet_name: str,
@@ -55,7 +56,7 @@ def set_formula(
     return engine.set_formula(file_path, sheet_name, cell_address, formula, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def set_named_range(
     file_path: str,
     sheet_name: str,
@@ -66,7 +67,7 @@ def set_named_range(
     return engine.set_named_range(file_path, sheet_name, range_name, range_address, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def set_conditional_format(
     file_path: str,
     sheet_name: str,
@@ -82,7 +83,7 @@ def set_conditional_format(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def set_data_validation(
     file_path: str,
     sheet_name: str,
@@ -97,7 +98,7 @@ def set_data_validation(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def freeze_panes(
     file_path: str,
     sheet_name: str,
@@ -107,7 +108,7 @@ def freeze_panes(
     return engine.freeze_panes(file_path, sheet_name, cell_address, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def set_autofilter(
     file_path: str,
     sheet_name: str,
@@ -117,7 +118,7 @@ def set_autofilter(
     return engine.set_autofilter(file_path, sheet_name, range_address, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def fill_formula_down(
     file_path: str,
     sheet_name: str,
@@ -129,7 +130,7 @@ def fill_formula_down(
     return engine.fill_formula_down(file_path, sheet_name, formula, start_cell, end_row, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def auto_sum(
     file_path: str,
     sheet_name: str,
@@ -141,7 +142,7 @@ def auto_sum(
     return engine.auto_sum(file_path, sheet_name, data_range, sum_cell, function_name, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def convert_to_values(
     file_path: str,
     sheet_name: str,

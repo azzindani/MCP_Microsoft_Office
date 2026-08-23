@@ -10,6 +10,7 @@ from starlette.responses import JSONResponse
 from docx_tables import engine
 from shared.deploy_auth import build_auth, build_oauth_bridge
 from shared.strict_args import enforce_known_arguments
+from shared.tool_annotations import EDITS, READS
 
 _VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
 _HOST = os.environ.get("OFFICE_DOCX_TABLES_HOST", "127.0.0.1")
@@ -44,49 +45,49 @@ async def version(request: Request) -> JSONResponse:
     return JSONResponse({"current": _VERSION})
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def list_tables(file_path: str) -> dict:
     """List all tables with row/column dimensions."""
     return engine.list_tables(file_path)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def read_table(file_path: str, table_index: int) -> dict:
     """Return the full 2-D cell array. Args: table_index (0-based)."""
     return engine.read_table(file_path, table_index)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def search_table_cells(file_path: str, query: str, max_results: int = 10) -> dict:
     """Scan all table cells for matching text. Returns coordinates."""
     return engine.search_table_cells(file_path, query, max_results)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def read_table_row(file_path: str, table_index: int, row: int) -> dict:
     """Return one table row. Args: table_index, row (both 0-based)."""
     return engine.read_table_row(file_path, table_index, row)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def set_cell(file_path: str, table_index: int, row: int, col: int, text: str) -> dict:
     """Write text to one cell. Args: table_index, row, col, text."""
     return engine.set_cell(file_path, table_index, row, col, text, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def add_row(file_path: str, table_index: int, data: list[str]) -> dict:
     """Append a row. Args: table_index, data (list of cell strings)."""
     return engine.add_row(file_path, table_index, data, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def delete_row(file_path: str, table_index: int, row: int) -> dict:
     """Remove a row; rows below shift up. Args: table_index, row."""
     return engine.delete_row(file_path, table_index, row, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def add_table(
     file_path: str,
     after_paragraph_index: int,
@@ -98,7 +99,7 @@ def add_table(
     return engine.add_table(file_path, after_paragraph_index, rows, cols, data, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def delete_table(file_path: str, table_index: int) -> dict:
     """Remove one table entirely. Args: table_index (0-based)."""
     return engine.delete_table(file_path, table_index, open_after=True)

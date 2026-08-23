@@ -10,6 +10,7 @@ from starlette.responses import JSONResponse
 from pptx_design import engine
 from shared.deploy_auth import build_auth, build_oauth_bridge
 from shared.strict_args import enforce_known_arguments
+from shared.tool_annotations import CREATES, EDITS
 
 _VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
 _HOST = os.environ.get("OFFICE_PPTX_DESIGN_HOST", "127.0.0.1")
@@ -44,7 +45,7 @@ async def version(request: Request) -> JSONResponse:
     return JSONResponse({"current": _VERSION})
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def set_background(
     file_path: str,
     slide_index: int,
@@ -55,7 +56,7 @@ def set_background(
     return engine.set_background(file_path, slide_index, color_hex, image_path, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def set_font_style(
     file_path: str,
     slide_index: int,
@@ -71,7 +72,7 @@ def set_font_style(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def add_table(
     file_path: str,
     slide_index: int,
@@ -87,7 +88,7 @@ def add_table(
     return engine.add_table(file_path, slide_index, rows, cols, data, left, top, width, height, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def add_chart(
     file_path: str,
     slide_index: int,
@@ -103,7 +104,7 @@ def add_chart(
     return engine.add_chart(file_path, slide_index, chart_type, data, title, left, top, width, height, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def duplicate_slide(
     file_path: str,
     slide_index: int,
@@ -113,7 +114,7 @@ def duplicate_slide(
     return engine.duplicate_slide(file_path, slide_index, insert_at, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def export_pdf(
     file_path: str,
     output_path: str = "",
@@ -123,7 +124,7 @@ def export_pdf(
     return engine.export_pdf(file_path, output_path, open_after=True, return_content=return_content)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def add_image_to_all_slides(
     file_path: str,
     image_path: str,
@@ -136,7 +137,7 @@ def add_image_to_all_slides(
     return engine.add_image_to_all_slides(file_path, image_path, left, top, width, height, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def set_font_all_slides(
     file_path: str,
     font_name: str = "",

@@ -14,6 +14,7 @@ from docx_basic.helpers import read_receipt_tool as _read_receipt_tool
 from docx_basic.helpers import restore_version as _restore_version
 from shared.deploy_auth import build_auth, build_oauth_bridge
 from shared.strict_args import enforce_known_arguments
+from shared.tool_annotations import EDITS, READS
 
 _VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
 _HOST = os.environ.get("OFFICE_DOCX_BASIC_HOST", "127.0.0.1")
@@ -48,31 +49,31 @@ async def version(request: Request) -> JSONResponse:
     return JSONResponse({"current": _VERSION})
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def get_document_outline(file_path: str) -> dict:
     """Return headings and paragraph indices — structural skeleton."""
     return engine.get_document_outline(file_path)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def get_document_index(file_path: str) -> dict:
     """Return section tree index. Zero paragraph content returned."""
     return engine.get_document_index(file_path)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def fetch_section(file_path: str, address: str) -> dict:
     """Fetch one addressed section or paragraph. address: '§1' or '§1.p3'."""
     return engine.fetch_section(file_path, address)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def read_document(file_path: str) -> dict:
     """Read full doc. Use get_document_index for large files (>10 pages)."""
     return engine.read_document(file_path)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def read_paragraph(file_path: str, paragraph_index: int = -1, index: int = -1) -> dict:
     """Return one paragraph by paragraph_index, with full run detail. index= ok."""
     chosen = paragraph_index if paragraph_index >= 0 else index
@@ -88,19 +89,19 @@ def read_paragraph(file_path: str, paragraph_index: int = -1, index: int = -1) -
     return engine.read_paragraph(file_path, chosen)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def read_paragraph_range(file_path: str, start_index: int, end_index: int) -> dict:
     """Return bounded paragraph range. Max 50 paragraphs."""
     return engine.read_paragraph_range(file_path, start_index, end_index)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def search_paragraphs(file_path: str, query: str, max_results: int = 10) -> dict:
     """Scan paragraphs for matching text. Returns only matches."""
     return engine.search_paragraphs(file_path, query, max_results)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def replace_text(
     file_path: str,
     match_text: str,
@@ -112,7 +113,7 @@ def replace_text(
     return engine.replace_text(file_path, match_text, new_text, preserve_style, dry_run, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def insert_paragraph(
     file_path: str,
     after_index: int,
@@ -123,7 +124,7 @@ def insert_paragraph(
     return engine.insert_paragraph(file_path, after_index, text, style, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def delete_paragraph(
     file_path: str,
     paragraph_index: int = -1,
@@ -133,31 +134,31 @@ def delete_paragraph(
     return engine.delete_paragraph(file_path, paragraph_index, match_text, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def append_text(file_path: str, text: str, style: str = "Body Text") -> dict:
     """Append a new paragraph at the end of the document."""
     return engine.append_text(file_path, text, style, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def get_history(file_path: str) -> dict:
     """Return version snapshot history for a document."""
     return _get_history_tool(file_path)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def restore_version(file_path: str, timestamp: str, create_branch: str = "") -> dict:
     """Restore document to a previous snapshot. Optionally create git branch."""
     return _restore_version(file_path, timestamp, create_branch)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def diff_versions(file_path: str, timestamp_a: str, timestamp_b: str = "current") -> dict:
     """Compare two document versions. timestamp_b defaults to current file."""
     return _diff_versions(file_path, timestamp_a, timestamp_b)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def read_receipt(file_path: str, last_n: int = 10) -> dict:
     """Show recent tool operations on this file. last_n: how many to show."""
     return _read_receipt_tool(file_path, last_n)

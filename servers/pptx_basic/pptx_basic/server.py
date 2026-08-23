@@ -10,6 +10,7 @@ from starlette.responses import JSONResponse
 from pptx_basic import engine
 from shared.deploy_auth import build_auth, build_oauth_bridge
 from shared.strict_args import enforce_known_arguments
+from shared.tool_annotations import EDITS, READS
 
 _VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
 _HOST = os.environ.get("OFFICE_PPTX_BASIC_HOST", "127.0.0.1")
@@ -44,55 +45,55 @@ async def version(request: Request) -> JSONResponse:
     return JSONResponse({"current": _VERSION})
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def read_presentation(file_path: str) -> dict:
     """Read presentation index: slides, layouts, and structure."""
     return engine.read_presentation(file_path)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def read_slide(file_path: str, slide_index: int) -> dict:
     """Read all shapes on one slide with name, type, and text."""
     return engine.read_slide(file_path, slide_index)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def search_slides(file_path: str, query: str) -> dict:
     """Search all slides for query text, return matching shapes."""
     return engine.search_slides(file_path, query)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def read_slide_text(file_path: str, slide_index: int) -> dict:
     """Return text of all shapes on one slide (no formatting)."""
     return engine.read_slide_text(file_path, slide_index)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def set_text(file_path: str, slide_index: int, shape_name: str, new_text: str) -> dict:
     """Replace shape text using run-level editing."""
     return engine.set_text(file_path, slide_index, shape_name, new_text, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def add_slide(file_path: str, layout_name: str, title: str = "", body: str = "") -> dict:
     """Append a slide with given layout, title, and body text."""
     return engine.add_slide(file_path, layout_name, title, body, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def delete_slide(file_path: str, slide_index: int) -> dict:
     """Remove a slide by index."""
     return engine.delete_slide(file_path, slide_index, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def reorder_slide(file_path: str, from_index: int, to_index: int) -> dict:
     """Move a slide from one position to another."""
     return engine.reorder_slide(file_path, from_index, to_index, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def add_text_box(
     file_path: str,
     slide_index: int,
@@ -106,7 +107,7 @@ def add_text_box(
     return engine.add_text_box(file_path, slide_index, text, left, top, width, height, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READS)
 def diff_versions(file_path: str, timestamp_a: str, timestamp_b: str = "current") -> dict:
     """Compare two presentation versions by snapshot timestamp."""
     return engine.diff_versions(file_path, timestamp_a, timestamp_b)

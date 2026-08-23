@@ -10,6 +10,7 @@ from starlette.responses import JSONResponse
 from docx_layout import engine
 from shared.deploy_auth import build_auth, build_oauth_bridge
 from shared.strict_args import enforce_known_arguments
+from shared.tool_annotations import CREATES, EDITS
 
 _VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
 _HOST = os.environ.get("OFFICE_DOCX_LAYOUT_HOST", "127.0.0.1")
@@ -44,13 +45,13 @@ async def version(request: Request) -> JSONResponse:
     return JSONResponse({"current": _VERSION})
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def set_heading(file_path: str, paragraph_index: int, level: int) -> dict:
     """Apply Heading 1-6 style to paragraph N. level must be 1-6."""
     return engine.set_heading(file_path, paragraph_index, level, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def set_font(
     file_path: str,
     paragraph_index: int,
@@ -63,13 +64,13 @@ def set_font(
     return engine.set_font(file_path, paragraph_index, font_name, font_size, bold, italic, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def set_paragraph_style(file_path: str, paragraph_index: int, style_name: str) -> dict:
     """Apply named style from document gallery to paragraph N."""
     return engine.set_paragraph_style(file_path, paragraph_index, style_name, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def add_image(
     file_path: str,
     paragraph_index: int,
@@ -81,7 +82,7 @@ def add_image(
     return engine.add_image(file_path, paragraph_index, image_path, width_inches, open_after=True, width=width)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def set_page_margins(
     file_path: str,
     top: float = 2.54,
@@ -93,7 +94,7 @@ def set_page_margins(
     return engine.set_page_margins(file_path, top, bottom, left, right, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def add_header_footer(
     file_path: str,
     text: str,
@@ -103,7 +104,7 @@ def add_header_footer(
     return engine.add_header_footer(file_path, text, location, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def export_pdf(file_path: str, output_path: str = "", return_content: bool = False) -> dict:
     """Export .docx to PDF (needs Word/LibreOffice). return_content=bytes."""
     return engine.export_pdf(file_path, output_path, open_after=True, return_content=return_content)

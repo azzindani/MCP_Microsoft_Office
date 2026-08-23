@@ -9,6 +9,7 @@ from starlette.responses import JSONResponse
 
 from shared.deploy_auth import build_auth, build_oauth_bridge
 from shared.strict_args import enforce_known_arguments
+from shared.tool_annotations import EDITS
 from xlsx_charts import engine
 
 _VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
@@ -44,7 +45,7 @@ async def version(request: Request) -> JSONResponse:
     return JSONResponse({"current": _VERSION})
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def add_chart(
     file_path: str,
     sheet_name: str,
@@ -71,7 +72,7 @@ def add_chart(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def delete_chart(
     file_path: str,
     sheet_name: str,
@@ -81,7 +82,7 @@ def delete_chart(
     return engine.delete_chart(file_path, sheet_name, chart_index, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def update_chart(
     file_path: str,
     sheet_name: str,
@@ -93,7 +94,7 @@ def update_chart(
     return engine.update_chart(file_path, sheet_name, chart_index, title, data_range, open_after=True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def add_pivot_table(
     file_path: str,
     sheet_name: str,
@@ -118,7 +119,7 @@ def add_pivot_table(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDITS)
 def set_cell_style(
     file_path: str,
     sheet_name: str,
