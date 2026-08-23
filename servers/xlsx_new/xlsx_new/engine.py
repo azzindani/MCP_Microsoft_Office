@@ -16,11 +16,13 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 import openpyxl  # noqa: E402
+from openpyxl.cell.cell import Cell  # noqa: E402
 from openpyxl.styles import Font  # noqa: E402
 
 from shared.file_utils import embed_content  # noqa: E402
 from shared.platform_utils import open_file, resolve_output_path  # noqa: E402
 from shared.progress import fail, info, ok, warn  # noqa: E402
+from shared.template_fill import ordered_pairs, resolve_targets, substitute_once  # noqa: E402
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -369,13 +371,38 @@ def create_from_template(
         progress.append(info("Loading template", src.name))
         wb = openpyxl.load_workbook(str(src))
 
+        # Resolve every key against the whole workbook's text first, so a caller
+        # who passes `platform` at a {platform} template is matched instead of
+        # silently replacing nothing. Same helper the docx and pptx template
+        # tools use, so all three now accept the same keys.
+        # MergedCell is excluded deliberately: only the top-left cell of a merge
+        # holds the text, and assigning to the others raises at runtime.
+        text_cells = [
+            cell
+            for sheet in wb.worksheets
+            for row in sheet.iter_rows()
+            for cell in row
+            if isinstance(cell, Cell) and isinstance(cell.value, str)
+        ]
+        targets, notes = resolve_targets("\n".join(str(c.value) for c in text_cells), substitutions)
+        for note in notes:
+            progress.append(info(note))
+        pairs = ordered_pairs(targets, substitutions)
+        exact = {target: substitutions[key] for key, target in targets.items()}
+
         replaced_count = 0
-        for sheet in wb.worksheets:
-            for row in sheet.iter_rows():
-                for cell in row:
-                    if cell.value is not None and cell.value in substitutions:
-                        cell.value = substitutions[cell.value]  # type: ignore[reportArgumentType]
-                        replaced_count += 1
+        for cell in text_cells:
+            # A cell that is nothing but one placeholder takes the value as
+            # given, so a number stays a number Excel can sum. Anything else is
+            # substituted in place, which keeps the prose around it.
+            if cell.value in exact:
+                cell.value = exact[str(cell.value)]  # type: ignore[reportArgumentType]
+                replaced_count += 1
+                continue
+            new_text, hits = substitute_once(str(cell.value), pairs)
+            if hits:
+                cell.value = new_text
+                replaced_count += hits
 
         progress.append(
             ok(
@@ -383,6 +410,12 @@ def create_from_template(
                 f"{len(substitutions)} substitution key(s) searched",
             )
         )
+
+        # A key that matched nothing is the caller's mistake or a stale
+        # template, and either way silence made it look like it worked.
+        unmatched = [str(k) for k in substitutions if str(k) not in targets]
+        for key in unmatched:
+            progress.append(warn(f"Placeholder '{key}' not found in template"))
 
         wb.save(str(dst))
         progress.append(ok(f"Saved {dst.name}"))
@@ -400,6 +433,7 @@ def create_from_template(
             # Named to match docx and pptx: reading one tier's response must not
             # KeyError on another's. The cell-level detail is in progress.
             "substitutions_applied": replaced_count,
+            "unmatched_keys": unmatched,
             "progress": progress,
         }
         embed_content(result, dst, return_content)

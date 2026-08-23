@@ -97,10 +97,10 @@ def add_pivot_table(
     source_range: str,
     dest_cell: str,
     rows: str,
-    cols: str,
     values: str,
+    cols: str = "",
 ) -> dict:
-    """Create pivot summary table from source range data."""
+    """Sum values per rows group. cols optional: adds a second axis."""
     return engine.add_pivot_table(file_path, sheet_name, source_range, dest_cell, rows, cols, values, open_after=True)
 
 

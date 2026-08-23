@@ -102,6 +102,19 @@ def _parse_range_ref(ws: Any, data_range: str) -> Reference:
     return Reference(ws, range_string=f"'{ws.title}'!{cell_range}")  # type: ignore[reportCallIssue]
 
 
+def _resolve_header(name: str, headers: list[str]) -> str | None:
+    """Find `name` among `headers`, tolerating case and surrounding space.
+
+    A caller reading a sheet with mixed-case headers ("Date" beside "spends")
+    has no way to know which convention any one column follows, and an exact
+    match makes that a guess. Returns the header as written, or None.
+    """
+    if name in headers:
+        return name
+    wanted = name.strip().casefold()
+    return next((h for h in headers if h.strip().casefold() == wanted), None)
+
+
 def _parse_cell_range(range_str: str) -> tuple[int, int, int, int]:
     """Parse 'A1:D10' into (min_row, min_col, max_row, max_col) 1-indexed."""
     top, bot = range_str.upper().split(":")
@@ -409,13 +422,14 @@ def add_pivot_table(
     source_range: str,
     dest_cell: str,
     rows: str,
-    cols: str,
-    values: str,
+    cols: str = "",
+    values: str = "",
     open_after: bool = False,
 ) -> dict[str, Any]:
     """Create a summary pivot-style table from source data.
 
-    rows/cols/values are column header names from source_range.
+    rows/values are column header names from source_range. cols is optional:
+    omit it for a one-dimensional pivot totalling values per rows group.
     Writes aggregated (summed) values to dest_cell location.
     """
     progress: list[dict[str, Any]] = []
@@ -427,9 +441,6 @@ def add_pivot_table(
             return err
 
         progress.append(ok(f"Opened {path.name}"))
-
-        backup = snapshot(str(path))
-        progress.append(ok("Snapshot saved", Path(backup).name))
 
         ws, err = _check_sheet(wb, sheet_name, progress, backup)
         if err:
@@ -462,30 +473,55 @@ def add_pivot_table(
             cell_val = src_ws.cell(row=min_row, column=col).value
             headers.append(str(cell_val) if cell_val is not None else "")
 
-        # Validate column names
-        for col_name in [rows, cols, values]:
-            if col_name not in headers:
-                progress.append(fail(f"Column '{col_name}' not in source headers"))
+        # Validate column names. `cols` is optional -- an empty one means a
+        # one-dimensional pivot, not a column literally named "".
+        for arg_name, col_name in (("rows", rows), ("values", values)):
+            if not col_name.strip():
+                progress.append(fail(f"No {arg_name} column given"))
                 return {
                     "success": False,
-                    "error": f"Column '{col_name}' not found in source range headers",
-                    "hint": f"Available headers: {', '.join(headers)}",
+                    "error": f"add_pivot_table needs a {arg_name} column",
+                    "hint": (f"Pass {arg_name}= one of these headers: {', '.join(headers)}. Only cols is optional."),
                     "backup": backup,
                     "progress": progress,
                     "token_estimate": 15,
                 }
 
-        rows_idx = headers.index(rows) + min_col
-        cols_idx = headers.index(cols) + min_col
-        vals_idx = headers.index(values) + min_col
+        resolved: dict[str, str] = {}
+        for arg_name, col_name in (("rows", rows), ("cols", cols), ("values", values)):
+            if not col_name.strip():
+                continue
+            match = _resolve_header(col_name, headers)
+            if match is None:
+                progress.append(fail(f"Column '{col_name}' not in source headers"))
+                return {
+                    "success": False,
+                    "error": f"Column '{col_name}' not found in source range headers",
+                    "hint": f"Pass {arg_name}= one of these headers: {', '.join(headers)}",
+                    "backup": backup,
+                    "progress": progress,
+                    "token_estimate": 15,
+                }
+            if match != col_name:
+                progress.append(ok(f"Matched {arg_name}='{col_name}' to header '{match}'"))
+            resolved[arg_name] = match
 
-        # Read data rows and aggregate
+        rows_idx = headers.index(resolved["rows"]) + min_col
+        vals_idx = headers.index(resolved["values"]) + min_col
+        cols_idx = headers.index(resolved["cols"]) + min_col if "cols" in resolved else 0
+
+        backup = snapshot(str(path))
+        progress.append(ok("Snapshot saved", Path(backup).name))
+
+        # Read data rows and aggregate. With no cols column every row falls in
+        # one group, so the pivot is a single total column headed by `values`.
         aggregated: dict[str, dict[str, float]] = {}
         col_keys: list[str] = []
+        one_dimensional = "cols" not in resolved
 
         for r in range(min_row + 1, max_row + 1):
             row_key = str(src_ws.cell(row=r, column=rows_idx).value or "")
-            col_key = str(src_ws.cell(row=r, column=cols_idx).value or "")
+            col_key = "" if one_dimensional else str(src_ws.cell(row=r, column=cols_idx).value or "")
             val = src_ws.cell(row=r, column=vals_idx).value
             num_val = float(val) if isinstance(val, (int, float)) else 0.0
 
@@ -496,14 +532,18 @@ def add_pivot_table(
             if col_key not in col_keys:
                 col_keys.append(col_key)
 
+        # The single group of a one-dimensional pivot is headed by what it sums,
+        # so the written table never carries a nameless column.
+        col_labels = [resolved["values"]] if one_dimensional else col_keys
+
         # Write pivot table to dest_cell
         dest_addr = dest_cell.upper()
         dest_row = int(re.sub(r"[A-Z]", "", dest_addr))
         dest_col = column_index_from_string(re.sub(r"\d", "", dest_addr))
 
         # Header row: blank, then column keys
-        ws.cell(row=dest_row, column=dest_col).value = rows
-        for ci, ck in enumerate(col_keys):
+        ws.cell(row=dest_row, column=dest_col).value = resolved["rows"]
+        for ci, ck in enumerate(col_labels):
             ws.cell(row=dest_row, column=dest_col + 1 + ci).value = ck
 
         # Data rows
@@ -520,7 +560,7 @@ def add_pivot_table(
         progress.append(
             ok(
                 f"Created pivot summary at {dest_cell}",
-                f"{len(aggregated)} row groups × {len(col_keys)} column groups",
+                f"{len(aggregated)} row groups × {len(col_labels)} column groups",
             )
         )
         result: dict[str, Any] = {
@@ -529,7 +569,7 @@ def add_pivot_table(
             "sheet": sheet_name,
             "dest_cell": dest_cell,
             "row_groups": len(aggregated),
-            "col_groups": len(col_keys),
+            "col_groups": len(col_labels),
             "backup": backup,
             "progress": progress,
         }
