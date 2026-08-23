@@ -507,6 +507,53 @@ def create_from_csv(
         }
 
 
+_ITEM_KEYS: dict[str, tuple[str, ...]] = {
+    "description": ("description", "desc", "item", "name", "product", "details", "service"),
+    "quantity": ("quantity", "qty", "count", "units", "hours", "amount"),
+    "unit_price": ("unit_price", "unitprice", "price", "rate", "unit_cost", "cost"),
+}
+
+
+def _pick(item: dict, field: str):
+    """First value in the item under any name this field is known by."""
+    lowered = {str(k).strip().lower().replace(" ", "_"): v for k, v in item.items()}
+    for alias in _ITEM_KEYS[field]:
+        if alias in lowered and lowered[alias] not in (None, ""):
+            return lowered[alias]
+    return None
+
+
+def _read_invoice_items(items: list) -> tuple[list[tuple[str, float, float]], list[tuple[int, str]]]:
+    """Split items into ones that carry a price and ones that do not.
+
+    `items` is a bare `list` in the schema, so the key names exist nowhere a
+    caller can read -- the only mention was inside the error hint for an *empty*
+    list. A sweep sent {"description":..., "qty":..., "price":...} and got a
+    complete, correctly formatted invoice in which every quantity and price was
+    0, subtotal 0.0, under success: true. Zeroing money silently is worse than
+    refusing, so the aliases are honoured and anything still unpriced is named.
+    """
+    priced: list[tuple[str, float, float]] = []
+    unpriced: list[tuple[int, str]] = []
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            unpriced.append((index, f"not an object ({type(item).__name__})"))
+            continue
+        quantity = _pick(item, "quantity")
+        unit_price = _pick(item, "unit_price")
+        if quantity is None and unit_price is None:
+            unpriced.append((index, ", ".join(str(k) for k in item)))
+            continue
+        try:
+            qty_value = float(quantity if quantity is not None else 0)
+            price_value = float(unit_price if unit_price is not None else 0)
+        except (TypeError, ValueError):
+            unpriced.append((index, ", ".join(str(k) for k in item)))
+            continue
+        priced.append((str(_pick(item, "description") or ""), qty_value, price_value))
+    return priced, unpriced
+
+
 def create_invoice(
     output_path: str,
     company_name: str,
@@ -554,6 +601,25 @@ def create_invoice(
                 "token_estimate": _token_estimate(progress),
             }
 
+        priced, unpriced = _read_invoice_items(items)
+        if unpriced:
+            first_index, first_keys = unpriced[0]
+            progress.append(fail(f"item {first_index} carries no quantity or price"))
+            return {
+                "success": False,
+                "error": (
+                    f"{len(unpriced)} of {len(items)} invoice item(s) have no quantity or unit "
+                    f"price. Item {first_index} has keys: {first_keys or 'none'}"
+                ),
+                "hint": (
+                    'Each item needs a number under "quantity" and one under "unit_price", as in '
+                    '[{"description":"Widget","quantity":2,"unit_price":50.0}]. '
+                    '"qty", "price", "rate" and "cost" are accepted as well.'
+                ),
+                "progress": progress,
+                "token_estimate": _token_estimate(progress),
+            }
+
         out_path = resolve_output_path(output_path, "workbook.xlsx")
         _ensure_parent(out_path)
         progress.append(info("Creating invoice", out_path.name))
@@ -584,11 +650,8 @@ def create_invoice(
         # Item rows starting at row 7
         item_start_row = 7
         subtotal = 0.0
-        for i, item in enumerate(items):
+        for i, (description, quantity, unit_price) in enumerate(priced):
             row_num = item_start_row + i
-            description = item.get("description", "") if isinstance(item, dict) else str(item)
-            quantity = item.get("quantity", 0) if isinstance(item, dict) else 0
-            unit_price = item.get("unit_price", 0.0) if isinstance(item, dict) else 0.0
             ws.cell(row=row_num, column=1, value=description)
             ws.cell(row=row_num, column=2, value=quantity)
             ws.cell(row=row_num, column=3, value=unit_price)
