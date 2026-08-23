@@ -458,6 +458,22 @@ def replace_text(
     progress: list[dict[str, Any]] = []
     backup: str | None = None
     path: Path | None = None
+    # preserve_style was declared on the tool, forwarded by the wrapper, and
+    # read nowhere: the replacement goes through docxedit.replace_string, which
+    # preserves run formatting and offers no way not to. So preserve_style=False
+    # did exactly what preserve_style=True does, and said it succeeded.
+    if not preserve_style:
+        return {
+            "success": False,
+            "op": "replace_text",
+            "error": "replace_text cannot drop the existing run formatting",
+            "hint": (
+                "It replaces text inside the runs, which keeps their formatting. Leave "
+                "preserve_style=True, then use set_font() or set_paragraph_style() to restyle."
+            ),
+            "progress": [fail("Unsupported argument", "preserve_style=False")],
+            "token_estimate": 40,
+        }
     try:
         import docxedit  # type: ignore[import-untyped]
         from docx import Document  # type: ignore[import-untyped]
