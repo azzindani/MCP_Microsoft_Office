@@ -7,7 +7,9 @@ from mcp.server.fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from shared.arg_alias import missing, pick
 from shared.deploy_auth import build_auth, build_oauth_bridge
+from shared.progress import info
 from xlsx_basic import engine
 from xlsx_basic.helpers import copy_sheet as _copy_sheet
 from xlsx_basic.helpers import find_duplicates as _find_duplicates
@@ -120,9 +122,15 @@ def sort_sheet(
 
 
 @mcp.tool()
-def rename_sheet(file_path: str, old_name: str, new_name: str) -> dict:
-    """Rename a sheet tab from old_name to new_name."""
-    return _rename_sheet(file_path, old_name, new_name, open_after=True)
+def rename_sheet(file_path: str, new_name: str, sheet_name: str = "", old_name: str = "") -> dict:
+    """Rename sheet_name to new_name. old_name= accepted for sheet_name."""
+    sheet, note = pick("rename_sheet", "sheet_name", sheet_name, old_name)
+    if not sheet:
+        return missing("rename_sheet", "sheet_name", "old_name")
+    result = _rename_sheet(file_path, sheet, new_name, open_after=True)
+    if note:
+        result.setdefault("progress", []).append(info(note))
+    return result
 
 
 @mcp.tool()
@@ -137,9 +145,25 @@ def find_duplicates(
 
 
 @mcp.tool()
-def copy_sheet(file_path: str, source_sheet: str, new_sheet_name: str) -> dict:
-    """Copy source_sheet to a new sheet named new_sheet_name."""
-    return _copy_sheet(file_path, source_sheet, new_sheet_name, open_after=True)
+def copy_sheet(
+    file_path: str,
+    sheet_name: str = "",
+    new_name: str = "",
+    source_sheet: str = "",
+    new_sheet_name: str = "",
+) -> dict:
+    """Copy sheet_name to a new sheet new_name. source_sheet=/new_sheet_name= ok."""
+    sheet, sheet_note = pick("copy_sheet", "sheet_name", sheet_name, source_sheet)
+    if not sheet:
+        return missing("copy_sheet", "sheet_name", "source_sheet")
+    target, target_note = pick("copy_sheet", "new_name", new_name, new_sheet_name)
+    if not target:
+        return missing("copy_sheet", "new_name", "new_sheet_name")
+    result = _copy_sheet(file_path, sheet, target, open_after=True)
+    for note in (sheet_note, target_note):
+        if note:
+            result.setdefault("progress", []).append(info(note))
+    return result
 
 
 def main() -> None:

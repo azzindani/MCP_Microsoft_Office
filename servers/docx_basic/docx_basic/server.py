@@ -72,9 +72,19 @@ def read_document(file_path: str) -> dict:
 
 
 @mcp.tool()
-def read_paragraph(file_path: str, index: int) -> dict:
-    """Return one paragraph with full run detail including formatting."""
-    return engine.read_paragraph(file_path, index)
+def read_paragraph(file_path: str, paragraph_index: int = -1, index: int = -1) -> dict:
+    """Return one paragraph by paragraph_index, with full run detail. index= ok."""
+    chosen = paragraph_index if paragraph_index >= 0 else index
+    if chosen < 0:
+        return {
+            "success": False,
+            "op": "read_paragraph",
+            "error": "read_paragraph needs a paragraph_index",
+            "hint": "Pass paragraph_index=0 for the first paragraph. index= is also accepted.",
+            "progress": [],
+            "token_estimate": 20,
+        }
+    return engine.read_paragraph(file_path, chosen)
 
 
 @mcp.tool()
