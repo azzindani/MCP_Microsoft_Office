@@ -612,11 +612,22 @@ def batch_create_from_template(
             # Copy template to output location
             shutil.copy2(str(tpl_path), str(out_file))
 
-            # Open copy and apply substitutions using run-level editing
+            # Open copy and apply substitutions using run-level editing.
+            # This used to hardcode "{{key}}" while create_from_template beside
+            # it matched the raw key, so one template could not serve both: a
+            # sweep pointed this at a {key} template and got two documents that
+            # were byte-identical to it, every placeholder still in place, under
+            # success: true. Both now resolve targets the same way.
             doc = Document(str(out_file))
-            for key, value in data_dict.items():
-                placeholder = "{{" + str(key) + "}}"
-                docxedit.replace_string(doc, placeholder, str(value))
+            targets, _notes = resolve_targets(_all_text(doc), data_dict)
+            pairs = ordered_pairs(targets, data_dict)
+            unfilled = [str(k) for k in data_dict if str(k) not in targets]
+            if unfilled:
+                progress.append(warn(f"{stem}: no placeholder for {', '.join(unfilled)}"))
+            for index, (target, _value) in enumerate(pairs):
+                docxedit.replace_string(doc, target, sentinel_for(index))
+            for index, (_target, value) in enumerate(pairs):
+                docxedit.replace_string(doc, sentinel_for(index), str(value))
 
             doc.save(str(out_file))
             created_files.append(out_file.name)

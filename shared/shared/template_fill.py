@@ -60,6 +60,7 @@ def resolve_targets(text: str, substitutions: dict) -> tuple[dict[str, str], lis
     """
     targets: dict[str, str] = {}
     notes: list[str] = []
+    wrapped: dict[str, str] = {}
     for key in substitutions:
         raw = str(key)
         if not raw:
@@ -67,15 +68,26 @@ def resolve_targets(text: str, substitutions: dict) -> tuple[dict[str, str], lis
         # A delimited form wins over the bare literal, because the bare literal
         # is *inside* it: searching for `platform` against `{platform}` matches,
         # replaces the name and leaves the braces sitting in the document.
-        wrapped_hit = next(
-            (f"{o}{raw}{c}" for o, c in DELIMITERS if f"{o}{raw}{c}" in text),
-            "",
-        )
-        if wrapped_hit:
-            targets[raw] = wrapped_hit
-            if wrapped_hit != raw:
-                notes.append(f"Matched '{raw}' as '{wrapped_hit}' — the template delimits its placeholders")
-        elif raw in text:
+        hit = next((f"{o}{raw}{c}" for o, c in DELIMITERS if f"{o}{raw}{c}" in text), "")
+        if hit:
+            wrapped[raw] = hit
+
+    # If any key resolved to a delimited placeholder, the template uses a
+    # delimiter convention, and a key with no delimited form is a caller
+    # mistake -- not licence to rewrite prose. A sweep passed rows="16,834" at a
+    # {placeholder} template and turned "205 duplicate rows were identified"
+    # into "205 duplicate 16,834 were identified", success: true. A key is only
+    # matched as a bare word when the template has no placeholders at all.
+    delimited_template = bool(wrapped)
+
+    for key in substitutions:
+        raw = str(key)
+        if not raw:
+            continue
+        if raw in wrapped:
+            targets[raw] = wrapped[raw]
+            notes.append(f"Matched '{raw}' as '{wrapped[raw]}' — the template delimits its placeholders")
+        elif not delimited_template and raw in text:
             targets[raw] = raw
     return targets, notes
 

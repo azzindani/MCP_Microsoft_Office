@@ -40,6 +40,7 @@ from pptx.util import Inches
 sys.path.insert(0, str(Path(__file__).parent.parent / "servers" / "docx_new"))
 sys.path.insert(0, str(Path(__file__).parent.parent / "servers" / "pptx_new"))
 
+from docx_new.engine import batch_create_from_template as batch_from_template  # noqa: E402
 from docx_new.engine import create_from_template as docx_from_template  # noqa: E402
 from pptx_new.engine import create_from_template as pptx_from_template  # noqa: E402
 from shared.template_fill import ordered_pairs, resolve_targets, substitute_once  # noqa: E402
@@ -200,3 +201,104 @@ class TestTheResolver:
     def test_an_empty_key_is_ignored(self):
         targets, _ = resolve_targets("anything", {"": "x"})
         assert targets == {}
+
+
+class TestABareWordIsNotAPlaceholder:
+    """A key with no placeholder must not rewrite the prose that mentions it.
+
+    A sweep passed rows="16,834" at a {placeholder} template whose body read
+    "205 duplicate rows were identified", and got
+
+        205 duplicate 16,834 were identified
+
+    under success: true. Once any key resolves to a delimited placeholder the
+    template plainly uses a convention, so a key without one is a caller
+    mistake, not licence to substitute into a sentence.
+    """
+
+    PROSE = "205 duplicate rows were identified."
+
+    @pytest.fixture()
+    def prose_template(self, tmp_path: Path) -> str:
+        d = Document()
+        d.add_paragraph("Platform: {platform}")
+        d.add_paragraph(self.PROSE)
+        d.save(str(tmp_path / "prose.docx"))
+        return str(tmp_path / "prose.docx")
+
+    def test_the_sentence_survives(self, prose_template: str, tmp_path: Path):
+        out = str(tmp_path / "f.docx")
+        docx_from_template(prose_template, out, {"platform": "Google Ads", "rows": "16,834"}, open_after=False)
+        assert self.PROSE in docx_lines(out), docx_lines(out)
+
+    def test_the_real_placeholder_is_still_filled(self, prose_template: str, tmp_path: Path):
+        out = str(tmp_path / "f.docx")
+        docx_from_template(prose_template, out, {"platform": "Google Ads", "rows": "16,834"}, open_after=False)
+        assert "Platform: Google Ads" in docx_lines(out)
+
+    def test_the_unmatched_key_is_reported(self, prose_template: str, tmp_path: Path):
+        r = docx_from_template(
+            prose_template, str(tmp_path / "f.docx"), {"platform": "X", "rows": "16,834"}, open_after=False
+        )
+        assert any("rows" in m.get("msg", "") and "not found" in m.get("msg", "") for m in r["progress"]), r["progress"]
+
+    def test_a_template_with_no_placeholders_still_takes_bare_keys(self, tmp_path: Path):
+        """Plain-text templates were always substituted by bare word, and a
+        template with no delimiters anywhere has no other reading."""
+        d = Document()
+        d.add_paragraph("Platform: PLATFORM")
+        d.save(str(tmp_path / "plain.docx"))
+        out = str(tmp_path / "f.docx")
+        docx_from_template(str(tmp_path / "plain.docx"), out, {"PLATFORM": "Google Ads"}, open_after=False)
+        assert "Platform: Google Ads" in docx_lines(out)
+
+
+class TestTheBatchTierFillsTheSameTemplate:
+    """batch_create_from_template hardcoded {{key}} while its neighbour matched
+    the raw key, so one template could not serve both. A sweep pointed it at a
+    {key} template and got documents byte-identical to the template."""
+
+    @pytest.fixture()
+    def batch_template(self, tmp_path: Path) -> str:
+        d = Document()
+        d.add_paragraph("{title}")
+        d.add_paragraph("Platform: {platform}. Spend: {spend}.")
+        d.save(str(tmp_path / "tpl.docx"))
+        return str(tmp_path / "tpl.docx")
+
+    ROWS = [
+        {"title": "Google Ads Spend Summary", "platform": "Google Ads", "spend": "1,939,000"},
+        {"title": "Facebook Ads Spend Summary", "platform": "Facebook Ads", "spend": "564,100"},
+    ]
+
+    def _run(self, template: str, tmp_path: Path) -> list[str]:
+        out_dir = tmp_path / "batch"
+        r = batch_from_template(template, self.ROWS, str(out_dir), filename_key="platform", open_after=False)
+        assert r["success"] is True, r.get("error")
+        return sorted(str(p) for p in out_dir.glob("*.docx"))
+
+    def test_it_produces_one_document_per_row(self, batch_template: str, tmp_path: Path):
+        assert len(self._run(batch_template, tmp_path)) == 2
+
+    def test_no_placeholder_survives(self, batch_template: str, tmp_path: Path):
+        for path in self._run(batch_template, tmp_path):
+            body = "\n".join(docx_lines(path))
+            assert "{" not in body and "}" not in body, (path, body)
+
+    def test_each_document_carries_its_own_row(self, batch_template: str, tmp_path: Path):
+        bodies = ["\n".join(docx_lines(p)) for p in self._run(batch_template, tmp_path)]
+        assert any("1,939,000" in b for b in bodies), bodies
+        assert any("564,100" in b for b in bodies), bodies
+
+    def test_a_double_brace_template_still_works(self, tmp_path: Path):
+        """The convention it used to hardcode has to keep working."""
+        d = Document()
+        d.add_paragraph("Platform: {{platform}}")
+        d.save(str(tmp_path / "dbl.docx"))
+        out_dir = tmp_path / "b2"
+        r = batch_from_template(
+            str(tmp_path / "dbl.docx"), [{"platform": "Google Ads"}], str(out_dir), open_after=False
+        )
+        assert r["success"] is True, r.get("error")
+        body = "\n".join(docx_lines(str(next(out_dir.glob("*.docx")))))
+        assert body == "Platform: Google Ads", body
