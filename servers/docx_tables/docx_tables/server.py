@@ -51,7 +51,7 @@ def list_tables(file_path: str) -> dict:
 
 @mcp.tool()
 def read_table(file_path: str, table_index: int) -> dict:
-    """Return full 2-D cell array for one table."""
+    """Return the full 2-D cell array. Args: table_index (0-based)."""
     return engine.read_table(file_path, table_index)
 
 
@@ -63,25 +63,25 @@ def search_table_cells(file_path: str, query: str, max_results: int = 10) -> dic
 
 @mcp.tool()
 def read_table_row(file_path: str, table_index: int, row: int) -> dict:
-    """Return all cells in one table row."""
+    """Return one table row. Args: table_index, row (both 0-based)."""
     return engine.read_table_row(file_path, table_index, row)
 
 
 @mcp.tool()
 def set_cell(file_path: str, table_index: int, row: int, col: int, text: str) -> dict:
-    """Write text to a specific table cell. Snapshot taken before write."""
+    """Write text to one cell. Args: table_index, row, col, text."""
     return engine.set_cell(file_path, table_index, row, col, text, open_after=True)
 
 
 @mcp.tool()
 def add_row(file_path: str, table_index: int, data: list[str]) -> dict:
-    """Append a row to table N. data is a list of cell text strings."""
+    """Append a row. Args: table_index, data (list of cell strings)."""
     return engine.add_row(file_path, table_index, data, open_after=True)
 
 
 @mcp.tool()
 def delete_row(file_path: str, table_index: int, row: int) -> dict:
-    """Remove row R from table N. Rows below shift up."""
+    """Remove a row; rows below shift up. Args: table_index, row."""
     return engine.delete_row(file_path, table_index, row, open_after=True)
 
 
@@ -93,13 +93,13 @@ def add_table(
     cols: int,
     data: list[list[str]] | None = None,
 ) -> dict:
-    """Insert table after paragraph N. -1 = before the first. data is optional."""
+    """Insert table after paragraph N (-1 = first). Args: rows, cols, data."""
     return engine.add_table(file_path, after_paragraph_index, rows, cols, data, open_after=True)
 
 
 @mcp.tool()
 def delete_table(file_path: str, table_index: int) -> dict:
-    """Remove table N from the document entirely."""
+    """Remove one table entirely. Args: table_index (0-based)."""
     return engine.delete_table(file_path, table_index, open_after=True)
 
 
