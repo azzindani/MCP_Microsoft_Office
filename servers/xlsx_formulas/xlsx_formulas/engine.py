@@ -14,7 +14,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from shared.file_utils import hint_for_error, resolve_path, sheet_names_hint
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_max_cells, open_file
-from shared.progress import fail, ok, warn
+from shared.progress import fail, info, ok, warn
 from shared.version_control import snapshot
 
 # ---------------------------------------------------------------------------
@@ -217,7 +217,32 @@ def set_named_range(
                 "token_estimate": 15,
             }
 
-        attr_text = f"'{sheet_name}'!{range_address}"
+        # The sheet name was prefixed unconditionally, so a caller who passed
+        # range_address="Sheet1!$M$2:$M$10" -- the form every Excel reference
+        # they have ever seen -- got "'Sheet1'!Sheet1!$M$2:$M$10" written into
+        # the workbook and success:true back. Excel rejects that definedName
+        # and nothing in the response said anything was wrong.
+        address = range_address.strip()
+        if "!" in address:
+            qualifier, _, bare = address.rpartition("!")
+            named_sheet = qualifier.strip().strip("'")
+            if named_sheet and named_sheet != sheet_name:
+                progress.append(fail(f"range_address names sheet '{named_sheet}'"))
+                return {
+                    "success": False,
+                    "error": f"range_address names sheet '{named_sheet}' but sheet_name is '{sheet_name}'",
+                    "hint": (
+                        f"Pass the bare range, e.g. range_address='{bare}', and name the sheet "
+                        "in sheet_name — or set sheet_name to the sheet the address refers to."
+                    ),
+                    "backup": backup,
+                    "progress": progress,
+                    "token_estimate": 30,
+                }
+            address = bare
+            progress.append(info("Sheet qualifier removed", f"{range_address} → {address}"))
+
+        attr_text = f"'{sheet_name}'!{address}"
         defn = DefinedName(range_name, attr_text=attr_text)
         wb.defined_names[range_name] = defn
         wb.save(str(path))
@@ -231,7 +256,8 @@ def set_named_range(
             "op": "set_named_range",
             "range_name": range_name,
             "sheet": sheet_name,
-            "range_address": range_address,
+            "range_address": address,
+            "reference": attr_text,
             "backup": backup,
             "progress": progress,
         }
@@ -405,6 +431,14 @@ def set_data_validation(
             formula1=formula1 or None,
             formula2=formula2 or None,
             allow_blank=True,
+            # openpyxl defaults showErrorMessage to False, which makes Excel
+            # draw the dropdown and then accept anything typed over it. A
+            # validation that validates nothing is not what this tool is for,
+            # and the response gave no sign: the rule was in the XML and
+            # success was true.
+            showErrorMessage=True,
+            errorTitle="Invalid entry",
+            error="That value is not allowed in this cell.",
         )
         ws.add_data_validation(dv)
         dv.sqref = range_address

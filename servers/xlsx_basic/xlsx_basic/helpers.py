@@ -12,7 +12,7 @@ from openpyxl.utils import column_index_from_string, get_column_letter
 
 from shared.file_utils import hint_for_error, resolve_path, sheet_names_hint
 from shared.live_edit import notify_reload
-from shared.platform_utils import open_file
+from shared.platform_utils import get_max_search_results, open_file
 from shared.progress import fail, info, ok
 from shared.version_control import snapshot
 
@@ -113,6 +113,23 @@ def sort_sheet(
 
         ws = wb[sheet_name]
 
+        # A merged region spans rows, so reordering the rows underneath it
+        # cannot preserve it -- and its non-anchor cells are read-only, so the
+        # write-back below would fail on them anyway. Previously the None-skip
+        # hid that: the sort "succeeded" and left the merged area holding
+        # whichever rows happened to land under it.
+        merged = [str(rng) for rng in ws.merged_cells.ranges]
+        if merged:
+            progress.append(fail(f"Sheet has {len(merged)} merged region(s)"))
+            return {
+                "success": False,
+                "error": f"Cannot sort '{sheet_name}': it has merged cells ({', '.join(merged[:5])})",
+                "hint": "Unmerge the region first — a merged block cannot follow the rows it spans.",
+                "backup": backup,
+                "progress": progress,
+                "token_estimate": 30,
+            }
+
         # Read all rows as lists of cell values
         all_rows = [[cell.value for cell in row] for row in ws.iter_rows()]
 
@@ -141,11 +158,31 @@ def sort_sheet(
             reverse=not ascending,
         )
 
-        # Write back cell by cell
+        # Write back cell by cell.
+        #
+        # Assigning .value rather than passing value= to ws.cell(): openpyxl's
+        # cell() skips the assignment entirely when the value is None
+        #
+        #     cell = self._get_cell(row, column)
+        #     if value is not None:
+        #         cell.value = value
+        #
+        # so every blank cell in the sorted data left the *previous* occupant of
+        # that address in place. Sorting three rows by column A turned
+        #
+        #     b, 2, ⌀          a, 1, ⌀
+        #     c, ⌀, keep  into  b, 2, keep     <- c's note, on b's row
+        #     a, 1, ⌀          c, 1, keep     <- b's n, on c's row
+        #
+        # with success:true and the ordering itself correct. On a real sheet
+        # that is mass silent corruption: a sweep measured 541 blanks in one
+        # column come back holding the value of whatever row had been there.
         start_row = 2 if has_header else 1
         for r_offset, row_vals in enumerate(sorted_rows):
             for c_offset, val in enumerate(row_vals):
-                ws.cell(row=start_row + r_offset, column=c_offset + 1, value=val)
+                # MergedCell.value is read-only, but the guard above has
+                # already refused any sheet that has a merged region.
+                ws.cell(row=start_row + r_offset, column=c_offset + 1).value = val  # type: ignore[reportAttributeAccessIssue]
 
         wb.save(str(path))
         wb.close()
@@ -326,8 +363,24 @@ def find_duplicates(
 
         wb.close()
 
-        # Keep only values that appear more than once
-        duplicates = [{"value": v, "rows": rows} for v, rows in value_rows.items() if len(rows) > 1]
+        # Keep only values that appear more than once.
+        #
+        # The count of distinct duplicated values was capped at 100 and each
+        # value's row list was not capped at all, so a low-cardinality column
+        # answered with every row number it had: two values carrying 15,101 and
+        # 1,733 rows put ~16,800 integers in one response and the transport
+        # truncated it. What a caller needs is how many, not which 15,101.
+        max_rows = get_max_search_results()
+        duplicates = []
+        rows_truncated = False
+        for v, rows in value_rows.items():
+            if len(rows) <= 1:
+                continue
+            entry: dict[str, Any] = {"value": v, "count": len(rows), "rows": rows[:max_rows]}
+            if len(rows) > max_rows:
+                entry["rows_truncated"] = True
+                rows_truncated = True
+            duplicates.append(entry)
 
         truncated = False
         if len(duplicates) > 100:
@@ -347,6 +400,8 @@ def find_duplicates(
             "duplicate_count": len(duplicates),
             "duplicates": duplicates,
             "truncated": truncated,
+            "rows_truncated": rows_truncated,
+            "max_rows_per_value": max_rows,
             "progress": progress,
         }
         result["token_estimate"] = len(str(result)) // 4

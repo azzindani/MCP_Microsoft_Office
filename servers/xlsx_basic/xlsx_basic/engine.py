@@ -612,11 +612,11 @@ def set_range(
         total_cells = 0
         for r_offset, row_data in enumerate(data):
             for c_offset, val in enumerate(row_data):
-                ws.cell(
-                    row=start_row + r_offset,
-                    column=start_col + c_offset,
-                    value=val,
-                )
+                # .value rather than ws.cell(value=...), which skips the write
+                # when the value is None and so leaves whatever the cell held
+                # before -- counted in cells_written all the same. "" already
+                # clears correctly; a JSON null did not.
+                ws.cell(row=start_row + r_offset, column=start_col + c_offset).value = val
                 total_cells += 1
 
         wb.save(str(path))
