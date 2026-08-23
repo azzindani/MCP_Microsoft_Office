@@ -170,9 +170,26 @@ def resolve_output_path(output_path: str, default_name: str) -> Path:
 
 def open_file(path: Path) -> None:
     """Open file in the default system application. Silently ignored on failure."""
+    # A test run must never launch Word. Every write wrapper passes
+    # open_after=True, so a suite that exercises them asks the desktop shell to
+    # open a document per call -- on the Windows runner that reached the COM
+    # layer and killed the interpreter mid-suite:
+    #
+    #     Windows fatal exception: code 0x80010108   (RPC_E_DISCONNECTED)
+    #     Thread 0x00000760 (most recent call first):
+    #       File "shared/shared/platform_utils.py", line 175 in open_file
+    #     Windows fatal exception: access violation
+    #
+    # with no failing test named and no traceback, because an access violation
+    # is not an exception the `except` below can catch.
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
     try:
         if is_windows():
-            getattr(os, "startfile")(str(path.resolve()))
+            # In a child process rather than in-process os.startfile(): the
+            # shell handler it invokes can fault, and a fault there must cost
+            # the child, not this server.
+            subprocess.Popen(["cmd", "/c", "start", "", str(path.resolve())], shell=False)
         elif is_macos():
             subprocess.Popen(["open", str(path.resolve())])
         else:
