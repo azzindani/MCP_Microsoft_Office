@@ -12,6 +12,12 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+from shared.arg_alias import (  # noqa: E402
+    ENTRY_HEADING_KEYS,
+    ENTRY_TEXT_KEYS,
+    entry_value,
+    unnamed_entry_note,
+)
 from shared.file_utils import embed_content  # noqa: E402
 from shared.platform_utils import open_file, resolve_output_path  # noqa: E402
 from shared.progress import fail, info, ok, warn  # noqa: E402
@@ -143,10 +149,27 @@ def create_from_text(
         _ensure_parent(path)
         progress.append(info(f"Creating document from {len(paragraphs)} paragraphs", path.name))
 
+        # Every entry is inspected before the document is built: a paragraph
+        # written under an unrecognised key used to become an empty paragraph
+        # and still be counted, so [{"content": "hello"}] saved a .docx with no
+        # text in it and reported "1 paragraphs written".
+        unnamed = [
+            note
+            for i, item in enumerate(paragraphs)
+            if (note := unnamed_entry_note(i, item, ENTRY_TEXT_KEYS, "Paragraph"))
+        ]
+        if unnamed and len(unnamed) == len(paragraphs):
+            progress.append(fail("No paragraph carried any text"))
+            return _err(
+                progress,
+                "; ".join(unnamed),
+                'Pass a list like [{"text": "Hello", "style": "Normal"}]. Nothing was written.',
+            )
+
         doc = Document()
         added = 0
-        for item in paragraphs:
-            text = item.get("text", "") if isinstance(item, dict) else str(item)
+        for i, item in enumerate(paragraphs):
+            text = entry_value(item, ENTRY_TEXT_KEYS)
             style = item.get("style", "Normal") if isinstance(item, dict) else "Normal"
             if not style:
                 style = "Normal"
@@ -157,6 +180,9 @@ def create_from_text(
                 progress.append(warn(f"Style '{style}' not found, using Normal"))
                 doc.add_paragraph(text, style="Normal")
             added += 1
+
+        for note in unnamed:
+            progress.append(warn("Paragraph written empty", note))
 
         doc.save(str(path))
         progress.append(ok(f"Saved {path.name}", f"{added} paragraphs written"))
@@ -214,10 +240,21 @@ def create_from_sections(
         doc.add_paragraph(title, style="Heading 1")
         progress.append(ok(f"Added title: {title[:40]}"))
 
+        # `header` for `heading` used to drop the heading and keep the body, so
+        # the document came back a level flatter than it was asked for with
+        # nothing said about it. A section carrying neither is a typo, not a
+        # request for a blank one.
         section_count = 0
-        for sec in sections:
-            heading = sec.get("heading", "") if isinstance(sec, dict) else ""
-            body = sec.get("body", "") if isinstance(sec, dict) else str(sec)
+        for i, sec in enumerate(sections):
+            heading = entry_value(sec, ENTRY_HEADING_KEYS)
+            body = entry_value(sec, ENTRY_TEXT_KEYS) if isinstance(sec, dict) else str(sec)
+            if not heading and not body:
+                progress.append(
+                    warn(
+                        f"Section {i} written empty",
+                        unnamed_entry_note(i, sec, ENTRY_HEADING_KEYS, "Section"),
+                    )
+                )
             if heading:
                 doc.add_paragraph(heading, style="Heading 2")
             if body:

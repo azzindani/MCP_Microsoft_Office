@@ -128,8 +128,11 @@ def create_presentation(
 # it guesses, and the wrong guess returns success:true with every slide title
 # blank. Both spellings are now accepted by both tools, and a slide that yields
 # no heading at all says so in progress instead of going quietly.
-_HEADING_KEYS = ("title", "heading")
-_BODY_KEYS = ("content", "bullets", "body", "text")
+_HEADING_KEYS = ("title", "heading", "header", "name")
+# `items` and `points` are what a caller writes for a bullet list about as often
+# as `bullets`; without them create_deck_from_data built the slide, set its
+# heading, and left the body blank under success.
+_BODY_KEYS = ("content", "bullets", "body", "text", "items", "points", "lines")
 
 
 def _slide_heading(item: dict[str, Any]) -> str:
@@ -283,7 +286,10 @@ def create_deck_from_data(
             _note_unnamed(progress, i + 2, item)
             heading = _slide_heading(item)
             body_text = _slide_body(item)
-            bullets = item.get("bullets") or ([] if not body_text else body_text.split("\n"))
+            # Was item.get("bullets") alone, so a list given under any of the
+            # other accepted body keys reached the slide as no bullets at all.
+            raw_bullets = next((item.get(k) for k in _BODY_KEYS if isinstance(item.get(k), list | tuple)), None)
+            bullets = list(raw_bullets) if raw_bullets else ([] if not body_text else body_text.split("\n"))
 
             slide = prs.slides.add_slide(content_layout)
             _set_placeholder_text(slide, 0, heading)

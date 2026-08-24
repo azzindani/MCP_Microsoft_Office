@@ -46,6 +46,54 @@ def pick(op: str, field: str, primary: str, alias: str) -> tuple[str, str]:
     return chosen, ""
 
 
+# The same problem one level down, inside a list[dict]. `paragraphs`,
+# `sections`, `slides` and `data_slides` are bare list[dict] in their schemas,
+# so pydantic never sees the keys and nothing refuses a wrong one -- the entry
+# is built from a .get() default and the document comes out short:
+#
+#     create_from_text(paragraphs=[{"content": "hello"}])
+#     -> success: true, "1 paragraphs written", and a .docx with no text in it
+#
+#     create_from_sections(sections=[{"header": "H", "body": "B"}])
+#     -> success: true, and a document whose headings are all missing
+#
+# pptx_new already aliases its own keys and warns on an entry it cannot name;
+# docx_new was written the same week and never got either. These are shared so
+# the next module cannot be the one that misses out.
+ENTRY_TEXT_KEYS: tuple[str, ...] = ("text", "content", "body", "paragraph", "value")
+ENTRY_HEADING_KEYS: tuple[str, ...] = ("heading", "title", "header", "name")
+ENTRY_BULLET_KEYS: tuple[str, ...] = ("bullets", "items", "points", "lines", "content", "body", "text")
+
+
+def entry_value(item: dict, keys: tuple[str, ...]) -> str:
+    """The first non-empty value under any accepted spelling, as text."""
+    if not isinstance(item, dict):
+        return str(item) if item else ""
+    for key in keys:
+        value = item.get(key)
+        if value in (None, "", [], {}):
+            continue
+        if isinstance(value, list | tuple):
+            return "\n".join(str(v) for v in value)
+        return str(value)
+    return ""
+
+
+def unnamed_entry_note(index: int, item: dict, keys: tuple[str, ...], label: str) -> str:
+    """Why this entry contributed nothing, or "" if it carried something.
+
+    An entry whose keys are all unrecognised is a typo every time -- nobody
+    passes a dict meaning "add a blank one" -- so it is worth saying out loud
+    rather than writing an empty paragraph and counting it as written.
+    """
+    if not isinstance(item, dict):
+        return "" if item else f"{label} {index} is empty"
+    if entry_value(item, keys):
+        return ""
+    seen = ", ".join(sorted(map(str, item))) or "none"
+    return f"{label} {index} has no {keys[0]}: keys seen are {seen} — accepted: {', '.join(keys)}"
+
+
 def missing(op: str, field: str, alias: str) -> dict:
     """The error dict for an argument given under neither spelling."""
     return {
