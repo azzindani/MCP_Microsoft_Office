@@ -532,6 +532,22 @@ def add_pivot_table(
             cell_val = src_ws.cell(row=min_row, column=col).value
             headers.append(str(cell_val) if cell_val is not None else "")
 
+        # A hint is only worth printing if it names something. On a blank sheet
+        # every header is "", and this advice came out as
+        # "Pass rows= one of these headers: ,  " -- offering a choice between
+        # two empty strings, for a problem that is one row up from where it
+        # points.
+        named_headers = [h for h in headers if h.strip()]
+
+        def _header_hint(arg_name: str, extra: str = "") -> str:
+            if named_headers:
+                return f"Pass {arg_name}= one of these headers: {', '.join(named_headers)}.{extra}"
+            return (
+                f"Row {min_row} of {cell_range} is blank, so this range has no column headers "
+                "to pivot on. Point source_range at a range whose first row holds the header "
+                "names, or write them with set_range() first."
+            )
+
         # Validate column names. `cols` is optional -- an empty one means a
         # one-dimensional pivot, not a column literally named "".
         for arg_name, col_name in (("rows", rows), ("values", values)):
@@ -540,7 +556,7 @@ def add_pivot_table(
                 return {
                     "success": False,
                     "error": f"add_pivot_table needs a {arg_name} column",
-                    "hint": (f"Pass {arg_name}= one of these headers: {', '.join(headers)}. Only cols is optional."),
+                    "hint": _header_hint(arg_name, " Only cols is optional."),
                     "backup": backup,
                     "progress": progress,
                     "token_estimate": 15,
@@ -556,7 +572,7 @@ def add_pivot_table(
                 return {
                     "success": False,
                     "error": f"Column '{col_name}' not found in source range headers",
-                    "hint": f"Pass {arg_name}= one of these headers: {', '.join(headers)}",
+                    "hint": _header_hint(arg_name),
                     "backup": backup,
                     "progress": progress,
                     "token_estimate": 15,
