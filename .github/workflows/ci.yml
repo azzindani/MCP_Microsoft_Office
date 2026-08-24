@@ -15,8 +15,9 @@ jobs:
       matrix:
         os: [ubuntu-22.04, macos-latest, windows-latest]
 
+    # No MCP_CONSTRAINED_MODE here: this is the normal-limits run. The
+    # constrained job below covers the other branch.
     env:
-      MCP_CONSTRAINED_MODE: "1"
       PYTHONPATH: "."
 
     steps:
@@ -50,6 +51,36 @@ jobs:
         run: uv run python tests/verify_tool_docstrings.py
 
       - name: Run tests
+        run: uv run python -m pytest tests/ -q --tb=short
+
+  # ── Constrained mode (8 GB VRAM target) ─────────────────────────────
+  # This workflow used to set MCP_CONSTRAINED_MODE on the matrix job above and
+  # have no job without it, so every run tested the constrained branch of every
+  # get_max_* helper and never the normal one. The matrix now runs at normal
+  # limits and this job covers the other half.
+  constrained:
+    name: Constrained mode (ubuntu)
+    runs-on: ubuntu-22.04
+
+    env:
+      MCP_CONSTRAINED_MODE: "1"
+      PYTHONPATH: "."
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --all-packages --frozen
+
+      - name: Generate test fixtures
+        run: uv run python tests/create_fixtures.py
+
+      - name: Run tests in constrained mode
         run: uv run python -m pytest tests/ -q --tb=short
 
   docker-build:
