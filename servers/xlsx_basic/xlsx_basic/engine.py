@@ -244,7 +244,15 @@ def read_cell(file_path: str, sheet_name: str, cell_address: str) -> dict[str, A
         wb_form.close()
 
         # Determine type
-        if value is None:
+        if value is None and formula is not None:
+            # A cell holding a formula is not an empty cell. openpyxl has no
+            # calculation engine, so a formula this server wrote and nothing
+            # has opened since carries no cached result -- and reporting that
+            # as `value: null, type: "empty"` reads as "the write did not
+            # land", which is the opposite of what happened. The formula is
+            # right there in the same response.
+            cell_type = "formula_uncalculated"
+        elif value is None:
             cell_type = "empty"
         elif isinstance(value, bool):
             cell_type = "boolean"
@@ -263,6 +271,12 @@ def read_cell(file_path: str, sheet_name: str, cell_address: str) -> dict[str, A
             "type": cell_type,
             "progress": progress,
         }
+        if cell_type == "formula_uncalculated":
+            result["note"] = (
+                f"{addr} holds the formula {formula!r} and no cached result. Excel and LibreOffice write the "
+                "computed value into the file when they save; this server stores formulas without evaluating "
+                "them, so there is nothing to read back until the file is opened in one of them."
+            )
         result["token_estimate"] = len(str(result)) // 4
         return result
 

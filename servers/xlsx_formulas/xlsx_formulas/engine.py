@@ -17,6 +17,19 @@ from shared.platform_utils import get_max_cells, open_file
 from shared.progress import fail, info, ok, warn
 from shared.version_control import snapshot
 
+# openpyxl writes the formula string into the sheet and stops there -- it has no
+# calculation engine, and the cached-result slot Excel and LibreOffice fill in
+# when they save stays empty. So a caller that writes =SUM(B2:B10) and then
+# reads the cell back gets `value: null`, which reads as a failed write. It was
+# not: the formula is in the file and any spreadsheet application will compute
+# it on open. Every tool here that writes a formula says so, once, in the same
+# response as the success.
+UNCALCULATED_NOTE = (
+    "Stored, not computed. This server writes the formula text; it has no calculation engine, so the cell "
+    "has no cached result until Excel or LibreOffice opens the file and saves it. read_cell() reports such "
+    "a cell as type 'formula_uncalculated'."
+)
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -157,6 +170,8 @@ def set_formula(
             "sheet": sheet_name,
             "cell": addr,
             "formula": formula,
+            "calculated": False,
+            "note": UNCALCULATED_NOTE,
             "backup": backup,
             "progress": progress,
         }
@@ -700,6 +715,8 @@ def fill_formula_down(
             "start_row": start_row,
             "end_row": end_row,
             "cells_filled": cells_filled,
+            "calculated": False,
+            "note": UNCALCULATED_NOTE,
             "backup": backup,
             "progress": progress,
         }
@@ -793,6 +810,8 @@ def auto_sum(
             "formula": formula,
             "data_range": data_range,
             "function_name": fn,
+            "calculated": False,
+            "note": UNCALCULATED_NOTE,
             "backup": backup,
             "progress": progress,
         }
