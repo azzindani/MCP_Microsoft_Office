@@ -179,7 +179,13 @@ def fetch_section(file_path: str, address: str) -> dict[str, Any]:
             "success": True,
             "file": str(path),
             **content,
-            "hint": "Call replace_text() or apply_patch() to edit the paragraphs you found.",
+            # apply_patch() is a Data_Analyst tool that edits CSVs. It has never
+            # existed on this server, so the advice could not be followed here;
+            # the handover below named the right tools all along.
+            "hint": (
+                "Call replace_text() to change wording, or insert_paragraph() / "
+                "delete_paragraph() to add or remove one."
+            ),
             "handover": make_handover(
                 workflow_step="INSPECT",
                 suggested_next=[
