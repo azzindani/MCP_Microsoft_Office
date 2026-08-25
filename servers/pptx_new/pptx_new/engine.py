@@ -129,6 +129,24 @@ def create_presentation(
 # blank. Both spellings are now accepted by both tools, and a slide that yields
 # no heading at all says so in progress instead of going quietly.
 _HEADING_KEYS = ("title", "heading", "header", "name")
+
+# The layouts create_from_outline can build, and the spellings that mean each.
+# The keys are matched after lowercasing and turning spaces and hyphens into
+# underscores, so "Title Only" and "title-only" both arrive as title_only.
+# PowerPoint's own layout names are on the left because they are what a caller
+# reads off a deck and types back.
+_OUTLINE_LAYOUTS: dict[str, str] = {
+    "title": "title",
+    "title_slide": "title",
+    "cover": "title",
+    "title_only": "title_only",
+    "titleonly": "title_only",
+    "heading_only": "title_only",
+    "content": "content",
+    "title_and_content": "content",
+    "bullets": "content",
+    "body": "content",
+}
 # `items` and `points` are what a caller writes for a bullet list about as often
 # as `bullets`; without them create_deck_from_data built the slide, set its
 # heading, and left the body blank under success.
@@ -195,9 +213,34 @@ def create_from_outline(
             _note_unnamed(progress, i + 1, slide_def)
             raw_title = _slide_heading(slide_def)
             content = _slide_body(slide_def)
-            layout_hint = str(slide_def.get("layout", "content")).lower()
+            # Only the exact token "title" was ever recognised; everything else
+            # fell through to the content layout and was then echoed back
+            # verbatim in the progress line, so layout="Title Only" reported
+            # "title only" while the file used Title and Content, and
+            # layout="zzz" reported "zzz". The response asserted a layout the
+            # artifact contradicted, which is worse than ignoring the argument
+            # quietly. Normalised to what will actually be applied, and an
+            # unrecognised value is refused rather than silently downgraded.
+            layout_hint = _OUTLINE_LAYOUTS.get(
+                str(slide_def.get("layout", "content")).strip().lower().replace("-", "_").replace(" ", "_"),
+                "",
+            )
+            if not layout_hint:
+                given = slide_def.get("layout")
+                return _error(
+                    f"Slide {i + 1}: unknown layout {given!r}.",
+                    f"Use one of: {', '.join(sorted(set(_OUTLINE_LAYOUTS.values())))}. "
+                    f"Accepted spellings: {', '.join(sorted(_OUTLINE_LAYOUTS))}.",
+                    progress,
+                )
 
-            if layout_hint == "title":
+            if layout_hint == "title_only":
+                # Layout index 5 — Title Only, a real layout this used to
+                # silently turn into Title and Content.
+                layout = prs.slide_layouts[5]
+                slide = prs.slides.add_slide(layout)
+                _set_placeholder_text(slide, 0, raw_title)
+            elif layout_hint == "title":
                 # Layout index 0 — Title Slide (title + subtitle)
                 layout = prs.slide_layouts[0]
                 slide = prs.slides.add_slide(layout)
@@ -581,6 +624,15 @@ def create_agenda(
         return _error(str(exc), "Check output_path is writable and items is a valid list.", progress)
 
 
+def _heading_level(para: Any) -> int:
+    """The heading depth of a paragraph, or 0 if it is body text."""
+    name = getattr(getattr(para, "style", None), "name", "") or ""
+    if not name.startswith("Heading"):
+        return 0
+    tail = name[len("Heading") :].strip()
+    return int(tail) if tail.isdigit() else 0
+
+
 def create_from_docx(
     docx_path: str,
     output_path: str,
@@ -622,16 +674,42 @@ def create_from_docx(
         current_slide: dict[str, Any] | None = None
         has_headings = any(p.style.name.startswith("Heading") for p in paragraphs)  # type: ignore[reportOptionalMemberAccess]
 
+        # A new slide used to start only on Heading 1, with Heading 2 demoted to
+        # a bullet. create_from_sections -- this fleet's own .docx builder --
+        # writes the document title as Heading 1 and every section heading as
+        # Heading 2, so a three-section document round-tripped through the two
+        # tools came back as ONE slide with all three sections crammed into its
+        # body, under success and a `slide_count: 1` that was accurate about a
+        # deck nobody asked for. max_slides=20 sat in the schema promising
+        # otherwise.
+        #
+        # Split on the shallowest heading level that occurs more than once
+        # instead: several Heading 1s still split on Heading 1 exactly as
+        # before, and a lone title over repeated Heading 2s splits on the
+        # Heading 2s, which is the structure the document is actually showing.
+        levels = [_heading_level(p) for p in paragraphs if p.text.strip()]
+        present = sorted({lv for lv in levels if lv})
+        repeated = [lv for lv in present if levels.count(lv) > 1]
+        split_level = repeated[0] if repeated else (present[0] if present else 1)
+        if split_level != 1:
+            progress.append(
+                info(
+                    f"Splitting slides on Heading {split_level}",
+                    f"Heading 1 appears {levels.count(1)} time(s), so it titles the deck rather than each slide",
+                )
+            )
+
         if has_headings:
             for para in paragraphs:
-                style = para.style.name  # type: ignore[reportOptionalMemberAccess]
                 text = para.text.strip()
                 if not text:
                     continue
-                if style == "Heading 1":
+                level = _heading_level(para)
+                if level and level <= split_level:
                     current_slide = {"title": text, "content_lines": []}
                     slides_data.append(current_slide)
-                elif style == "Heading 2":
+                elif level:
+                    # A heading below the split level is a sub-point of its slide.
                     if current_slide is not None:
                         current_slide["content_lines"].append(f"  • {text}")
                     else:
