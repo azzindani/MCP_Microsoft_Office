@@ -921,12 +921,29 @@ def convert_to_values(
         if open_after:
             open_file(path)
 
-        progress.append(
-            ok(
-                f"Converted formulas to values in {range_address}",
-                f"{converted} formula{'s' if converted != 1 else ''} replaced",
+        # "Converted formulas to values" sat above "0 formulas replaced" -- the
+        # headline claiming the thing its own detail said had not happened, on a
+        # success:true reply. Not a rare corner, either: openpyxl writes formulas
+        # without computing them, so a workbook produced anywhere in this fleet
+        # has no cached values at all and this tool can convert nothing in it. A
+        # round-15 phase hit exactly that on a file the xlsx server had just
+        # written, and had to read skipped_no_cached_value to find out.
+        if converted:
+            progress.append(
+                ok(
+                    f"Converted formulas to values in {range_address}",
+                    f"{converted} formula{'s' if converted != 1 else ''} replaced",
+                )
             )
-        )
+        else:
+            progress.append(
+                warn(
+                    f"No formulas converted in {range_address}",
+                    f"{len(skipped)} formula cell(s) had no cached value to write"
+                    if skipped
+                    else "that range holds no formula cells",
+                )
+            )
         # Every skipped cell address was listed in full, twice -- once joined
         # into this warning and once as the response field. A sweep converting a
         # filled-down column over 16,834 rows skipped all of them (openpyxl
@@ -956,10 +973,20 @@ def convert_to_values(
             "backup": backup,
             "progress": progress,
         }
-        if skipped:
+        if skipped and converted:
             result["hint"] = (
                 "Some formula cells had no cached value (never opened in Excel/LibreOffice) "
                 "and were left as formulas rather than being overwritten with a blank value."
+            )
+        elif skipped:
+            # Nothing at all was converted, so say what to do rather than only
+            # what happened. Every workbook these servers write lands here.
+            result["hint"] = (
+                f"None of the {len(skipped)} formula cell(s) had a cached value, so nothing was "
+                "converted and the file is unchanged. Formulas written by this server are never "
+                "calculated -- openpyxl stores the text, not a result. Open the workbook in "
+                "Excel or LibreOffice and save it once so the values are cached, then call "
+                "convert_to_values again."
             )
         result["token_estimate"] = len(str(result)) // 4
         return result

@@ -74,14 +74,23 @@ class TestTheResponseStaysSmall:
     def test_the_response_is_not_hundreds_of_kilobytes(self, response: dict):
         assert len(json.dumps(response, default=str)) < 20000
 
-    def test_the_warning_does_not_repeat_the_whole_list(self, response: dict):
-        warns = [p for p in response["progress"] if p.get("status") == "warn"]
+    # Found by message rather than by position. These took warns[0], which was
+    # the skipped-cells warning until a second warning was added in front of it
+    # ("No formulas converted in ...") for a different defect. Position was
+    # never what this file is about; the size of the skipped list is.
+    @staticmethod
+    def skipped_warning(response: dict) -> dict:
+        warns = [
+            p for p in response["progress"] if p.get("status") == "warn" and "Skipped" in str(p.get("message", ""))
+        ]
         assert warns, response["progress"]
-        assert len(str(warns[0].get("detail", ""))) < 4000
+        return warns[0]
+
+    def test_the_warning_does_not_repeat_the_whole_list(self, response: dict):
+        assert len(str(self.skipped_warning(response).get("detail", ""))) < 4000
 
     def test_the_warning_still_names_the_count(self, response: dict):
-        warns = [p for p in response["progress"] if p.get("status") == "warn"]
-        assert str(ROWS) in str(warns[0].get("message", "")), warns
+        assert str(ROWS) in str(self.skipped_warning(response).get("message", "")), response["progress"]
 
 
 class TestItStillExplainsItself:
