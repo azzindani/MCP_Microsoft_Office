@@ -108,6 +108,19 @@ def get_document_outline(file_path: str) -> dict[str, Any]:
         return _error(str(e), "Check that file_path is a valid .docx file.", progress)
 
 
+def _index_hint(index_data: dict[str, Any]) -> str:
+    """Name the notation, and the headings the section cut passed over."""
+    base = "Use an address like '§2' or '§2.p4' with fetch_section() to read targeted content."
+    deeper = sum(v for k, v in index_data["heading_counts"].items() if k != "1")
+    if deeper:
+        return (
+            f"{base} Sections are cut at Heading 1 only, so the {deeper} deeper heading(s) in this "
+            "document are inside a section rather than being one; reach them with §N.pM, or "
+            "get_document_outline() to see every heading."
+        )
+    return base
+
+
 def get_document_index(file_path: str) -> dict[str, Any]:
     """Return section tree index. Zero paragraph content returned."""
     progress: list[dict[str, Any]] = []
@@ -131,7 +144,13 @@ def get_document_index(file_path: str) -> dict[str, Any]:
             "total_paragraphs": total,
             "address_scheme": index_data["address_scheme"],
             "sections": index_data["sections"],
-            "hint": "Use an address like '§2' or '§2.p4' with fetch_section() to read targeted content.",
+            # Sections are cut at Heading 1 only. Said out loud because a
+            # document with one H1 and four H2s indexes as a single section
+            # while get_document_outline lists five headings for the same file,
+            # and the two read as a contradiction.
+            "sections_cut_at_heading_level": index_data["sections_cut_at_heading_level"],
+            "heading_counts": index_data["heading_counts"],
+            "hint": _index_hint(index_data),
             "handover": make_handover(
                 workflow_step="INSPECT",
                 suggested_next=[

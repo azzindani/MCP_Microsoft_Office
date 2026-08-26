@@ -61,7 +61,19 @@ def build_docx_index(doc: Any) -> dict[str, Any]:
             "address_scheme": "flat",
             "total_paragraphs": total,
             "sections": [],
+            "sections_cut_at_heading_level": 1,
+            "heading_counts": {},
         }
+
+    # How many headings there are at each level. A section is cut at level 1
+    # only, so a document whose headings are a title plus four Heading 2s is
+    # one section covering everything -- while get_document_outline lists five
+    # headings for the same file. Both are right and they read as a
+    # contradiction, so the index says which level it cut on and what it passed
+    # over. The scheme is not changed: every existing §N address would move.
+    heading_levels: dict[int, int] = {}
+    for _, level, _ in headings:
+        heading_levels[level] = heading_levels.get(level, 0) + 1
 
     # Build section list from top-level headings (level 1)
     sections: list[dict[str, Any]] = []
@@ -94,7 +106,21 @@ def build_docx_index(doc: Any) -> dict[str, Any]:
         "address_scheme": "sectioned",
         "total_paragraphs": total,
         "sections": sections,
+        "sections_cut_at_heading_level": 1,
+        "heading_counts": {str(k): v for k, v in sorted(heading_levels.items())},
     }
+
+
+# One pattern for the §N / §N.pM / §N.tM notation, because there were two and
+# they disagreed. fetch_section_content matched only `^§(\d+)$` while labelling
+# every paragraph it returned `§N.pM` -- so the addresses the tool printed were
+# addresses it refused, and so was the '§1.p3' its own error message offered as
+# the example. resolve_docx_address had parsed the full form correctly all
+# along. Anything that reads this notation compiles it from here.
+_SECTION_ADDRESS = re.compile(r"^§(\d+)(?:\.(\d+))?(?:\.(p\d+|t\d+))?$")
+
+# What to call the notation when refusing one. Written once for the same reason.
+_ADDRESS_FORMS = "Use §N for a section, e.g. '§1', or §N.pM for a paragraph inside one, e.g. '§1.p3'."
 
 
 def resolve_docx_address(doc: Any, address: str) -> DocxNode:
@@ -119,7 +145,7 @@ def resolve_docx_address(doc: Any, address: str) -> DocxNode:
         return DocxNode(paragraph=paragraphs[idx], para_index=idx)
 
     # Section address
-    section_match = re.match(r"^§(\d+)(?:\.(\d+))?(?:\.(p\d+|t\d+))?$", address)
+    section_match = _SECTION_ADDRESS.match(address)
     if not section_match:
         raise AddressError(f"Invalid address format: '{address}'. Use §N, §N.pM, pN, or slide[N]/shape[name] notation.")
 
@@ -177,17 +203,14 @@ def fetch_section_content(doc: Any, address: str) -> dict[str, Any]:
         raise AddressError(f"Address '{address}' not valid for flat document. Use pN notation.")
 
     # Sectioned document
-    section_match = re.match(r"^§(\d+)$", address)
+    section_match = _SECTION_ADDRESS.match(address)
     if not section_match:
         # The sibling resolver above already names the notation on a bad
         # address; this one just said the address was invalid. A section number
         # is written with a section sign -- not a character anyone types by
         # accident, and not one a caller can guess: '1', 'p1', 'section:1' and
         # 'Introduction' all arrive here and all got the same bare sentence.
-        raise AddressError(
-            f"Invalid section address: '{address}'. Use §N for a section, e.g. '§1', "
-            "or §N.pM for a paragraph inside one, e.g. '§1.p3'."
-        )
+        raise AddressError(f"Invalid section address: '{address}'. {_ADDRESS_FORMS}")
 
     sections = index_data["sections"]
     section_num = int(section_match.group(1))
@@ -209,6 +232,22 @@ def fetch_section_content(doc: Any, address: str) -> dict[str, Any]:
                 "style": p.style.name,
             }
         )
+
+    # §N.pM — one paragraph out of the section, addressed the way this function
+    # labels it. Sending back an address it just printed used to fail here.
+    item = section_match.group(3)
+    if item:
+        if item.startswith("t"):
+            raise AddressError(
+                f"'{address}' addresses a table, which fetch_section does not return. "
+                "Use list_tables() to find it and read_table() to read it."
+            )
+        rel_idx = int(item[1:])
+        if rel_idx < 0 or rel_idx >= len(para_list):
+            raise AddressError(
+                f"Paragraph §{section_num}.p{rel_idx} out of range. Section has {len(para_list)} paragraphs."
+            )
+        para_list = [para_list[rel_idx]]
 
     return {
         "address": address,
