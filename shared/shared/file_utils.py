@@ -126,9 +126,21 @@ def resolve_path(raw: str) -> Path:
 
     path = p.resolve()
 
-    # Reject paths inside .mcp_versions/ to prevent snapshot-of-snapshot loops
+    # Reject paths inside .mcp_versions/ to prevent snapshot-of-snapshot loops.
+    #
+    # get_history hands back backup_path for every entry, and this refused the
+    # very paths it had just been given -- so a caller who wanted to *look at*
+    # an old version was told only what not to pass, never how to see it. The
+    # guard is right (a write to a backup snapshots the snapshot); the silence
+    # about the timestamp route was not. Versions are addressed by timestamp
+    # plus the original path, never by the .bak path itself.
     if ".mcp_versions" in path.parts:
-        raise ValueError(f"Path '{path}' is inside .mcp_versions/. Pass the original document path, not a backup path.")
+        raise ValueError(
+            f"Path '{path}' is inside .mcp_versions/. Snapshots are addressed by timestamp, not by "
+            "path: get_history lists them, and restore_version and diff_versions take that timestamp "
+            "together with the original file_path. To open a .bak directly, copy it outside "
+            ".mcp_versions/ first."
+        )
 
     # Add Windows long-path prefix if needed
     if sys.platform == "win32" and len(str(path)) > 200:
