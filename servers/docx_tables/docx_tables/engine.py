@@ -623,6 +623,12 @@ def add_table(
         backup = snapshot(str(path))
         progress.append(ok("Snapshot saved", Path(backup).name))
 
+        # "No paragraphs" is not the same as "empty". A document can hold tables
+        # and nothing else, and then there is more than one place a table can go
+        # after all -- so -1 has a front to be placed at, and calling the file
+        # empty in the reply describes a document that is not.
+        body_before = [child for child in doc.element.body if not child.tag.endswith("}sectPr")]
+
         # Create a new table (appended to body first by python-docx)
         tbl = doc.add_table(rows=rows, cols=cols)
 
@@ -644,12 +650,25 @@ def add_table(
                 anchor_para.addprevious(tbl_element)
             else:
                 anchor_para.addnext(tbl_element)
+        elif after_paragraph_index == -1 and body_before:
+            # No paragraphs, but the body is not empty -- honour "first" against
+            # whatever content is there rather than leaving the table where
+            # python-docx appended it, which is the other end entirely.
+            tbl_element = tbl._element  # type: ignore[attr-defined]
+            tbl_element.getparent().remove(tbl_element)
+            body_before[0].addprevious(tbl_element)
 
         doc.save(str(path))
         if open_after:
             open_file(path)
-        if not total_paras:
+        if not total_paras and not body_before:
             placed = "in the empty document"
+        elif not total_paras:
+            placed = (
+                "before the existing content"
+                if after_paragraph_index == -1
+                else "at the end (the document has no paragraphs to anchor to)"
+            )
         elif after_paragraph_index == -1:
             placed = "before paragraph 0"
         else:
