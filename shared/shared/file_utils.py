@@ -141,6 +141,21 @@ def hint_for_error(e: Exception, path: Path | None = None) -> str:
     """Return a user-facing hint appropriate for the exception type."""
     if isinstance(e, PermissionError):
         name = path.name if path else "the file"
+        # This used to answer "is open in Word, Excel, or PowerPoint" for every
+        # PermissionError, which is a Windows file-lock answer given to a Linux
+        # ownership problem. A round-15 phase hit `[Errno 13] Permission denied`
+        # on a root-owned workbook, was told to close an application that was
+        # not running, and retried into the same error. A hint that names a
+        # specific WRONG fix is worse than a vague one: the caller acts on it.
+        #
+        # os.access with the real uid answers the question directly -- if the
+        # process cannot write the file, no amount of closing Excel will help.
+        if path is not None and path.exists() and not os.access(path, os.W_OK):
+            return (
+                f"'{name}' is not writable by this process -- check its owner and mode. "
+                "On a container mount the MCP server often runs as a different user than your shell, "
+                "so a file created with bash needs chmod/chown before a tool can write it."
+            )
         return f"'{name}' is open in Word, Excel, or PowerPoint. Close it and try again."
     if isinstance(e, FileNotFoundError):
         return "That path does not exist. Check the directory was created first."
