@@ -41,6 +41,7 @@ it happens.
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -128,7 +129,28 @@ class TestASnapshotForAnEditThatDidNotHappen:
 
 
 def immutable_supported(p: Path) -> bool:
-    return subprocess.run(["chattr", "+i", str(p)], capture_output=True).returncode == 0
+    """Can this platform make a file unwritable to root? Linux/ext4 only.
+
+    subprocess.run RAISES FileNotFoundError when the binary is absent rather
+    than returning non-zero, so checking only the return code let the exception
+    escape and failed the test instead of skipping it. CI went red on
+    macos-latest, where there is no chattr at all, and would have on Windows
+    too. Guarded on the exception as well as the exit status.
+    """
+    if shutil.which("chattr") is None:
+        return False
+    try:
+        return subprocess.run(["chattr", "+i", str(p)], capture_output=True).returncode == 0
+    except OSError:
+        return False
+
+
+def clear_immutable(p: Path) -> None:
+    if shutil.which("chattr") is not None:
+        try:
+            subprocess.run(["chattr", "-i", str(p)], capture_output=True)
+        except OSError:
+            pass
 
 
 class TestTheWholeSequenceAgainstARealFailedWrite:
@@ -136,7 +158,7 @@ class TestTheWholeSequenceAgainstARealFailedWrite:
 
     def test_a_failed_write_leaves_the_file_alone_and_can_shed_its_snapshot(self, book: Path) -> None:
         if not immutable_supported(book):
-            pytest.skip("chattr +i unavailable (needs CAP_LINUX_IMMUTABLE on this filesystem)")
+            pytest.skip("chattr +i unavailable — Linux with CAP_LINUX_IMMUTABLE only")
         try:
             from xlsx_basic.engine import set_cell  # type: ignore[reportMissingImports]
 
@@ -148,4 +170,4 @@ class TestTheWholeSequenceAgainstARealFailedWrite:
             # The file is untouched, so the snapshot is provably redundant.
             assert discard_unused_snapshot(bak, str(book)) is True
         finally:
-            subprocess.run(["chattr", "-i", str(book)], capture_output=True)
+            clear_immutable(book)
