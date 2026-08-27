@@ -5,7 +5,7 @@ from typing import Any
 
 from shared.address_resolver import build_pptx_index
 from shared.doc_diff import diff_pptx
-from shared.file_utils import hint_for_error, resolve_path
+from shared.file_utils import hint_for_error, hint_for_message, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import open_file
 from shared.progress import describe_error, fail, index_range, info, ok
@@ -43,7 +43,7 @@ def _error(msg: str, hint: str, progress: list[dict[str, Any]], backup: str | No
         "success": False,
         "progress": progress,
         "error": describe_error(msg),
-        "hint": hint,
+        "hint": hint_for_message(msg, hint),
         "token_estimate": len(str(progress)) // 4,
     }
     if backup is not None:

@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from shared.file_utils import hint_for_error, resolve_path
+from shared.file_utils import hint_for_error, hint_for_message, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import open_file
 from shared.progress import describe_error, fail, index_range, ok
@@ -44,7 +44,7 @@ def _error(msg: str, hint: str, progress: list[dict[str, Any]], backup: str | No
     result: dict[str, Any] = {
         "success": False,
         "error": describe_error(msg),
-        "hint": hint,
+        "hint": hint_for_message(msg, hint),
         "progress": progress,
         "token_estimate": len(str(progress)) // 4,
     }

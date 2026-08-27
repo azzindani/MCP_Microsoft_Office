@@ -4,7 +4,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from shared.file_utils import embed_content, hint_for_error, resolve_path
+from shared.file_utils import embed_content, hint_for_error, hint_for_message, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_pdf_converter, open_file, resolve_output_path
 from shared.progress import describe_error, fail, index_range, info, ok
@@ -42,7 +42,7 @@ def _error(msg: str, hint: str, progress: list[dict[str, Any]], backup: str | No
     result: dict[str, Any] = {
         "success": False,
         "error": describe_error(msg),
-        "hint": hint,
+        "hint": hint_for_message(msg, hint),
         "progress": progress,
         "token_estimate": len(str(progress)) // 4,
     }

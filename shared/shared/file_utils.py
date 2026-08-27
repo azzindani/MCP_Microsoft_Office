@@ -149,8 +149,44 @@ def resolve_path(raw: str) -> Path:
     return path
 
 
+SNAPSHOT_ROUTE_HINT = (
+    "Call get_history() for the timestamps, then restore_version() or diff_versions() with the "
+    "ORIGINAL file_path and that timestamp. To read a .bak directly, copy it outside "
+    ".mcp_versions/ first."
+)
+
+
+def hint_for_message(message: str, default: str) -> str:
+    """Keep a hint that fits the error, instead of one that contradicts it.
+
+    A call site's default hint is written for the common failure and then
+    handed to every exception its try block can raise. That is usually
+    harmless, and once was not:
+
+        read_document(".../.mcp_versions/working_....docx.bak")
+        -> error: "... is inside .mcp_versions/. Snapshots are addressed by
+                   timestamp ... restore_version and diff_versions take that
+                   timestamp together with the original file_path."
+           hint:  "Check that file_path is a valid .docx file."
+
+    The file *is* a valid .docx. It is only in a directory the tools refuse to
+    open, the error already said exactly what to do instead, and `hint` is the
+    field a caller acts on -- so the response argued a caller out of the answer
+    it had just handed them. A hint that names a specific wrong fix is worse
+    than a vague one, the same lesson as the PermissionError branch below.
+    """
+    if ".mcp_versions" in message:
+        return SNAPSHOT_ROUTE_HINT
+    return default
+
+
 def hint_for_error(e: Exception, path: Path | None = None) -> str:
     """Return a user-facing hint appropriate for the exception type."""
+    # Checked before the type branches: the guard raises a plain ValueError, so
+    # nothing below would recognise it, and the path-is-None branch would answer
+    # "Pass an absolute path to an existing file" -- which this already is.
+    if ".mcp_versions" in str(e):
+        return SNAPSHOT_ROUTE_HINT
     if isinstance(e, PermissionError):
         name = path.name if path else "the file"
         # This used to answer "is open in Word, Excel, or PowerPoint" for every

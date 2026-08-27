@@ -8,7 +8,7 @@ from typing import Any
 
 from shared.address_resolver import AddressError, resolve_docx_address
 from shared.doc_diff import diff_docx
-from shared.file_utils import resolve_path
+from shared.file_utils import hint_for_message, resolve_path
 from shared.live_edit import notify_reload
 from shared.progress import describe_error, fail, ok, undo, warn
 from shared.receipt import append_receipt, read_receipt_log
@@ -49,7 +49,7 @@ def _error(msg: str, hint: str, progress: list) -> dict[str, Any]:
     return {
         "success": False,
         "error": describe_error(msg),
-        "hint": hint,
+        "hint": hint_for_message(msg, hint),
         "progress": progress,
         "token_estimate": 15,
     }

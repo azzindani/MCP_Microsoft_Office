@@ -122,3 +122,55 @@ class TestTheResponseContract:
             populated, "Sheet", source_range="A1:C3", dest_cell="E1", rows="nope", values="Revenue"
         )
         assert "nope" in r["error"], r["error"]
+
+
+class TestAHintThatContradictedItsOwnError:
+    """The .mcp_versions guard answered its own instructions with a denial.
+
+        read_document(".../.mcp_versions/working_....docx.bak")
+        -> error: "... is inside .mcp_versions/. Snapshots are addressed by
+                   timestamp ... restore_version and diff_versions take that
+                   timestamp together with the original file_path."
+           hint:  "Check that file_path is a valid .docx file."
+
+    The file IS a valid .docx. It is only in a directory the tools refuse to
+    open, and `hint` is the field a caller acts on -- so the response talked
+    the caller out of the answer it had just given. Found by handing a real
+    .bak path to a real tool, which is the only way this surfaces: the error
+    string alone reads perfectly.
+    """
+
+    def _snapshot_path(self, tmp_path):
+        d = tmp_path / ".mcp_versions"
+        d.mkdir()
+        p = d / "working_2026-01-01T00-00-00-000000Z.docx.bak"
+        p.write_bytes(b"not really a docx")
+        return p
+
+    def test_the_hint_names_the_route_the_error_describes(self, tmp_path):
+        from docx_basic import engine
+
+        r = engine.read_document(str(self._snapshot_path(tmp_path)))
+        assert r["success"] is False
+        for name in ("get_history", "restore_version", "diff_versions"):
+            assert name in r["hint"], r["hint"]
+
+    def test_it_no_longer_blames_the_file_type(self, tmp_path):
+        from docx_basic import engine
+
+        r = engine.read_document(str(self._snapshot_path(tmp_path)))
+        assert "valid .docx" not in r["hint"], r["hint"]
+
+    def test_an_unrelated_error_keeps_its_own_hint(self, tmp_path):
+        """The override must be narrow, or every hint becomes the same hint."""
+        from docx_basic import engine
+
+        r = engine.read_document(str(tmp_path / "no_such_file.docx"))
+        assert r["success"] is False
+        assert "get_history" not in r["hint"], r["hint"]
+
+    def test_the_shared_helper_passes_other_messages_through(self):
+        from shared.file_utils import hint_for_message
+
+        assert hint_for_message("some other failure", "the default") == "the default"
+        assert "restore_version" in hint_for_message("x is inside .mcp_versions/", "the default")

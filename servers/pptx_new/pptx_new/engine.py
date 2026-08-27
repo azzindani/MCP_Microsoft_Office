@@ -16,7 +16,7 @@ if str(_ROOT) not in sys.path:
 from pptx import Presentation  # noqa: E402
 from pptx.util import Inches, Pt  # noqa: E402,F401
 
-from shared.file_utils import embed_content  # noqa: E402
+from shared.file_utils import embed_content, hint_for_message  # noqa: E402
 from shared.platform_utils import open_file, resolve_output_path  # noqa: E402
 from shared.progress import describe_error, fail, info, ok, warn  # noqa: E402
 from shared.slide_text import strip_list_markers  # noqa: E402
@@ -47,7 +47,7 @@ def _error(
     return {
         "success": False,
         "error": describe_error(msg),
-        "hint": hint,
+        "hint": hint_for_message(msg, hint),
         "progress": progress,
         "token_estimate": _token_estimate(progress),
     }
