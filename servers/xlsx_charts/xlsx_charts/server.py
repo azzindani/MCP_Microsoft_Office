@@ -9,6 +9,7 @@ from starlette.responses import JSONResponse
 
 from shared.deploy_auth import build_auth, build_oauth_bridge
 from shared.strict_args import enforce_known_arguments
+from shared.token_estimate import measure_responses
 from shared.tool_annotations import EDITS
 from xlsx_charts import engine
 
@@ -148,6 +149,7 @@ def set_cell_style(
 # name yields a plausible answer with the argument silently dropped. Refuse it,
 # and name the ones that would have worked.
 enforce_known_arguments(mcp)
+measure_responses(mcp)
 
 
 def main() -> None:

@@ -12,6 +12,7 @@ from starlette.responses import JSONResponse
 from pptx_new import engine
 from shared.deploy_auth import build_auth, build_oauth_bridge
 from shared.strict_args import enforce_known_arguments
+from shared.token_estimate import measure_responses
 from shared.tool_annotations import CREATES
 
 _VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
@@ -128,6 +129,7 @@ def create_from_docx(
 # name yields a plausible answer with the argument silently dropped. Refuse it,
 # and name the ones that would have worked.
 enforce_known_arguments(mcp)
+measure_responses(mcp)
 
 
 def main() -> None:

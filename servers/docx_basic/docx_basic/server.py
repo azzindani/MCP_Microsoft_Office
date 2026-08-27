@@ -14,6 +14,7 @@ from docx_basic.helpers import read_receipt_tool as _read_receipt_tool
 from docx_basic.helpers import restore_version as _restore_version
 from shared.deploy_auth import build_auth, build_oauth_bridge
 from shared.strict_args import enforce_known_arguments
+from shared.token_estimate import measure_responses
 from shared.tool_annotations import EDITS, READS
 
 _VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
@@ -168,6 +169,7 @@ def read_receipt(file_path: str, last_n: int = 10) -> dict:
 # name yields a plausible answer with the argument silently dropped. Refuse it,
 # and name the ones that would have worked.
 enforce_known_arguments(mcp)
+measure_responses(mcp)
 
 
 def main() -> None:
