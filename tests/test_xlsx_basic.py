@@ -304,6 +304,15 @@ def test_set_cell_has_progress(workbook: Path):
 
 
 def test_set_range_writes_2d_array(workbook: Path):
+    """Shape and placement of the write.
+
+    "1" and "2" now land as numbers, not as the strings that were passed in.
+    This test used to assert ws["A2"].value == "1", which was the old
+    behaviour: every value arrived over MCP as text and was stored as text, so
+    a column of digits could not be summed. The string-ness was incidental to
+    what this test is about -- see test_a_number_that_was_stored_as_text.py for
+    the coercion rule and the values deliberately kept as text.
+    """
     data = [["X", "Y"], ["1", "2"]]
     result = set_range(str(workbook), "Q3 Revenue", "A1", data)
     assert result["success"] is True
@@ -314,8 +323,8 @@ def test_set_range_writes_2d_array(workbook: Path):
     ws = wb["Q3 Revenue"]
     assert ws["A1"].value == "X"
     assert ws["B1"].value == "Y"
-    assert ws["A2"].value == "1"
-    assert ws["B2"].value == "2"
+    assert ws["A2"].value == 1
+    assert ws["B2"].value == 2
     wb.close()
 
 

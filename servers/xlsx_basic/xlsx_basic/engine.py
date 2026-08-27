@@ -16,7 +16,7 @@ from shared.platform_utils import get_max_cells, get_max_search_results, open_fi
 from shared.progress import fail, ok, warn
 from shared.version_control import snapshot
 
-from .helpers import _cell_count_for_range, _last_cell, _validate_cell, _validate_range
+from .helpers import _cell_count_for_range, _last_cell, _validate_cell, _validate_range, coerce_cell_value
 
 logger = logging.getLogger(__name__)
 
@@ -535,7 +535,8 @@ def set_cell(
             }
 
         ws = wb[sheet_name]
-        ws[addr] = value
+        stored, stored_type = coerce_cell_value(value)
+        ws[addr] = stored
         wb.save(str(path))
         wb.close()
         if open_after:
@@ -547,7 +548,10 @@ def set_cell(
             "op": "set_cell",
             "sheet": sheet_name,
             "cell": addr,
-            "value": value,
+            # The stored value, not the string that arrived. Echoing the input
+            # while storing something else would be its own small lie.
+            "value": stored,
+            "stored_type": stored_type,
             "backup": backup,
             "progress": progress,
         }
@@ -630,7 +634,11 @@ def set_range(
                 # when the value is None and so leaves whatever the cell held
                 # before -- counted in cells_written all the same. "" already
                 # clears correctly; a JSON null did not.
-                ws.cell(row=start_row + r_offset, column=start_col + c_offset).value = val
+                #
+                # Same coercion as set_cell: two tools that write cells must not
+                # disagree about whether "10" is a number.
+                stored, _ = coerce_cell_value(val)
+                ws.cell(row=start_row + r_offset, column=start_col + c_offset).value = stored
                 total_cells += 1
 
         wb.save(str(path))

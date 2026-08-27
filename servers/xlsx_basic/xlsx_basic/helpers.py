@@ -34,6 +34,187 @@ def _validate_range(address: str) -> bool:
     return bool(_RANGE_RE.match(address.upper()))
 
 
+# A canonical decimal and nothing else.
+#
+# set_cell's MCP signature is `value: str`, so every number arrives as text, and
+# openpyxl stores text as text -- =SUM() over the column returns 0 and a chart
+# built on it plots nothing. The obvious fix, float(value) on anything that
+# parses, is worse than the bug: the values people most need kept as text are
+# exactly the ones that parse. 07030 is a New Jersey ZIP code, not 7030; a part
+# number like 1E5 becomes 100000.0; "1,234" and " 42 " are display formatting
+# that should survive a round trip untouched.
+#
+# So: optional minus, no leading zeros (except a bare 0 or 0.x), no leading
+# plus, no surrounding whitespace, no exponent, no thousands separator.
+# Anything else stays text. Exponent form is refused even though Python reads
+# it unambiguously -- a sheet full of silently converted part codes is a worse
+# outcome than a caller having to send a real float.
+_CANONICAL_NUMBER = re.compile(r"^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$")
+
+
+# Renaming a sheet used to be `ws.title = new` and nothing else, which left
+# every reference to the old name pointing at a sheet that no longer existed:
+# chart series ('Data'!$A$2:$A$4), defined names, and cross-sheet formulas
+# (=Data!B2) all survived the rename untouched. Excel draws the chart empty and
+# shows #REF! in the formula, and the tool reported success.
+#
+# A sheet name appears in a reference either quoted ('Q3 Revenue'!A1) or bare
+# (Data!A1). Both have to be rewritten, and neither may match a longer name
+# that merely starts the same way -- renaming "Data" must not touch "Data2!A1".
+# Hence the lookbehind on the bare form: a name character (or a quote, or the
+# dot of a table reference) before it means this is not our sheet.
+_SHEET_NAME_NEEDS_QUOTES = re.compile(r"[^A-Za-z0-9_]")
+
+
+def _retarget_sheet_name(text: str, old: str, new: str) -> str:
+    """Rewrite references to `old` in one formula/reference string."""
+    esc = re.escape(old)
+    replacement = f"'{new}'" if _SHEET_NAME_NEEDS_QUOTES.search(new) else new
+    text = re.sub(r"'" + esc + r"'(?=!)", replacement, text)
+    return re.sub(r"(?<![A-Za-z0-9_.'])" + esc + r"(?=!)", replacement, text)
+
+
+def retarget_sheet_references(wb: Any, old: str, new: str) -> dict[str, int]:
+    """Point charts, defined names and formulas at a renamed sheet.
+
+    Returns how many of each were rewritten, so the caller can say what it
+    touched rather than claiming a bare success.
+    """
+    counts = {"formulas": 0, "defined_names": 0, "chart_series": 0}
+
+    for sheet in wb.worksheets:
+        for row in sheet.iter_rows():
+            for cell in row:
+                v = cell.value
+                # `old in v`, not `f"{old}!" in v`: a quoted reference puts the
+                # bang after the closing quote ('Old Name'!A1), so the stricter
+                # pre-filter skipped every sheet whose name needed quoting --
+                # exactly the names most likely to be renamed. The regexes below
+                # do the precise matching; this only avoids running them on
+                # formulas that cannot possibly match.
+                if isinstance(v, str) and v.startswith("=") and old in v:
+                    updated = _retarget_sheet_name(v, old, new)
+                    if updated != v:
+                        cell.value = updated
+                        counts["formulas"] += 1
+
+        # Charts are anchored to the sheet they are drawn on, which is often not
+        # the sheet holding their data, so every sheet has to be walked.
+        for chart in getattr(sheet, "_charts", []):
+            for series in getattr(chart, "series", []):
+                for holder in (
+                    getattr(series, "val", None),
+                    getattr(series, "cat", None),
+                    getattr(series, "tx", None),
+                ):
+                    if holder is None:
+                        continue
+                    for kind in ("numRef", "strRef", "multiLvlStrRef"):
+                        ref = getattr(holder, kind, None)
+                        if ref is None:
+                            continue
+                        formula = getattr(ref, "f", None)
+                        if not formula:
+                            continue
+                        updated = _retarget_sheet_name(formula, old, new)
+                        if updated != formula:
+                            ref.f = updated
+                            counts["chart_series"] += 1
+
+    for defined in wb.defined_names.values():
+        text = getattr(defined, "attr_text", None)
+        if not text:
+            continue
+        updated = _retarget_sheet_name(text, old, new)
+        if updated != text:
+            defined.attr_text = updated
+            counts["defined_names"] += 1
+
+    return counts
+
+
+# openpyxl's copy_worksheet copies cells, styles and dimensions and documents
+# that it does NOT copy charts, images or other drawing objects. copy_sheet
+# passed that omission straight through: a sheet carrying a chart and a picture
+# produced a copy with neither, reported as a plain success. The cells were
+# right, so nothing looked wrong until you opened the file.
+#
+# Deep-copying the chart and re-anchoring it does work, and the copy's series
+# are retargeted at the new sheet -- which is what Excel does when you duplicate
+# a sheet by hand: the duplicate's chart plots the duplicate's data, not the
+# original's.
+def clone_drawings(source_ws: Any, target_ws: Any, old_name: str, new_name: str) -> dict[str, int]:
+    """Copy charts and images onto a freshly copied sheet. Returns counts."""
+    import copy as _copy
+
+    counts = {"charts": 0, "images": 0}
+
+    for chart in getattr(source_ws, "_charts", []):
+        cloned = _copy.deepcopy(chart)
+        for series in getattr(cloned, "series", []):
+            for holder in (
+                getattr(series, "val", None),
+                getattr(series, "cat", None),
+                getattr(series, "tx", None),
+            ):
+                if holder is None:
+                    continue
+                for kind in ("numRef", "strRef", "multiLvlStrRef"):
+                    ref = getattr(holder, kind, None)
+                    if ref is None:
+                        continue
+                    formula = getattr(ref, "f", None)
+                    if formula:
+                        ref.f = _retarget_sheet_name(formula, old_name, new_name)
+        target_ws.add_chart(cloned, _anchor_cell(chart))
+        counts["charts"] += 1
+
+    for image in getattr(source_ws, "_images", []):
+        target_ws.add_image(_copy.deepcopy(image), _anchor_cell(image))
+        counts["images"] += 1
+
+    return counts
+
+
+def _anchor_cell(drawing: Any, default: str = "A1") -> str:
+    """Where a chart or image sits, as an address, falling back to A1.
+
+    The anchor is a OneCellAnchor/TwoCellAnchor whose _from carries 0-based col
+    and row. Losing the position is much better than losing the drawing, so
+    anything unexpected lands at A1 rather than raising.
+    """
+    anchor = getattr(drawing, "anchor", None)
+    corner = getattr(anchor, "_from", None)
+    if corner is None:
+        return default
+    try:
+        return f"{get_column_letter(int(corner.col) + 1)}{int(corner.row) + 1}"
+    except Exception:
+        return default
+
+
+def coerce_cell_value(value: Any) -> tuple[Any, str]:
+    """Return (value to store, what it was stored as).
+
+    The second element is reported to the caller as `stored_type`, so someone
+    who sent "07030" can see it stayed text rather than discovering it in a
+    broken SUM three steps later.
+    """
+    if value is None:
+        return value, "empty"
+    # bool before int: isinstance(True, int) is True in Python, so a boolean
+    # would otherwise be reported as a number.
+    if isinstance(value, bool):
+        return value, "boolean"
+    if isinstance(value, (int, float)):
+        return value, "number"
+    if not isinstance(value, str):
+        return value, "other"
+    if not _CANONICAL_NUMBER.match(value):
+        return value, "text"
+    return (float(value) if "." in value else int(value)), "number"
+
+
 def _last_cell(ws: Any) -> str:
     """Return the Excel address of the last used cell in the worksheet."""
     col_letter = get_column_letter(ws.max_column) if ws.max_column else "A"
@@ -273,6 +454,10 @@ def rename_sheet(
                 "token_estimate": 15,
             }
 
+        # Retarget before the title changes: the reference strings still carry
+        # the old name either way, but doing it first keeps the two steps from
+        # depending on each other's order in a way a later edit could break.
+        retargeted = retarget_sheet_references(wb, old_name, new_name)
         wb[old_name].title = new_name
         wb.save(str(path))
         wb.close()
@@ -280,11 +465,23 @@ def rename_sheet(
             open_file(path)
 
         progress.append(ok(f"Renamed sheet '{old_name}' → '{new_name}'"))
+        moved = sum(retargeted.values())
+        if moved:
+            progress.append(
+                ok(
+                    f"Repointed {moved} reference(s) at '{new_name}'",
+                    f"{retargeted['formulas']} formula(s), {retargeted['defined_names']} defined name(s), "
+                    f"{retargeted['chart_series']} chart series",
+                )
+            )
         result: dict[str, Any] = {
             "success": True,
             "op": "rename_sheet",
             "old_name": old_name,
             "new_name": new_name,
+            # Say what else moved. A rename that silently broke every chart and
+            # cross-sheet formula still reported a bare success.
+            "references_updated": retargeted,
             "backup": backup,
             "progress": progress,
         }
@@ -382,14 +579,27 @@ def find_duplicates(
                 rows_truncated = True
             duplicates.append(entry)
 
+        # Count before capping. This used to read len(duplicates) *after* the
+        # slice below, so a column with thousands of repeated values answered
+        # "duplicate_count: 100" -- wrong exactly when the column was worst, and
+        # wrong in the one field a caller reads to decide what to do next.
+        # `truncated` was already correct; the number beside it was not.
+        #
+        # The cap now comes from the same helper as the per-value row cap above.
+        # It was a typed-in 100 sitting next to a derived limit, so the two
+        # disagreed (50 vs 100 by default) and MCP_CONSTRAINED_MODE reached only
+        # one of them.
+        total_duplicate_values = len(duplicates)
+        max_values = get_max_search_results()
         truncated = False
-        if len(duplicates) > 100:
-            duplicates = duplicates[:100]
+        if total_duplicate_values > max_values:
+            duplicates = duplicates[:max_values]
             truncated = True
 
         progress.append(
             ok(
-                f"Found {len(duplicates)} duplicate value(s) in column {col_upper}",
+                f"Found {total_duplicate_values} duplicate value(s) in column {col_upper}"
+                + (f", returning {len(duplicates)}" if truncated else ""),
                 sheet_name,
             )
         )
@@ -397,10 +607,14 @@ def find_duplicates(
             "success": True,
             "sheet": sheet_name,
             "column": col_upper,
-            "duplicate_count": len(duplicates),
+            # How many exist, and how many came back -- two different numbers
+            # whenever truncated is true, and conflating them was the defect.
+            "duplicate_count": total_duplicate_values,
+            "duplicates_returned": len(duplicates),
             "duplicates": duplicates,
             "truncated": truncated,
             "rows_truncated": rows_truncated,
+            "max_duplicates_returned": max_values,
             "max_rows_per_value": max_rows,
             "progress": progress,
         }
@@ -479,6 +693,7 @@ def copy_sheet(
         source_ws = wb[source_sheet]
         copied_ws = wb.copy_worksheet(source_ws)
         copied_ws.title = new_sheet_name
+        drawings = clone_drawings(source_ws, copied_ws, source_sheet, new_sheet_name)
 
         wb.save(str(path))
         wb.close()
@@ -486,11 +701,21 @@ def copy_sheet(
             open_file(path)
 
         progress.append(ok(f"Copied '{source_sheet}' → '{new_sheet_name}'"))
+        if drawings["charts"] or drawings["images"]:
+            progress.append(
+                ok(
+                    f"Copied {drawings['charts']} chart(s) and {drawings['images']} image(s)",
+                    f"chart series now read from '{new_sheet_name}'",
+                )
+            )
         result: dict[str, Any] = {
             "success": True,
             "op": "copy_sheet",
             "source_sheet": source_sheet,
             "new_sheet_name": new_sheet_name,
+            # openpyxl copies no drawings at all, so a caller had no way to know
+            # the copy was missing its chart short of opening the file.
+            "drawings_copied": drawings,
             "backup": backup,
             "progress": progress,
         }
