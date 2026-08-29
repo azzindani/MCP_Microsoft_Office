@@ -119,3 +119,5 @@ jobs:
           public-host: office.example.com
           mcp-path: /docx-basic/mcp
           health-timeout: "180"
+          create-dirs: "oauth-state"
+          shared-dir: shared-files
