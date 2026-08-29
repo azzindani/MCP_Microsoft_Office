@@ -11,7 +11,7 @@ from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import column_index_from_string
 
 from shared.arg_alias import missing, pick
-from shared.file_utils import hint_for_error, resolve_path, sheet_names_hint
+from shared.file_utils import drop_snapshot_if_unwritten, hint_for_error, resolve_path, scrub_repr, sheet_names_hint
 from shared.live_edit import notify_reload
 from shared.platform_utils import open_file
 from shared.progress import fail, index_range, info, ok
@@ -286,9 +286,9 @@ def add_chart(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -326,7 +326,7 @@ def delete_chart(
                 "success": False,
                 "error": f"chart_index {chart_index} out of range {index_range(len(charts), 'charts')}",
                 "hint": "Use add_chart to see chart indices.",
-                "backup": backup,
+                "backup": drop_snapshot_if_unwritten(backup, path, progress),
                 "progress": progress,
                 "token_estimate": 15,
             }
@@ -355,9 +355,9 @@ def delete_chart(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -397,7 +397,7 @@ def update_chart(
                 "success": False,
                 "error": f"chart_index {chart_index} out of range {index_range(len(charts), 'charts')}",
                 "hint": "Use add_chart to see chart indices.",
-                "backup": backup,
+                "backup": drop_snapshot_if_unwritten(backup, path, progress),
                 "progress": progress,
                 "token_estimate": 15,
             }
@@ -436,9 +436,9 @@ def update_chart(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -515,7 +515,7 @@ def add_pivot_table(
                     "success": False,
                     "error": f"Sheet '{src_sheet_name}' not found",
                     "hint": "Check the source_range sheet name.",
-                    "backup": backup,
+                    "backup": drop_snapshot_if_unwritten(backup, path, progress),
                     "progress": progress,
                     "token_estimate": 15,
                 }
@@ -557,7 +557,7 @@ def add_pivot_table(
                     "success": False,
                     "error": f"add_pivot_table needs a {arg_name} column",
                     "hint": _header_hint(arg_name, " Only cols is optional."),
-                    "backup": backup,
+                    "backup": drop_snapshot_if_unwritten(backup, path, progress),
                     "progress": progress,
                     "token_estimate": 15,
                 }
@@ -573,7 +573,7 @@ def add_pivot_table(
                     "success": False,
                     "error": f"Column '{col_name}' not found in source range headers",
                     "hint": _header_hint(arg_name),
-                    "backup": backup,
+                    "backup": drop_snapshot_if_unwritten(backup, path, progress),
                     "progress": progress,
                     "token_estimate": 15,
                 }
@@ -655,9 +655,9 @@ def add_pivot_table(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -755,9 +755,9 @@ def set_cell_style(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }

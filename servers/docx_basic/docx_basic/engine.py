@@ -11,7 +11,7 @@ from shared.address_resolver import (
     build_docx_index,
     fetch_section_content,
 )
-from shared.file_utils import hint_for_error, resolve_path
+from shared.file_utils import drop_snapshot_if_unwritten, hint_for_error, resolve_path, scrub_repr
 from shared.handover import make_context, make_handover
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_max_paragraphs, get_max_search_results, open_file
@@ -230,7 +230,7 @@ def fetch_section(file_path: str, address: str) -> dict[str, Any]:
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": "Use get_document_index to see valid section addresses.",
             "progress": progress,
             "token_estimate": 30,
@@ -607,8 +607,8 @@ def replace_text(
         )
         return {
             "success": False,
-            "error": str(e),
-            "backup": backup,
+            "error": scrub_repr(e),
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "hint": hint_for_error(e, path),
             "progress": progress,
             "token_estimate": 20,
@@ -724,8 +724,8 @@ def insert_paragraph(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
-            "backup": backup,
+            "error": scrub_repr(e),
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "hint": hint_for_error(e, path),
             "progress": progress,
             "token_estimate": 20,
@@ -837,8 +837,8 @@ def delete_paragraph(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
-            "backup": backup,
+            "error": scrub_repr(e),
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "hint": hint_for_error(e, path),
             "progress": progress,
             "token_estimate": 20,
@@ -904,8 +904,8 @@ def append_text(file_path: str, text: str, style: str = "Body Text", open_after:
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
-            "backup": backup,
+            "error": scrub_repr(e),
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "hint": hint_for_error(e, path),
             "progress": progress,
             "token_estimate": 20,

@@ -4,7 +4,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from shared.file_utils import embed_content, hint_for_error, hint_for_message, resolve_path
+from shared.file_utils import embed_content, hint_for_error, hint_for_message, image_hint, image_problem, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_pdf_converter, open_file, resolve_output_path
 from shared.progress import describe_error, fail, index_range, info, ok
@@ -364,11 +364,14 @@ def add_image(
                 "Check that image_path is an absolute path to an existing image file.",
                 progress,
             )
-        if img_path.suffix.lower() not in _SUPPORTED_IMAGE_EXTS:
-            progress.append(fail(f"Unsupported image format: {img_path.suffix}"))
+        # Content, not just extension: a .png holding something else reaches
+        # Pillow inside python-docx and comes back as a heap address.
+        problem = image_problem(img_path)
+        if problem:
+            progress.append(fail(problem))
             return _error(
-                f"Unsupported image format: {img_path.suffix}",
-                "Supported formats: PNG, JPG, GIF, BMP, TIFF.",
+                problem,
+                image_hint(img_path),
                 progress,
             )
 

@@ -11,7 +11,7 @@ from openpyxl.utils import get_column_letter, range_boundaries
 from openpyxl.workbook.defined_name import DefinedName
 from openpyxl.worksheet.datavalidation import DataValidation
 
-from shared.file_utils import hint_for_error, resolve_path, sheet_names_hint
+from shared.file_utils import drop_snapshot_if_unwritten, hint_for_error, resolve_path, scrub_repr, sheet_names_hint
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_max_cells, open_file
 from shared.progress import fail, info, ok, warn
@@ -182,9 +182,9 @@ def set_formula(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -227,7 +227,7 @@ def set_named_range(
                 "success": False,
                 "error": f"Sheet '{sheet_name}' not found",
                 "hint": sheet_names_hint(available_sheets),
-                "backup": backup,
+                "backup": drop_snapshot_if_unwritten(backup, path, progress),
                 "progress": progress,
                 "token_estimate": 15,
             }
@@ -250,7 +250,7 @@ def set_named_range(
                         f"Pass the bare range, e.g. range_address='{bare}', and name the sheet "
                         "in sheet_name — or set sheet_name to the sheet the address refers to."
                     ),
-                    "backup": backup,
+                    "backup": drop_snapshot_if_unwritten(backup, path, progress),
                     "progress": progress,
                     "token_estimate": 30,
                 }
@@ -283,9 +283,9 @@ def set_named_range(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -396,9 +396,9 @@ def set_conditional_format(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -487,9 +487,9 @@ def set_data_validation(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -553,9 +553,9 @@ def freeze_panes(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -606,9 +606,9 @@ def set_autofilter(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -727,9 +727,9 @@ def fill_formula_down(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -822,9 +822,9 @@ def auto_sum(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -995,9 +995,9 @@ def convert_to_values(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }

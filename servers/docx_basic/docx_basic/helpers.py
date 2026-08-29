@@ -8,7 +8,7 @@ from typing import Any
 
 from shared.address_resolver import AddressError, resolve_docx_address
 from shared.doc_diff import diff_docx
-from shared.file_utils import hint_for_message, resolve_path
+from shared.file_utils import drop_snapshot_if_unwritten, hint_for_message, resolve_path, scrub_repr
 from shared.live_edit import notify_reload
 from shared.progress import describe_error, fail, ok, undo, warn
 from shared.receipt import append_receipt, read_receipt_log
@@ -120,7 +120,7 @@ def replace_at(file_path: str, address: str, new_text: str) -> dict[str, Any]:
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": "Use get_document_index to find valid addresses.",
             "progress": progress,
             "token_estimate": 20,
@@ -129,8 +129,8 @@ def replace_at(file_path: str, address: str, new_text: str) -> dict[str, Any]:
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
-            "backup": backup,
+            "error": scrub_repr(e),
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "hint": "Use restore_version to undo.",
             "progress": progress,
             "token_estimate": 20,
@@ -184,7 +184,7 @@ def insert_at(file_path: str, address: str, new_text: str, style: str = "Body Te
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": "Use get_document_index to find valid addresses.",
             "progress": progress,
             "token_estimate": 20,
@@ -193,8 +193,8 @@ def insert_at(file_path: str, address: str, new_text: str, style: str = "Body Te
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
-            "backup": backup,
+            "error": scrub_repr(e),
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "hint": "Use restore_version to undo.",
             "progress": progress,
             "token_estimate": 20,
@@ -241,7 +241,7 @@ def delete_at(file_path: str, address: str) -> dict[str, Any]:
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": "Use get_document_index to find valid addresses.",
             "progress": progress,
             "token_estimate": 20,
@@ -250,8 +250,8 @@ def delete_at(file_path: str, address: str) -> dict[str, Any]:
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
-            "backup": backup,
+            "error": scrub_repr(e),
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "hint": "Use restore_version to undo.",
             "progress": progress,
             "token_estimate": 20,

@@ -156,18 +156,28 @@ def clear_immutable(p: Path) -> None:
 class TestTheWholeSequenceAgainstARealFailedWrite:
     """Reproduces what the phase actually hit, rather than a mocked stand-in."""
 
-    def test_a_failed_write_leaves_the_file_alone_and_can_shed_its_snapshot(self, book: Path) -> None:
+    def test_a_failed_write_leaves_the_file_alone_and_sheds_its_snapshot(self, book: Path) -> None:
         if not immutable_supported(book):
             pytest.skip("chattr +i unavailable — Linux with CAP_LINUX_IMMUTABLE only")
         try:
             from xlsx_basic.engine import set_cell  # type: ignore[reportMissingImports]
 
+            versions = book.parent / ".mcp_versions"
+            before = set(versions.glob("*.bak")) if versions.exists() else set()
+
             r = set_cell(str(book), "Sheet", "A1", "after")
             assert r["success"] is False, r
             assert load_workbook(str(book)).active["A1"].value == "before"
-            bak = r.get("backup")
-            assert bak and Path(bak).exists(), "the snapshot this test is about was not taken"
-            # The file is untouched, so the snapshot is provably redundant.
-            assert discard_unused_snapshot(bak, str(book)) is True
+
+            # Round 19b: shedding is no longer left to the caller to do by hand.
+            # This test used to assert the snapshot was still sitting there and
+            # that discard_unused_snapshot COULD remove it -- which was true,
+            # and which nothing in production ever called. Three failed argument
+            # calls against one workbook left three .bak files and three
+            # responses whose hint said "there is no snapshot to restore" beside
+            # a backup field naming one. The tool now drops it itself.
+            assert not r.get("backup"), r["backup"]
+            after = set(versions.glob("*.bak")) if versions.exists() else set()
+            assert after == before, f"a write that never happened left {after - before}"
         finally:
             clear_immutable(book)

@@ -12,7 +12,15 @@ from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION  # type: ignore[at
 from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
-from shared.file_utils import embed_content, hint_for_error, resolve_path
+from shared.file_utils import (
+    drop_snapshot_if_unwritten,
+    embed_content,
+    hint_for_error,
+    image_hint,
+    image_problem,
+    resolve_path,
+    scrub_repr,
+)
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_pdf_converter, open_file, resolve_output_path
 from shared.progress import fail, index_range, ok, warn
@@ -237,7 +245,7 @@ def set_background(
                     "success": False,
                     "error": f"Image file not found: {image_path}",
                     "hint": "Check that image_path is absolute and the file exists.",
-                    "backup": backup,
+                    "backup": drop_snapshot_if_unwritten(backup, path, progress),
                     "progress": progress,
                     "token_estimate": 15,
                 }
@@ -273,9 +281,9 @@ def set_background(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -320,7 +328,7 @@ def set_font_style(
                 "success": False,
                 "error": f"Shape '{shape_name}' has no text frame",
                 "hint": "Only text shapes support font styling.",
-                "backup": backup,
+                "backup": drop_snapshot_if_unwritten(backup, path, progress),
                 "progress": progress,
                 "token_estimate": 15,
             }
@@ -373,9 +381,9 @@ def set_font_style(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -434,7 +442,7 @@ def add_table(
                 "error": str(exc),
                 "hint": "Add a new slide with add_slide and put the table there, "
                 "or shorten the text already on this one.",
-                "backup": backup,
+                "backup": drop_snapshot_if_unwritten(backup, path, progress),
                 "progress": progress,
                 "token_estimate": 30,
             }
@@ -481,9 +489,9 @@ def add_table(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -568,7 +576,7 @@ def add_chart(
                 "error": str(exc),
                 "hint": "Add a new slide with add_slide and put the chart there, "
                 "or shorten the text already on this one.",
-                "backup": backup,
+                "backup": drop_snapshot_if_unwritten(backup, path, progress),
                 "progress": progress,
                 "token_estimate": 30,
             }
@@ -634,9 +642,9 @@ def add_chart(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -788,9 +796,9 @@ def duplicate_slide(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -910,7 +918,7 @@ def export_pdf(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": "Check file path and that a PDF converter is installed.",
             "progress": progress,
             "token_estimate": 15,
@@ -938,7 +946,6 @@ def add_image_to_all_slides(
 
         # Validate image path and format
         img_path = Path(image_path).resolve()
-        supported = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff"}
         if not img_path.exists():
             progress.append(fail(f"Image not found: {img_path.name}"))
             return {
@@ -948,12 +955,15 @@ def add_image_to_all_slides(
                 "progress": progress,
                 "token_estimate": 15,
             }
-        if img_path.suffix.lower() not in supported:
-            progress.append(fail(f"Unsupported image format: {img_path.suffix}"))
+        # Checked before the snapshot below: a file that cannot be read as an
+        # image must not cost the deck a version entry.
+        problem = image_problem(img_path)
+        if problem:
+            progress.append(fail(problem))
             return {
                 "success": False,
-                "error": f"Unsupported image format: {img_path.suffix}",
-                "hint": f"Supported formats: {', '.join(sorted(supported))}",
+                "error": problem,
+                "hint": image_hint(img_path),
                 "progress": progress,
                 "token_estimate": 15,
             }
@@ -994,9 +1004,9 @@ def add_image_to_all_slides(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -1092,9 +1102,9 @@ def set_font_all_slides(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }

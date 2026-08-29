@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 
 import openpyxl
 from openpyxl.utils import column_index_from_string, get_column_letter
 
-from shared.file_utils import hint_for_error, resolve_path, sheet_names_hint
+from shared.file_utils import drop_snapshot_if_unwritten, hint_for_error, resolve_path, scrub_repr, sheet_names_hint
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_max_search_results, open_file
 from shared.progress import fail, info, ok
@@ -239,6 +240,59 @@ def _cell_count_for_range(range_address: str) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _is_blank(value: Any) -> bool:
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
+def _header_row_index(rows: list[list[Any]]) -> int | None:
+    """Index of the first row holding anything, or None if every row is blank.
+
+    `has_header` used to mean "skip rows[0]" -- the *physical* first row, not
+    the header. A sheet whose row 1 is blank therefore had its header sorted
+    into the body as an ordinary value, and the write-back (which also started
+    at a fixed row 2) landed the sorted block on top of it. success: true,
+    rows_sorted correct, header gone:
+
+        1  ⌀      ⌀            1  ⌀      ⌀
+        2  name   qty   sort   2  alpha  3
+        3  beta   2     ---->  3  beta   2
+        4  alpha  3            4  gamma  1
+        5  gamma  1            5  name   qty     <- header, sorted as data
+
+    A leading blank or title row is ordinary in a real workbook, and
+    insert_row(1) creates one, so two normal calls in sequence corrupted the
+    file with no failure anywhere.
+    """
+    for i, row in enumerate(rows):
+        if any(not _is_blank(v) for v in row):
+            return i
+    return None
+
+
+def _sort_key(value: Any) -> tuple[int, float, str]:
+    """Order a cell without ever comparing across types.
+
+    The key was `(value is None, value)`, which hands mixed types straight to
+    `<` and raises out of the tool as a bare
+    `'<' not supported between instances of 'int' and 'str'`. A column holding
+    numbers plus one stray text cell -- a stringified total, an "n/a", a header
+    the caller did not declare -- is the common case, not the exotic one.
+
+    Ranking by type first keeps every comparison within a single type: numbers
+    before booleans before dates before text, and the second and third slots
+    are only ever read against a value of the same rank.
+    """
+    if isinstance(value, bool):
+        return (1, float(value), "")
+    if isinstance(value, (int, float)):
+        return (0, float(value), "")
+    if isinstance(value, timedelta):
+        return (0, value.total_seconds(), "")
+    if isinstance(value, (datetime, date, time)):
+        return (2, 0.0, value.isoformat())
+    return (3, 0.0, str(value).casefold())
+
+
 def sort_sheet(
     file_path: str,
     sheet_name: str,
@@ -287,7 +341,7 @@ def sort_sheet(
                 "success": False,
                 "error": f"Sheet '{sheet_name}' not found",
                 "hint": sheet_names_hint(available_sheets),
-                "backup": backup,
+                "backup": drop_snapshot_if_unwritten(backup, path, progress),
                 "progress": progress,
                 "token_estimate": 15,
             }
@@ -306,7 +360,7 @@ def sort_sheet(
                 "success": False,
                 "error": f"Cannot sort '{sheet_name}': it has merged cells ({', '.join(merged[:5])})",
                 "hint": "Unmerge the region first — a merged block cannot follow the rows it spans.",
-                "backup": backup,
+                "backup": drop_snapshot_if_unwritten(backup, path, progress),
                 "progress": progress,
                 "token_estimate": 30,
             }
@@ -327,17 +381,61 @@ def sort_sheet(
                 "token_estimate": 15,
             }
 
-        if has_header:
-            data_rows = all_rows[1:]
-        else:
-            data_rows = all_rows
+        # column_index_from_string accepts far more than a column that exists.
+        # "QTY" -- a caller passing the header name, which the docstring's
+        # `column='A'` invites -- is a perfectly valid column string resolving
+        # to index 12347, so the guard above lets it through and r[col_idx]
+        # then indexes off the end of every row as `list index out of range`.
+        width = max(len(r) for r in all_rows)
+        if col_idx >= width:
+            headers = [str(v) for v in all_rows[0][:width] if not _is_blank(v)]
+            named = f" This sheet's column names are: {', '.join(headers)}." if headers else ""
+            progress.append(fail(f"Column {col_upper} is beyond the data"))
+            return {
+                "success": False,
+                "error": (
+                    f"Column '{column}' is outside this sheet: it holds "
+                    f"{width} column(s), A to {get_column_letter(width)}"
+                ),
+                "hint": (
+                    f"Nothing was written. column= takes a column LETTER, not a header name."
+                    f" Pass one between A and {get_column_letter(width)}.{named}"
+                ),
+                "backup": drop_snapshot_if_unwritten(backup, path, progress),
+                "progress": progress,
+                "token_estimate": 30,
+            }
 
-        # Sort: None values sink to bottom
-        sorted_rows = sorted(
-            data_rows,
-            key=lambda r: (r[col_idx] is None, r[col_idx]),
-            reverse=not ascending,
-        )
+        if has_header:
+            header_idx = _header_row_index(all_rows)
+            if header_idx is None:
+                progress.append(info("Sheet holds no values — nothing to sort"))
+                wb.close()
+                return {
+                    "success": True,
+                    "op": "sort_sheet",
+                    "sheet": sheet_name,
+                    "rows_sorted": 0,
+                    "backup": backup,
+                    "progress": progress,
+                    "token_estimate": 15,
+                }
+            data_start = header_idx + 1
+        else:
+            data_start = 0
+        data_rows = all_rows[data_start:]
+
+        def _cell(row: list[Any]) -> Any:
+            # Rows come back ragged when trailing cells were never written.
+            return row[col_idx] if col_idx < len(row) else None
+
+        # Blanks sink to the bottom in BOTH directions -- reverse= applied to a
+        # (is_none, value) tuple floated them to the top on a descending sort,
+        # which contradicted the comment that stood here.
+        present = [r for r in data_rows if not _is_blank(_cell(r))]
+        blank = [r for r in data_rows if _is_blank(_cell(r))]
+        present.sort(key=lambda r: _sort_key(_cell(r)), reverse=not ascending)
+        sorted_rows = present + blank
 
         # Write back cell by cell.
         #
@@ -358,7 +456,7 @@ def sort_sheet(
         # with success:true and the ordering itself correct. On a real sheet
         # that is mass silent corruption: a sweep measured 541 blanks in one
         # column come back holding the value of whatever row had been there.
-        start_row = 2 if has_header else 1
+        start_row = data_start + 1
         for r_offset, row_vals in enumerate(sorted_rows):
             for c_offset, val in enumerate(row_vals):
                 # MergedCell.value is read-only, but the guard above has
@@ -388,9 +486,11 @@ def sort_sheet(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
-            "hint": hint_for_error(e, path),
-            "backup": backup,
+            "error": scrub_repr(e),
+            # Everything this function can raise past the guards above comes
+            # from the column it was told to sort by.
+            "hint": hint_for_error(e, path, argument="column"),
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -439,7 +539,7 @@ def rename_sheet(
                 "success": False,
                 "error": f"Sheet '{old_name}' not found",
                 "hint": sheet_names_hint(available_sheets),
-                "backup": backup,
+                "backup": drop_snapshot_if_unwritten(backup, path, progress),
                 "progress": progress,
                 "token_estimate": 15,
             }
@@ -448,8 +548,8 @@ def rename_sheet(
             return {
                 "success": False,
                 "error": f"Sheet '{new_name}' already exists",
-                "hint": "Choose a different name or delete the existing sheet first.",
-                "backup": backup,
+                "hint": "Choose a different name -- add_sheet cannot replace a sheet. Use list_sheets to see which names are taken, or rename_sheet to free this one.",
+                "backup": drop_snapshot_if_unwritten(backup, path, progress),
                 "progress": progress,
                 "token_estimate": 15,
             }
@@ -492,9 +592,9 @@ def rename_sheet(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -625,7 +725,7 @@ def find_duplicates(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": "Check that file_path points to a valid .xlsx file.",
             "progress": progress,
             "token_estimate": 15,
@@ -675,7 +775,7 @@ def copy_sheet(
                 "success": False,
                 "error": f"Sheet '{source_sheet}' not found",
                 "hint": sheet_names_hint(available_sheets),
-                "backup": backup,
+                "backup": drop_snapshot_if_unwritten(backup, path, progress),
                 "progress": progress,
                 "token_estimate": 15,
             }
@@ -684,8 +784,8 @@ def copy_sheet(
             return {
                 "success": False,
                 "error": f"Sheet '{new_sheet_name}' already exists",
-                "hint": "Choose a different name or delete the existing sheet first.",
-                "backup": backup,
+                "hint": "Choose a different name -- add_sheet cannot replace a sheet. Use list_sheets to see which names are taken, or rename_sheet to free this one.",
+                "backup": drop_snapshot_if_unwritten(backup, path, progress),
                 "progress": progress,
                 "token_estimate": 15,
             }
@@ -726,9 +826,9 @@ def copy_sheet(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }

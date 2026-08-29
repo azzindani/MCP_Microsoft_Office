@@ -10,7 +10,7 @@ from typing import Any
 import openpyxl
 from openpyxl.utils import column_index_from_string, get_column_letter, range_boundaries
 
-from shared.file_utils import hint_for_error, resolve_path, sheet_names_hint
+from shared.file_utils import drop_snapshot_if_unwritten, hint_for_error, resolve_path, scrub_repr, sheet_names_hint
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_max_cells, get_max_search_results, open_file
 from shared.progress import fail, ok, warn
@@ -97,7 +97,7 @@ def list_sheets(file_path: str) -> dict[str, Any]:
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": "Check that file_path points to a valid .xlsx file.",
             "progress": progress,
             "token_estimate": 15,
@@ -180,7 +180,7 @@ def get_sheet_summary(file_path: str, sheet_name: str) -> dict[str, Any]:
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": "Check that file_path points to a valid .xlsx file.",
             "progress": progress,
             "token_estimate": 15,
@@ -284,7 +284,7 @@ def read_cell(file_path: str, sheet_name: str, cell_address: str) -> dict[str, A
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": "Check that file_path points to a valid .xlsx file.",
             "progress": progress,
             "token_estimate": 15,
@@ -387,7 +387,7 @@ def read_cell_range(file_path: str, sheet_name: str, range_address: str) -> dict
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": "Check that file_path points to a valid .xlsx file.",
             "progress": progress,
             "token_estimate": 15,
@@ -481,7 +481,7 @@ def search_cells(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": "Check that file_path points to a valid .xlsx file.",
             "progress": progress,
             "token_estimate": 15,
@@ -529,7 +529,7 @@ def set_cell(
                 "success": False,
                 "error": f"Sheet '{sheet_name}' not found",
                 "hint": sheet_names_hint(available_sheets),
-                "backup": backup,
+                "backup": drop_snapshot_if_unwritten(backup, path, progress),
                 "progress": progress,
                 "token_estimate": 15,
             }
@@ -562,9 +562,9 @@ def set_cell(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -615,7 +615,7 @@ def set_range(
                 "success": False,
                 "error": f"Sheet '{sheet_name}' not found",
                 "hint": sheet_names_hint(available_sheets),
-                "backup": backup,
+                "backup": drop_snapshot_if_unwritten(backup, path, progress),
                 "progress": progress,
                 "token_estimate": 15,
             }
@@ -664,9 +664,9 @@ def set_range(
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -700,7 +700,7 @@ def insert_row(file_path: str, sheet_name: str, row_index: int, open_after: bool
                 "success": False,
                 "error": f"Sheet '{sheet_name}' not found",
                 "hint": sheet_names_hint(available_sheets),
-                "backup": backup,
+                "backup": drop_snapshot_if_unwritten(backup, path, progress),
                 "progress": progress,
                 "token_estimate": 15,
             }
@@ -728,9 +728,9 @@ def insert_row(file_path: str, sheet_name: str, row_index: int, open_after: bool
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -764,7 +764,7 @@ def delete_row(file_path: str, sheet_name: str, row_index: int, open_after: bool
                 "success": False,
                 "error": f"Sheet '{sheet_name}' not found",
                 "hint": sheet_names_hint(available_sheets),
-                "backup": backup,
+                "backup": drop_snapshot_if_unwritten(backup, path, progress),
                 "progress": progress,
                 "token_estimate": 15,
             }
@@ -777,7 +777,7 @@ def delete_row(file_path: str, sheet_name: str, row_index: int, open_after: bool
                 "success": False,
                 "error": f"row_index {row_index} out of range (1-{max_row})",
                 "hint": "Use list_sheets to get current row count.",
-                "backup": backup,
+                "backup": drop_snapshot_if_unwritten(backup, path, progress),
                 "progress": progress,
                 "token_estimate": 15,
             }
@@ -804,9 +804,9 @@ def delete_row(file_path: str, sheet_name: str, row_index: int, open_after: bool
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }
@@ -840,8 +840,8 @@ def add_sheet(file_path: str, sheet_name: str = "", open_after: bool = False) ->
                 return {
                     "success": False,
                     "error": f"Sheet '{sheet_name}' already exists",
-                    "hint": "Choose a different name or delete the existing sheet first.",
-                    "backup": backup,
+                    "hint": "Choose a different name -- add_sheet cannot replace a sheet. Use list_sheets to see which names are taken, or rename_sheet to free this one.",
+                    "backup": drop_snapshot_if_unwritten(backup, path, progress),
                     "progress": progress,
                     "token_estimate": 15,
                 }
@@ -870,9 +870,9 @@ def add_sheet(file_path: str, sheet_name: str = "", open_after: bool = False) ->
         progress.append(fail(str(e)))
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": hint_for_error(e, path),
-            "backup": backup,
+            "backup": drop_snapshot_if_unwritten(backup, path, progress),
             "progress": progress,
             "token_estimate": 15,
         }

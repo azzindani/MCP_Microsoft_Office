@@ -4,6 +4,7 @@ import base64
 import json
 import mimetypes
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -20,20 +21,25 @@ from shared.exchange import (
     public_url_for,
     url_fetch_enabled,
 )
+from shared.version_control import discard_unused_snapshot
 
 __all__ = [
     "apply_default_mode",
     "attach_public_url",
+    "drop_snapshot_if_unwritten",
     "embed_content",
     "fetch_url",
     "get_inbox_dir",
     "get_output_dir",
     "hint_for_error",
+    "image_hint",
+    "image_problem",
     "is_url",
     "public_url_for",
     "read_mcp_json",
     "resolve_path",
     "safe_copy",
+    "scrub_repr",
     "sheet_names_hint",
     "url_fetch_enabled",
     "write_mcp_json",
@@ -180,8 +186,145 @@ def hint_for_message(message: str, default: str) -> str:
     return default
 
 
-def hint_for_error(e: Exception, path: Path | None = None) -> str:
-    """Return a user-facing hint appropriate for the exception type."""
+# "cannot identify image file <_io.BytesIO object at 0x7170edaa6a70>"
+#
+# A default Python repr, heap pointer included, reaching a client as the `error`
+# field of a JSON response. Round 19b got that one out of add_image_to_all_slides
+# on a corrupt PNG. It tells the caller nothing, it changes on every run so no
+# test or cache can key on it, and the address is an implementation detail of a
+# process the caller cannot see.
+#
+# Every tool here builds its error as str(e), so any library that interpolates
+# an object into its message can leak one. Substituting the type name keeps the
+# sentence readable -- "cannot identify image file <BytesIO>" -- and is the
+# identity function on the ordinary messages that make up almost every error.
+_OBJECT_REPR = re.compile(r"<([A-Za-z_][\w.]*) object at 0x[0-9a-fA-F]+>")
+
+
+def scrub_repr(e: Exception | str) -> str:
+    """str(e) with any <... object at 0x...> reduced to its bare type name."""
+    return _OBJECT_REPR.sub(lambda m: f"<{m.group(1).rsplit('.', 1)[-1]}>", str(e))
+
+
+# Raised while VALIDATING, before anything is saved. The round-18 fix listed
+# only ValueError and TypeError, which covered openpyxl's coordinate checks --
+# the case it was written for -- and let every sibling fall through to the
+# "Use restore_version to undo" line it existed to remove. Round 19b reached
+# that line twice, on two different servers:
+#
+#   xlsx  sort_sheet(column="qty")        IndexError            list index out of range
+#   pptx  add_image_to_all_slides(...)    UnidentifiedImageError  (a corrupt PNG)
+#
+# Both wrote nothing, and both were told to restore a snapshot.
+#
+# UnidentifiedImageError subclasses OSError, and OSError as a whole is NOT an
+# argument error -- a disk filling up mid-save belongs on the restore branch --
+# so it is matched by name rather than by widening to its base class.
+_ARGUMENT_ERROR_TYPES = (ValueError, TypeError, IndexError, KeyError)
+_ARGUMENT_ERROR_NAMES = frozenset({"UnidentifiedImageError"})
+
+
+def _is_argument_error(e: Exception) -> bool:
+    """True when e was raised validating an argument, before any write."""
+    if isinstance(e, (PermissionError, FileNotFoundError)):
+        return False
+    return isinstance(e, _ARGUMENT_ERROR_TYPES) or type(e).__name__ in _ARGUMENT_ERROR_NAMES
+
+
+SUPPORTED_IMAGE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff"})
+
+
+def image_problem(path: Path) -> str | None:
+    """Say why this file cannot be inserted as an image, or None if it can.
+
+    The three image tools in this fleet each checked the *extension* and
+    nothing else, so a file named .png holding anything at all got as far as
+    python-pptx, which snapshots the deck, hands the bytes to Pillow and lets
+
+        cannot identify image file <_io.BytesIO object at 0x7170edaa6a70>
+
+    out as the tool's error -- a heap address in place of the one fact the
+    caller needed, which is that the file is not an image. Reading the header
+    here costs one open() and moves the failure in front of the snapshot.
+    """
+    if path.suffix.lower() not in SUPPORTED_IMAGE_SUFFIXES:
+        return f"Unsupported image format: {path.suffix or '(no extension)'}"
+    try:
+        from PIL import Image
+    except ImportError:  # pragma: no cover - Pillow ships with python-pptx
+        return None
+    try:
+        with Image.open(path) as probe:
+            probe.verify()
+    except Exception:
+        return f"{path.name} has a {path.suffix} extension but its contents are not a readable image"
+    return None
+
+
+def image_hint(path: Path) -> str:
+    """The hint that goes with image_problem(path).
+
+    Kept beside it so the three image tools answer the same way. The
+    contents-not-extension wording is load-bearing: a caller who named the file
+    .png believes it is a PNG, and "supported formats: png, jpg, ..." reads as
+    though .png were not on the list.
+    """
+    formats = ", ".join(sorted(s.lstrip(".").upper() for s in SUPPORTED_IMAGE_SUFFIXES))
+    if path.suffix.lower() not in SUPPORTED_IMAGE_SUFFIXES:
+        return f"Nothing was written. Supported formats: {formats}."
+    return (
+        f"The {path.suffix} extension names a format but not the contents -- pass a file whose "
+        f"contents really are an image. Nothing was written. Supported formats: {formats}."
+    )
+
+
+def drop_snapshot_if_unwritten(
+    backup: str | None, path: Path | None, progress: list[dict[str, Any]] | None = None
+) -> str | None:
+    """Report a snapshot only if it still stands for something that happened.
+
+    Every write tool snapshots before it edits, which is the only order that can
+    work. When validation then fails, the copy is left behind and advertised:
+    round 19b made three argument mistakes against one workbook and got three
+    .bak files plus, in each response,
+
+        "hint":   "Nothing was written -- ... there is no snapshot to restore."
+        "backup": ".mcp_versions/p53_2026-...-xlsx.bak"
+        "progress": [{"icon": "✔", "msg": "Snapshot saved"}]
+
+    -- the hint denying what the other two fields advertise. Round 18 fixed the
+    sentence and left the contradiction; before it, the hint at least agreed
+    with `backup`.
+
+    `discard_unused_snapshot` has answered this since round 15 and no caller
+    ever used it: it removes the copy only when it is still byte-identical to
+    its source, so a partial write keeps its snapshot and any doubt keeps it too.
+    This is the wrapper that puts it in the response path.
+    """
+    if not backup or path is None:
+        return backup
+    if not discard_unused_snapshot(backup, str(path)):
+        return backup
+    if progress is not None:
+        # The log said "✔ Snapshot saved" on the way in and that entry is still
+        # sitting there. Leaving it makes the execution log the last field still
+        # claiming a backup that no longer exists -- a fix that stops at two of
+        # the three fields is not a fix.
+        for entry in progress:
+            if entry.get("msg") == "Snapshot saved":
+                entry["icon"] = "→"
+                entry["status"] = "info"
+                entry["msg"] = entry["message"] = "Snapshot discarded — nothing was written"
+                entry.pop("detail", None)
+    return None
+
+
+def hint_for_error(e: Exception, path: Path | None = None, argument: str | None = None) -> str:
+    """Return a user-facing hint appropriate for the exception type.
+
+    Pass `argument` when the caller knows which parameter was being validated;
+    the hint then names it instead of asserting the error text does.
+    """
     # Checked before the type branches: the guard raises a plain ValueError, so
     # nothing below would recognise it, and the path-is-None branch would answer
     # "Pass an absolute path to an existing file" -- which this already is.
@@ -232,11 +375,22 @@ def hint_for_error(e: Exception, path: Path | None = None) -> str:
     # The error text already names the offending value, so the hint's job is
     # only to say what to do about it -- and, above all, that there is nothing
     # to undo.
-    if isinstance(e, (ValueError, TypeError)):
-        return (
-            "Nothing was written -- this is an argument error, so there is no snapshot to restore. "
-            "Fix the value named in the error and call again."
-        )
+    #
+    # `argument`, when the call site passes it, is the precise form: the error
+    # text does not always name anything actionable, and round 19b caught the
+    # round-18 sentence promising it does when it does not --
+    #
+    #     sort_sheet(column="B")        '<' not supported between instances of 'int' and 'str'
+    #     set_font_all_slides("red")    invalid literal for int() with base 16: 're'
+    #     sort_sheet(column="qty")      list index out of range
+    #
+    # -- three leaked exceptions naming no argument at all, under a hint that
+    # told the caller to go and fix the one the error named. The function
+    # validating the value always knows which parameter it came from even when
+    # the exception it caught does not, so it can say so.
+    if _is_argument_error(e):
+        target = f"Fix the {argument} argument" if argument else "Fix the value named in the error"
+        return f"Nothing was written -- this is an argument error, so there is no snapshot to restore. {target} and call again."
     return "Use restore_version to undo if a snapshot was taken."
 
 

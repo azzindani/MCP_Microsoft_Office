@@ -3,6 +3,8 @@
 import difflib
 from typing import Any
 
+from .file_utils import scrub_repr
+
 MAX_CHANGED_CELLS = 500
 
 
@@ -55,7 +57,7 @@ def diff_docx(path_a: str, path_b: str) -> dict[str, Any]:
     except Exception as e:
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": "Check that both paths point to valid .docx files.",
         }
 
@@ -132,7 +134,7 @@ def diff_xlsx(path_a: str, path_b: str, sheet_name: str | None = None) -> dict[s
     except Exception as e:
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": "Check that both paths point to valid .xlsx files.",
         }
 
@@ -185,7 +187,7 @@ def diff_pptx(path_a: str, path_b: str) -> dict[str, Any]:
     except Exception as e:
         return {
             "success": False,
-            "error": str(e),
+            "error": scrub_repr(e),
             "hint": "Check that both paths point to valid .pptx files.",
         }
 
