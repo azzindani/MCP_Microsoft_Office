@@ -581,7 +581,7 @@ def _read_invoice_items(items: list) -> tuple[list[tuple[str, float, float]], li
         try:
             qty_value = float(quantity if quantity is not None else 0)
             price_value = float(unit_price if unit_price is not None else 0)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             unpriced.append((index, ", ".join(str(k) for k in item)))
             continue
         priced.append((str(_pick(item, "description") or ""), qty_value, price_value))

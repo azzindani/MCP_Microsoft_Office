@@ -30,7 +30,7 @@ required-version = ">=0.5"
 
 [tool.ruff]
 line-length = 120
-target-version = "py312"
+target-version = "py314"
 exclude = ["*.ipynb"]
 
 [tool.ruff.lint]

@@ -73,7 +73,7 @@ def slide_background_hex(slide) -> str | None:
             # so fall through to the next level of the chain.
             if fill.type == MSO_FILL.SOLID:
                 return str(fill.fore_color.rgb)
-        except (AttributeError, TypeError, ValueError):
+        except AttributeError, TypeError, ValueError:
             continue
     return None
 
@@ -237,7 +237,7 @@ def _occupied_bottom(slide, left: float, width: float, margin: float) -> float:
             s_top = (shape.top or 0) / 914400
             s_width = (shape.width or 0) / 914400
             s_height = (shape.height or 0) / 914400
-        except (AttributeError, TypeError):
+        except AttributeError, TypeError:
             continue
         if s_width <= 0 or s_height <= 0:
             continue

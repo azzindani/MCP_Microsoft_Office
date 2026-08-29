@@ -128,7 +128,7 @@ def public_url_for(path: Path | str) -> str:
         return ""
     try:
         relative = Path(path).resolve().relative_to(Path(root).resolve())
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return ""
     return f"{base}/{quote(relative.as_posix())}"
 

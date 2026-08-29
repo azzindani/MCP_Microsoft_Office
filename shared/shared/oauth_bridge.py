@@ -79,7 +79,7 @@ class OAuthBridge:
             data = json.loads(path.read_text(encoding="utf-8"))
             now = time.time()
             return {k: v for k, v in data.items() if v.get("expires_at", 0) > now}
-        except (OSError, json.JSONDecodeError):
+        except OSError, json.JSONDecodeError:
             return {}
 
     def _persist(self, tokens: dict[str, dict], path: Path) -> None:

@@ -49,7 +49,7 @@ def _chart_title_text(chart: Any) -> str:
         return title
     try:
         return title.tx.rich.p[0].r[0].t
-    except (AttributeError, IndexError, TypeError):
+    except AttributeError, IndexError, TypeError:
         return ""
 
 
@@ -156,7 +156,7 @@ def _bind_data(chart: Any, ws: Any, data_range: str) -> bool:
     cell_range = data_range.split("!", 1)[1] if "!" in data_range else data_range
     try:
         min_row, min_col, max_row, max_col = _parse_cell_range(cell_range)
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         chart.add_data(_parse_range_ref(ws, data_range), titles_from_data=True)
         return False
 

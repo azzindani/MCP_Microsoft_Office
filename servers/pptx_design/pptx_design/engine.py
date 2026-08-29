@@ -60,7 +60,7 @@ def _axis_number_format(values: list[Any]) -> str:
     for v in values:
         try:
             peak = max(peak, abs(float(v)))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             continue
     if peak >= 1_000_000:
         return '#,##0.#,,"M"'
@@ -157,13 +157,13 @@ def _match_chart_text_to_slide(chart: Any, slide: Any) -> str:
     # the axes are set explicitly because their tick labels usually have been.
     try:
         chart.font.color.rgb = rgb
-    except (AttributeError, TypeError, ValueError):
+    except AttributeError, TypeError, ValueError:
         pass
 
     for axis_name in ("category_axis", "value_axis"):
         try:
             getattr(chart, axis_name).tick_labels.font.color.rgb = rgb
-        except (AttributeError, TypeError, ValueError):
+        except AttributeError, TypeError, ValueError:
             # Pie charts have no axes; nothing to colour.
             continue
 
@@ -173,7 +173,7 @@ def _match_chart_text_to_slide(chart: Any, slide: Any) -> str:
                 para.font.color.rgb = rgb
                 for run in para.runs:
                     run.font.color.rgb = rgb
-    except (AttributeError, TypeError, ValueError):
+    except AttributeError, TypeError, ValueError:
         pass
 
     return readable
@@ -609,7 +609,7 @@ def add_chart(
                 ticks = chart_shape.chart.value_axis.tick_labels
                 ticks.number_format = _axis_number_format([v for s in series for v in s["values"]])
                 ticks.number_format_is_linked = False
-            except (AttributeError, ValueError, NotImplementedError):
+            except AttributeError, ValueError, NotImplementedError:
                 # Not every chart type python-pptx builds exposes a value axis.
                 pass
 

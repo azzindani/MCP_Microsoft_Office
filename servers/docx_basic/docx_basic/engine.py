@@ -71,7 +71,7 @@ def get_document_outline(file_path: str) -> dict[str, Any]:
                     level = int(name.split()[-1])  # type: ignore[reportOptionalMemberAccess]
                     if 1 <= level <= 6:
                         outline.append({"index": i, "level": level, "text": p.text})
-                except (ValueError, IndexError):
+                except ValueError, IndexError:
                     pass
 
         progress.append(ok("Built outline", f"{len(outline)} headings"))

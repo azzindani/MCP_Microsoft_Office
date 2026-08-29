@@ -62,7 +62,7 @@ def _set_placeholder_text(slide: Any, index: int, text: str) -> None:
     """
     try:
         slide.placeholders[index].text = text
-    except (IndexError, KeyError, AttributeError):
+    except IndexError, KeyError, AttributeError:
         pass
 
 
@@ -258,7 +258,7 @@ def create_from_outline(
                         tf = slide.placeholders[1].text_frame  # type: ignore[reportAttributeAccessIssue]
                         tf.clear()
                         tf.text = strip_list_markers(content)
-                    except (IndexError, KeyError, AttributeError):
+                    except IndexError, KeyError, AttributeError:
                         pass
 
             slide_count += 1
@@ -343,7 +343,7 @@ def create_deck_from_data(
                     tf = slide.placeholders[1].text_frame  # type: ignore[reportAttributeAccessIssue]
                     tf.clear()
                     tf.text = strip_list_markers(body_text)
-                except (IndexError, KeyError, AttributeError):
+                except IndexError, KeyError, AttributeError:
                     pass
 
             progress.append(
@@ -594,7 +594,7 @@ def create_agenda(
             tf = agenda_slide.placeholders[1].text_frame  # type: ignore[reportAttributeAccessIssue]
             tf.clear()
             tf.text = strip_list_markers(agenda_text)
-        except (IndexError, KeyError, AttributeError):
+        except IndexError, KeyError, AttributeError:
             pass
 
         progress.append(ok("Added agenda slide", f"{len(items)} item(s)"))
@@ -758,7 +758,7 @@ def create_from_docx(
                         tf = slide.placeholders[1].text_frame  # type: ignore[reportAttributeAccessIssue]
                         tf.clear()
                         tf.text = strip_list_markers(content_text)
-                    except (IndexError, KeyError, AttributeError):
+                    except IndexError, KeyError, AttributeError:
                         pass
 
             slide_count += 1

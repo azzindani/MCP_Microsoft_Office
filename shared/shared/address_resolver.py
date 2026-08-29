@@ -30,7 +30,7 @@ class SectionInfo:
     level: int
     para_range: list[int]  # [start, end] inclusive
     table_count: int = 0
-    sub_sections: list["SectionInfo"] = field(default_factory=list)
+    sub_sections: list[SectionInfo] = field(default_factory=list)
 
 
 def build_docx_index(doc: Any) -> dict[str, Any]:
@@ -53,7 +53,7 @@ def build_docx_index(doc: Any) -> dict[str, Any]:
             try:
                 level = int(style_name.split()[-1])
                 headings.append((i, level, p.text))
-            except (ValueError, IndexError):
+            except ValueError, IndexError:
                 pass
 
     if not headings:

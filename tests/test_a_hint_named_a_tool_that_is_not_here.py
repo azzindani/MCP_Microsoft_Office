@@ -51,7 +51,7 @@ def _python_files() -> list[Path]:
 def _parse(path: Path) -> ast.Module | None:
     try:
         return ast.parse(path.read_text(encoding="utf-8"))
-    except (SyntaxError, UnicodeDecodeError, OSError):
+    except SyntaxError, UnicodeDecodeError, OSError:
         return None
 
 
