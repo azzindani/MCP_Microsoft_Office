@@ -26,7 +26,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v4
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - name: Install native dependencies (macOS)
         if: runner.os == 'macOS'

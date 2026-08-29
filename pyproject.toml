@@ -2,7 +2,7 @@
 name = "office-mcp"
 version = "0.1.1"
 description = "MCP servers for Microsoft Office file formats"
-requires-python = "==3.12.*"
+requires-python = "==3.14.*"
 readme = "README.md"
 license = { text = "MIT" }
 
@@ -46,7 +46,7 @@ known-first-party = [
 ]
 
 [tool.pyright]
-pythonVersion = "3.12"
+pythonVersion = "3.14"
 typeCheckingMode = "basic"
 reportMissingImports = true
 reportMissingTypeStubs = false

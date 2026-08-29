@@ -136,7 +136,7 @@ MCP_Microsoft_Office/
 │
 ├── pyproject.toml                  # root workspace — uv workspaces config
 ├── uv.lock
-├── .python-version                 # 3.12
+├── .python-version                 # 3.14
 └── CLAUDE.md                       # this file
 ```
 
@@ -207,7 +207,7 @@ Never use a mutable default like `[]` or `{}`.
 
 | Layer | Choice | Reason |
 |---|---|---|
-| Language | Python 3.12+ | Document libraries live here |
+| Language | Python 3.14+ | Document libraries live here |
 | MCP framework | FastMCP ≥ 1.2.0 | Official SDK, decorator-based tools |
 | Package manager | uv | Workspace support, fast, single lockfile |
 | DOCX manipulation | python-docx ≥ 1.1.0 | Mature, MIT, run-level access |
@@ -1235,4 +1235,4 @@ Rules for this module:
 ---
 
 *Last updated: 2026-04-11*
-*Covers: office-mcp — 11 servers, 96 tools, Python 3.12+*
+*Covers: office-mcp — 11 servers, 96 tools, Python 3.14+*

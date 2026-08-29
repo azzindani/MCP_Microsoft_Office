@@ -20,7 +20,7 @@
 # Run:    docker run --rm -p 8830:8830 -e OFFICE_TRANSPORT=http mcp-microsoft-office:latest
 # ─────────────────────────────────────────────────────────────────────────────
 
-ARG PYTHON_VERSION=3.12-slim
+ARG PYTHON_VERSION=3.14-slim
 
 FROM python:${PYTHON_VERSION} AS builder
 WORKDIR /app
