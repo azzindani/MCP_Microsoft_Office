@@ -278,3 +278,46 @@ class TestEveryHintNamesSomethingThatExists:
         assert "delete the existing sheet" not in r["hint"]
         # It must still say what to do instead, with tools that are really here.
         assert "rename_sheet" in r["hint"] or "list_sheets" in r["hint"]
+
+
+class TestAColourThatIsNotAColour:
+    """`color_hex="red"` answered `invalid literal for int() with base 16: 're'`.
+
+    RGBColor leaves the parse to int(), so the message named 're' -- half the
+    value the caller passed -- and no argument at all, under a hint telling
+    them to fix the value the error named. The check now runs before the
+    snapshot, so a colour typo costs the deck nothing.
+    """
+
+    @pytest.fixture
+    def deck(self, tmp_path):
+        pptx = pytest.importorskip("pptx")
+        path = tmp_path / "d.pptx"
+        prs = pptx.Presentation()
+        prs.slides.add_slide(prs.slide_layouts[0])
+        prs.save(str(path))
+        return path
+
+    def _call(self, deck, **kw):
+        from pptx_design import engine as design_engine
+
+        return design_engine.set_font_all_slides(str(deck), **kw)
+
+    def test_a_colour_name_is_answered_not_leaked(self, deck):
+        r = self._call(deck, color_hex="red")
+        assert r["success"] is False
+        assert "base 16" not in r["error"], r["error"]
+        assert "color_hex" in r["error"]
+        assert NOTHING_WRITTEN in r["hint"]
+
+    def test_the_deck_keeps_no_snapshot_for_it(self, deck):
+        self._call(deck, color_hex="red")
+        versions = deck.parent / ".mcp_versions"
+        assert not versions.exists() or not list(versions.glob("*.bak"))
+
+    def test_a_hash_prefixed_colour_still_works(self, deck):
+        r = self._call(deck, color_hex="#FF0000", font_name="Arial")
+        assert r["success"] is True, r.get("error")
+
+    def test_a_bare_six_digit_colour_still_works(self, deck):
+        assert self._call(deck, color_hex="00FF00")["success"] is True

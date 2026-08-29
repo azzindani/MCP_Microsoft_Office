@@ -1032,13 +1032,26 @@ def set_font_all_slides(
 
         progress.append(ok(f"Opened {path.name}", f"{len(prs.slides)} slides"))
 
-        backup = snapshot(str(path))
-        progress.append(ok("Snapshot saved", Path(backup).name))
-
+        # Parsed before the snapshot, and with its own message: RGBColor leaves
+        # `int(clean, 16)` to fail, so color_hex="red" came back as
+        # `invalid literal for int() with base 16: 're'` -- which names 're',
+        # a fragment of the value, and no argument at all.
         rgb: RGBColor | None = None
         if color_hex:
             clean = color_hex.lstrip("#")
+            if len(clean) != 6 or any(c not in "0123456789abcdefABCDEF" for c in clean):
+                progress.append(fail(f"Not a hex colour: {color_hex}"))
+                return {
+                    "success": False,
+                    "error": f"color_hex must be 6 hex digits, got {color_hex!r}",
+                    "hint": "Nothing was written. Pass a colour like 'FF0000' or '#FF0000'.",
+                    "progress": progress,
+                    "token_estimate": 20,
+                }
             rgb = RGBColor.from_string(clean)
+
+        backup = snapshot(str(path))
+        progress.append(ok("Snapshot saved", Path(backup).name))
 
         slides_modified = 0
         shapes_modified = 0
