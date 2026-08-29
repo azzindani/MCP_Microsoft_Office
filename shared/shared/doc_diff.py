@@ -312,11 +312,28 @@ def _summarise_docx_diff(
     table_changes = table_changes or []
     if not changes and not table_changes:
         return "No changes detected."
+
+    # Count the rows and paragraphs, not the opcodes. difflib returns one
+    # opcode per contiguous run, so counting opcodes reported a 2-row table
+    # insert as "1 table row added" and a replace spanning four paragraphs as
+    # "1 paragraph changed" -- a summary that disagreed with the very list of
+    # changes printed beneath it.
+    def _spans(source: list[dict[str, Any]]) -> tuple[int, int, int]:
+        changed = added = deleted = 0
+        for c in source:
+            a_len = c["a_range"][1] - c["a_range"][0]
+            b_len = c["b_range"][1] - c["b_range"][0]
+            if c["type"] == "replace":
+                changed += max(a_len, b_len)
+            elif c["type"] == "insert":
+                added += b_len
+            elif c["type"] == "delete":
+                deleted += a_len
+        return changed, added, deleted
+
     parts = []
     for label, source in (("paragraph", changes), ("table row", table_changes)):
-        n_changed = sum(1 for c in source if c["type"] == "replace")
-        n_added = sum(1 for c in source if c["type"] == "insert")
-        n_deleted = sum(1 for c in source if c["type"] == "delete")
+        n_changed, n_added, n_deleted = _spans(source)
         if n_changed:
             parts.append(f"{n_changed} {label}{'s' if n_changed != 1 else ''} changed")
         if n_added:

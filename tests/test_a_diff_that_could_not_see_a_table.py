@@ -157,3 +157,25 @@ def test_the_text_rendering_shows_table_rows_too(tmp_path):
     text = format_diff_as_text(diff_docx(a, b))
 
     assert "h1" in text and "h2" in text
+
+
+def test_the_summary_counts_rows_not_opcodes(tmp_path):
+    # difflib returns one opcode per contiguous run, so counting opcodes
+    # described a 2-row table insert as "1 table row added" -- a summary that
+    # disagreed with the b_cells list printed directly beneath it.
+    a = _docx(tmp_path / "a.docx")
+    b = _docx(tmp_path / "b.docx", table=[["h1", "h2"], ["v1", "v2"], ["x1", "x2"]])
+
+    result = diff_docx(a, b)
+
+    assert "3 table rows added" in result["summary"]
+    assert sum(len(c["b_cells"]) for c in result["table_changes"]) == 3
+
+
+def test_the_paragraph_summary_counts_paragraphs_not_opcodes(tmp_path):
+    a = _docx(tmp_path / "a.docx", paragraphs=("one", "two", "three", "four"))
+    b = _docx(tmp_path / "b.docx", paragraphs=("one",))
+
+    result = diff_docx(a, b)
+
+    assert "3 paragraphs deleted" in result["summary"]
