@@ -12,6 +12,7 @@ from docx_basic.helpers import diff_versions as _diff_versions
 from docx_basic.helpers import get_history_tool as _get_history_tool
 from docx_basic.helpers import read_receipt_tool as _read_receipt_tool
 from docx_basic.helpers import restore_version as _restore_version
+from shared.arg_errors import contract_errors
 from shared.deploy_auth import build_auth, build_oauth_bridge
 from shared.strict_args import enforce_known_arguments
 from shared.token_estimate import measure_responses
@@ -169,6 +170,10 @@ def read_receipt(file_path: str, last_n: int = 10) -> dict:
 # name yields a plausible answer with the argument silently dropped. Refuse it,
 # and name the ones that would have worked.
 enforce_known_arguments(mcp)
+# A known argument with the WRONG TYPE is rejected by pydantic before any of
+# this runs, and used to escape as a raw dump with no success/hint/token_estimate
+# and a pydantic.dev URL. Give it the fleet's failure shape instead.
+contract_errors(mcp)
 measure_responses(mcp)
 
 

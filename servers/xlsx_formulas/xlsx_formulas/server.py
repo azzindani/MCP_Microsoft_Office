@@ -7,6 +7,7 @@ from mcp.server.fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from shared.arg_errors import contract_errors
 from shared.deploy_auth import build_auth, build_oauth_bridge
 from shared.strict_args import enforce_known_arguments
 from shared.token_estimate import measure_responses
@@ -157,6 +158,10 @@ def convert_to_values(
 # name yields a plausible answer with the argument silently dropped. Refuse it,
 # and name the ones that would have worked.
 enforce_known_arguments(mcp)
+# A known argument with the WRONG TYPE is rejected by pydantic before any of
+# this runs, and used to escape as a raw dump with no success/hint/token_estimate
+# and a pydantic.dev URL. Give it the fleet's failure shape instead.
+contract_errors(mcp)
 measure_responses(mcp)
 
 
