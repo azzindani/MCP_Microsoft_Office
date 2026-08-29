@@ -96,3 +96,26 @@ jobs:
           push: "false"
           registry-username: ${{ github.actor }}
           registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  # The suite above never starts a server (STANDARDS.md keeps pytest offline)
+  # and the docker job never runs the image it builds, so nothing until now
+  # proved that what we ship answers a request. Shared action, because this is
+  # identical in all six repos and drift between copies is the bug that keeps
+  # costing rounds.
+  e2e:
+    name: End-to-end (container)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Smoke test every tool over HTTP
+        uses: azzindani/MCP_Math/.github/actions/e2e-smoke@main
+        with:
+          port: "8830"
+          key-env: OFFICE_API_KEY
+          # Deliberately not the deployed hostname. Rebinding protection is off,
+          # so any Host must be accepted; an arbitrary one proves exactly that
+          # and keeps the real domain out of one more file.
+          public-host: office.example.com
+          mcp-path: /docx-basic/mcp
+          health-timeout: "180"

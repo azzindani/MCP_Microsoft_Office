@@ -18,8 +18,12 @@ set -uo pipefail
 
 DOMAIN="${DOMAIN:-https://office.casava.space}"
 CONTAINER="${CONTAINER:-mcp-office}"
-if [ -f .env ]; then
-  set -a; source .env; set +a
+# Read the key out of .env without executing it. `source` runs every line of
+# the file, so a line that is not a KEY=VALUE assignment is a command; that has
+# already turned a stray summary line into a file named after a secret. A plain
+# read of one assignment cannot do that.
+if [ -z "${OFFICE_API_KEY:-}" ] && [ -f .env ]; then
+  OFFICE_API_KEY=$(sed -n 's/^[[:space:]]*OFFICE_API_KEY[[:space:]]*=[[:space:]]*//p' .env | tail -n1 | tr -d '\042\047\r')
 fi
 KEY="${OFFICE_API_KEY:?Set OFFICE_API_KEY (env var or .env file) before running}"
 D=/tmp/remote-smoke-test
