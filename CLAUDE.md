@@ -722,17 +722,33 @@ Never regenerate fixtures in tests — use `tmp_path` to copy and modify within 
 6. Wrong file type failure case
 7. Formatting preservation (for DOCX operations on styled text)
 
-### Remote smoke tests (not part of pytest / CI)
+### Remote smoke tests (`remote_smoke_test.sh`)
 
 The tests above stay offline-only per STANDARDS.md — never spin up an MCP
 process, never touch the network. Verifying the deployed HTTP endpoint (auth
 enforcement, real tool calls against the real public domain, producing real
-`.docx`/`.xlsx`/`.pptx` files) is a separate, manual/on-demand check —
-hand-authored `curl` sessions or a `remote_smoke_test.sh`, run after `docker
-compose up`, never wired into CI, never storing the live API key in the
+`.docx`/`.xlsx`/`.pptx` files) is what `remote_smoke_test.sh` covers, run after `docker
+compose up`, never storing the live API key in the
 repo. This is exactly how the `Invalid Host header` regression (see
 "Transport and Deployment" below) was actually caught — `pytest` alone could
 not have found it.
+
+It runs in **two** places: in CI via the `e2e` job, which starts the image with
+`docker compose` and runs this script against `http://localhost:<port>` with a
+throwaway key; and by hand against the deployment, which is still manual and
+still never stores the live API key in the repo. CI must not be pointed at the
+deployment -- CI runs on push and the redeploy happens after, so it would test
+the old server against the new code. Assertions needing deployment-only
+configuration (`MCP_FETCH_URLS`, a public base URL) skip in CI and run by hand.
+
+Read values out of the envelope with `\\?"key\\?"[[:space:]]*:`. A tool's
+document arrives as the JSON *string* `result.content[0].text`, so keys and
+values are escaped (`\"result\": 93`). Patterns written for unescaped JSON
+match nothing while every call still succeeds -- four of the six repos' scripts
+had silently stopped asserting anything after the official-SDK migration
+dropped `structuredContent`. Under `set -euo pipefail` an extractor matching
+nothing also aborts the script before its own `|| fail` runs, so end one with
+`|| true`.
 
 
 `tests/test_smoke_test_covers_every_tool.py` keeps that script honest: it reads
