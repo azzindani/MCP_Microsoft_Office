@@ -214,6 +214,29 @@ def hint_for_error(e: Exception, path: Path | None = None) -> str:
         # generic "use restore_version to undo" answer is doubly wrong here --
         # nothing was written, and the fix is to the argument.
         return "file_path could not be resolved. Pass an absolute path to an existing file."
+    # An argument error is raised while VALIDATING, before the workbook or the
+    # document is ever saved -- openpyxl's own coordinate checks, our range and
+    # index checks, a value of the wrong type. Nothing has been written, so the
+    # fallback below is advice to destroy unrelated work in answer to a typo:
+    #
+    #     set_cell(cell_address="A0")
+    #     error: Row numbers must be between 1 and 1048576. Row number supplied was 0
+    #     hint : Use restore_version to undo if a snapshot was taken.
+    #
+    # Round 18 followed that hint literally, which is what a model with nothing
+    # else to go on does. It restored a snapshot three times over (set_cell,
+    # set_range, insert_row) and every retry failed, because rolling a file back
+    # cannot fix a bad argument; one phase reached for a DIFFERENT server's
+    # restore_version to do it.
+    #
+    # The error text already names the offending value, so the hint's job is
+    # only to say what to do about it -- and, above all, that there is nothing
+    # to undo.
+    if isinstance(e, (ValueError, TypeError)):
+        return (
+            "Nothing was written -- this is an argument error, so there is no snapshot to restore. "
+            "Fix the value named in the error and call again."
+        )
     return "Use restore_version to undo if a snapshot was taken."
 
 
