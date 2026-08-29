@@ -8,11 +8,33 @@ from .file_utils import scrub_repr
 MAX_CHANGED_CELLS = 500
 
 
+def _docx_table_rows(doc: Any) -> list[tuple[str, ...]]:
+    """Every table's cells, one flat row of text per table row.
+
+    python-docx's `doc.paragraphs` walks the body only; a paragraph inside a
+    table cell is not in it. Diffing paragraphs alone therefore cannot see a
+    table at all -- see diff_docx.
+
+    Tuples, not lists: SequenceMatcher hashes the elements it compares.
+    """
+    rows: list[tuple[str, ...]] = []
+    for t_index, table in enumerate(doc.tables):
+        for r_index, row in enumerate(table.rows):
+            rows.append((f"t{t_index}r{r_index}", *[cell.text for cell in row.cells]))
+    return rows
+
+
 def diff_docx(path_a: str, path_b: str) -> dict[str, Any]:
     """
-    Compare two .docx files at paragraph level.
+    Compare two .docx files at paragraph and table-cell level.
 
-    Returns structured diff with added, removed, changed paragraphs.
+    Returns structured diff with added, removed, changed paragraphs and rows.
+
+    Paragraphs alone were not enough. `doc.paragraphs` excludes anything inside
+    a table cell, so a document that gained a whole 2x3 table came back
+    `change_count: 0`, "No changes detected." -- the two files differed by six
+    cells of text and one table. add_table, set_cell, add_row and delete_row
+    were all invisible to the one tool whose job is confirming what changed.
     """
     try:
         from docx import Document  # type: ignore[import-untyped]
@@ -42,7 +64,26 @@ def diff_docx(path_a: str, path_b: str) -> dict[str, Any]:
                 }
             )
 
-        summary = _summarise_docx_diff(changes, len(paras_a), len(paras_b))
+        rows_a = _docx_table_rows(doc_a)
+        rows_b = _docx_table_rows(doc_b)
+        row_matcher = difflib.SequenceMatcher(None, rows_a, rows_b, autojunk=False)
+        table_changes: list[dict[str, Any]] = []
+        for tag, i1, i2, j1, j2 in row_matcher.get_opcodes():
+            if tag == "equal":
+                continue
+            table_changes.append(
+                {
+                    "type": tag,
+                    "a_range": [i1, i2],
+                    "b_range": [j1, j2],
+                    # The row label is carried in the leading element; the cells
+                    # are what the reader wants to see.
+                    "a_cells": [list(r[1:]) for r in rows_a[i1:i2]],
+                    "b_cells": [list(r[1:]) for r in rows_b[j1:j2]],
+                }
+            )
+
+        summary = _summarise_docx_diff(changes, len(paras_a), len(paras_b), table_changes)
 
         return {
             "success": True,
@@ -50,8 +91,11 @@ def diff_docx(path_a: str, path_b: str) -> dict[str, Any]:
             "file_b": path_b,
             "paragraph_count_a": len(paras_a),
             "paragraph_count_b": len(paras_b),
+            "table_count_a": len(doc_a.tables),
+            "table_count_b": len(doc_b.tables),
             "changes": changes,
-            "change_count": len(changes),
+            "table_changes": table_changes,
+            "change_count": len(changes) + len(table_changes),
             "summary": summary,
         }
     except Exception as e:
@@ -139,9 +183,30 @@ def diff_xlsx(path_a: str, path_b: str, sheet_name: str | None = None) -> dict[s
         }
 
 
+def _pptx_shape_texts(slide: Any) -> dict[str, str]:
+    """Readable text per shape, including tables.
+
+    A table shape has no `text_frame`, so a `has_text_frame` filter drops it
+    entirely and a slide that gained a whole table diffed as unchanged. Its rows
+    are rendered as text so the existing per-shape comparison covers them.
+    """
+    texts: dict[str, str] = {}
+    for shape in slide.shapes:
+        key = shape.name
+        # Shape names are not unique within a slide; without this the second
+        # shape of a name silently replaces the first.
+        if key in texts:
+            key = f"{shape.name}#{shape.shape_id}"
+        if getattr(shape, "has_text_frame", False):
+            texts[key] = shape.text_frame.text
+        elif getattr(shape, "has_table", False):
+            texts[key] = "\n".join(" | ".join(cell.text for cell in row.cells) for row in shape.table.rows)
+    return texts
+
+
 def diff_pptx(path_a: str, path_b: str) -> dict[str, Any]:
     """
-    Compare two .pptx files at shape-text level.
+    Compare two .pptx files at shape-text level, tables included.
 
     Returns structured diff with changed text per slide per shape.
     """
@@ -156,8 +221,8 @@ def diff_pptx(path_a: str, path_b: str) -> dict[str, Any]:
 
         changes: list[dict[str, Any]] = []
         for i, (slide_a, slide_b) in enumerate(zip(prs_a.slides, prs_b.slides)):
-            shapes_a = {s.name: s.text_frame.text for s in slide_a.shapes if s.has_text_frame}  # type: ignore[reportAttributeAccessIssue]
-            shapes_b = {s.name: s.text_frame.text for s in slide_b.shapes if s.has_text_frame}  # type: ignore[reportAttributeAccessIssue]
+            shapes_a = _pptx_shape_texts(slide_a)
+            shapes_b = _pptx_shape_texts(slide_b)
 
             all_names = set(shapes_a) | set(shapes_b)
             for name in sorted(all_names):
@@ -211,6 +276,13 @@ def format_diff_as_text(diff: dict[str, Any]) -> str:
                 lines.append(f"- {text[:120]}")
             for text in change.get("b_text", []):
                 lines.append(f"+ {text[:120]}")
+        # Table rows too, or this renders an empty diff for a document whose
+        # only change was a table -- the same blind spot diff_docx had.
+        for change in diff.get("table_changes", []):
+            for cells in change.get("a_cells", []):
+                lines.append(f"- | {' | '.join(cells)}"[:120])
+            for cells in change.get("b_cells", []):
+                lines.append(f"+ | {' | '.join(cells)}"[:120])
 
     # XLSX diff
     if "sheet_diffs" in diff:
@@ -231,19 +303,26 @@ def format_diff_as_text(diff: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _summarise_docx_diff(changes: list[dict[str, Any]], count_a: int, count_b: int) -> str:
-    if not changes:
+def _summarise_docx_diff(
+    changes: list[dict[str, Any]],
+    count_a: int,
+    count_b: int,
+    table_changes: list[dict[str, Any]] | None = None,
+) -> str:
+    table_changes = table_changes or []
+    if not changes and not table_changes:
         return "No changes detected."
-    n_changed = sum(1 for c in changes if c["type"] == "replace")
-    n_added = sum(1 for c in changes if c["type"] == "insert")
-    n_deleted = sum(1 for c in changes if c["type"] == "delete")
     parts = []
-    if n_changed:
-        parts.append(f"{n_changed} paragraph{'s' if n_changed != 1 else ''} changed")
-    if n_added:
-        parts.append(f"{n_added} paragraph{'s' if n_added != 1 else ''} added")
-    if n_deleted:
-        parts.append(f"{n_deleted} paragraph{'s' if n_deleted != 1 else ''} deleted")
+    for label, source in (("paragraph", changes), ("table row", table_changes)):
+        n_changed = sum(1 for c in source if c["type"] == "replace")
+        n_added = sum(1 for c in source if c["type"] == "insert")
+        n_deleted = sum(1 for c in source if c["type"] == "delete")
+        if n_changed:
+            parts.append(f"{n_changed} {label}{'s' if n_changed != 1 else ''} changed")
+        if n_added:
+            parts.append(f"{n_added} {label}{'s' if n_added != 1 else ''} added")
+        if n_deleted:
+            parts.append(f"{n_deleted} {label}{'s' if n_deleted != 1 else ''} deleted")
     return ". ".join(parts) + "."
 
 
