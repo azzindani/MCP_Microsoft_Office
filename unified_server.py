@@ -152,7 +152,16 @@ def main() -> None:
     parser.add_argument("--host", default=os.environ.get("OFFICE_HOST", "0.0.0.0"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("OFFICE_PORT", "8830")))
     args = parser.parse_args()
-    uvicorn.run(app, host=args.host, port=args.port)
+    # timeout_keep_alive must exceed the reverse proxy's idle-connection pool,
+    # or the proxy reuses a connection this server has already closed. uvicorn's
+    # default is 5s and Caddy pools for 2 minutes, so every connection idle
+    # between the two was dead here and live there. Reusing one gave Caddy
+    # "aborting with incomplete response ... use of closed network connection",
+    # which it turned into a 200 with zero bytes: the tool call had run, and the
+    # caller hung until its own timeout believing it had failed. Measured
+    # against the deployment: idle 2s reused fine, idle 7s closed.
+    keepalive = int(os.environ.get("MCP_KEEPALIVE_SECONDS", "300"))
+    uvicorn.run(app, host=args.host, port=args.port, timeout_keep_alive=keepalive)
 
 
 if __name__ == "__main__":
