@@ -68,8 +68,8 @@ _MIN_COL_EMU = 457200  # 0.5 inch
 # Used to ask "how much does this column actually need", not to typeset -- the
 # real answer depends on the font, and a column an eighth of an inch too wide
 # costs nothing while one an eighth too narrow breaks a figure in half.
-_CHAR_EMU = 77000  # ~0.084 inch
-_CELL_PADDING_EMU = 137000  # ~0.15 inch
+_CHAR_EMU = 88000  # ~0.096 inch
+_CELL_PADDING_EMU = 160000  # ~0.175 inch
 
 # Leftover width is shared on the SQUARE ROOT of a column's longest cell rather
 # than on the length itself, so one enormous column does not take everything.
