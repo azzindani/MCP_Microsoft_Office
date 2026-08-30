@@ -12,6 +12,7 @@ from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION  # type: ignore[at
 from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
+from shared import tristate
 from shared.file_utils import (
     drop_snapshot_if_unwritten,
     embed_content,
@@ -295,15 +296,32 @@ def set_font_style(
     shape_name: str,
     font_name: str = "",
     font_size: float = 0,
-    bold: bool = False,
+    bold: str = "",
     color_hex: str = "",
     open_after: bool = False,
 ) -> dict[str, Any]:
-    """Apply font name, size, bold, and/or color to all runs in a shape."""
+    """Apply font name, size, bold, and/or color to all runs in a shape.
+
+    bold is "true", "false" or "" (leave unchanged) -- see shared/tristate.py.
+    """
     progress: list[dict[str, Any]] = []
     backup: str | None = None
     path: Path | None = None
     try:
+        # Parsed before the snapshot: a bad value must not leave a backup of a
+        # file nothing was going to change.
+        try:
+            want_bold = tristate.parse(bold, "bold")
+        except tristate.TriStateError as exc:
+            progress.append(fail(str(exc)))
+            return {
+                "success": False,
+                "error": str(exc),
+                "hint": exc.hint,
+                "progress": progress,
+                "token_estimate": 25,
+            }
+
         path = resolve_path(file_path)
         prs, err = _open_prs(path, progress)
         if err:
@@ -349,8 +367,11 @@ def set_font_style(
                     run.font.name = font_name
                 if font_size > 0:
                     run.font.size = Pt(font_size)
-                if bold:
-                    run.font.bold = True
+                # `is not None`, never `if want_bold`. Truthiness is the bug:
+                # it cannot tell "make this not bold" from "bold was not
+                # mentioned", so bold could only ever be turned ON.
+                if want_bold is not None:
+                    run.font.bold = want_bold
                 if rgb is not None:
                     run.font.color.rgb = rgb
                 runs_updated += 1
@@ -368,7 +389,10 @@ def set_font_style(
             "shape_name": shape_name,
             "font_name": font_name,
             "font_size": font_size,
-            "bold": bold,
+            # What was DONE, not what was passed. Echoing the argument is how
+            # a successful response came to carry "bold": false beside text
+            # that was still bold.
+            "bold": tristate.echo(want_bold),
             "color_hex": color_hex,
             "runs_updated": runs_updated,
             "backup": backup,
@@ -1016,15 +1040,32 @@ def set_font_all_slides(
     file_path: str,
     font_name: str = "",
     font_size: float = 0,
-    bold: bool = False,
+    bold: str = "",
     color_hex: str = "",
     open_after: bool = False,
 ) -> dict[str, Any]:
-    """Apply font settings to every text run across all slides."""
+    """Apply font settings to every text run across all slides.
+
+    bold is "true", "false" or "" (leave unchanged) -- see shared/tristate.py.
+    """
     progress: list[dict[str, Any]] = []
     backup: str | None = None
     path: Path | None = None
     try:
+        # Parsed before the snapshot: a bad value must not leave a backup of a
+        # file nothing was going to change.
+        try:
+            want_bold = tristate.parse(bold, "bold")
+        except tristate.TriStateError as exc:
+            progress.append(fail(str(exc)))
+            return {
+                "success": False,
+                "error": str(exc),
+                "hint": exc.hint,
+                "progress": progress,
+                "token_estimate": 25,
+            }
+
         path = resolve_path(file_path)
         prs, err = _open_prs(path, progress)
         if err:
@@ -1060,18 +1101,30 @@ def set_font_all_slides(
             for shape in slide.shapes:
                 if not shape.has_text_frame:
                     continue
+                shape_changed = False
                 for para in shape.text_frame.paragraphs:
                     for run in para.runs:
                         if font_name:
                             run.font.name = font_name
+                            shape_changed = True
                         if font_size > 0:
                             run.font.size = Pt(font_size)
-                        if bold:
-                            run.font.bold = True
+                            shape_changed = True
+                        # See set_font_style: `is not None`, never truthiness.
+                        if want_bold is not None:
+                            run.font.bold = want_bold
+                            shape_changed = True
                         if rgb is not None:
                             run.font.color.rgb = rgb
-                shapes_modified += 1
-                slide_touched = True
+                            shape_changed = True
+                # Counted where something actually changed. This was
+                # `shapes_modified += 1` for every shape carrying a text
+                # frame, so a call that altered nothing still reported "6
+                # shapes modified" -- a number agreeing with the success flag
+                # and with the echoed argument, and disagreeing with the file.
+                if shape_changed:
+                    shapes_modified += 1
+                    slide_touched = True
             if slide_touched:
                 slides_modified += 1
 
@@ -1100,7 +1153,8 @@ def set_font_all_slides(
             "shapes_modified": shapes_modified,
             "font_name": font_name,
             "font_size": font_size,
-            "bold": bold,
+            # The effect, not the argument -- see set_font_style.
+            "bold": tristate.echo(want_bold),
             "color_hex": color_hex,
             "backup": backup,
             "progress": progress,

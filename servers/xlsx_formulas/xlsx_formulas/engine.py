@@ -455,6 +455,21 @@ def set_data_validation(
             errorTitle="Invalid entry",
             error="That value is not allowed in this cell.",
         )
+        # Drop any rule already covering exactly this range before adding the
+        # new one. `add_data_validation` appends unconditionally, so calling
+        # set_data_validation twice with identical arguments left TWO rules on
+        # the same sqref -- and both responses were byte-identical, so nothing
+        # told the caller. `set_` means set: set_named_range and freeze_panes
+        # in this same file replace, and only this and set_conditional_format
+        # appended.
+        replaced = 0
+        for existing in list(ws.data_validations.dataValidation):
+            if str(existing.sqref) == str(range_address):
+                ws.data_validations.dataValidation.remove(existing)
+                replaced += 1
+        if replaced:
+            progress.append(info(f"Replaced {replaced} existing rule(s) on {range_address}"))
+
         ws.add_data_validation(dv)
         dv.sqref = range_address
 

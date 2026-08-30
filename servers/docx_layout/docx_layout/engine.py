@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from shared import tristate
 from shared.file_utils import embed_content, hint_for_error, hint_for_message, image_hint, image_problem, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_pdf_converter, open_file, resolve_output_path
@@ -145,15 +146,27 @@ def set_font(
     paragraph_index: int,
     font_name: str = "",
     font_size: float = 0,
-    bold: bool = False,
-    italic: bool = False,
+    bold: str = "",
+    italic: str = "",
     open_after: bool = False,
 ) -> dict[str, Any]:
-    """Set font attributes on all runs in paragraph N."""
+    """Set font attributes on all runs in paragraph N.
+
+    bold and italic are "true", "false" or "" (leave unchanged). They were
+    bools, which could only ever turn an attribute ON -- see
+    shared/tristate.py for what that cost.
+    """
     progress: list[dict[str, Any]] = []
     backup: str | None = None
     path: Path | None = None
     try:
+        # Parsed first, so a bad value never leaves a snapshot of a file
+        # nothing was going to change.
+        try:
+            want_bold = tristate.parse(bold, "bold")
+            want_italic = tristate.parse(italic, "italic")
+        except tristate.TriStateError as exc:
+            return _error(str(exc), exc.hint, progress, None)
         from docx import Document  # type: ignore[import-untyped]
         from docx.shared import Pt  # type: ignore[import-untyped]
 
@@ -181,19 +194,22 @@ def set_font(
                 run.font.name = font_name
             if font_size > 0:
                 run.font.size = Pt(font_size)
-            if bold:
-                run.bold = True
-            if italic:
-                run.italic = True
+            # `is not None`, never truthiness: `if bold:` cannot tell "make
+            # this not bold" from "bold was not mentioned", so bold and italic
+            # could only ever be turned ON.
+            if want_bold is not None:
+                run.bold = want_bold
+            if want_italic is not None:
+                run.italic = want_italic
 
         if font_name:
             changes.append(f"name={font_name}")
         if font_size > 0:
             changes.append(f"size={font_size}pt")
-        if bold:
-            changes.append("bold=True")
-        if italic:
-            changes.append("italic=True")
+        if want_bold is not None:
+            changes.append(f"bold={want_bold}")
+        if want_italic is not None:
+            changes.append(f"italic={want_italic}")
 
         detail = ", ".join(changes) if changes else "no changes"
         progress.append(ok(f"Updated font on paragraph {paragraph_index}", detail))
@@ -211,8 +227,9 @@ def set_font(
                 "paragraph_index": paragraph_index,
                 "font_name": font_name,
                 "font_size": font_size,
-                "bold": bold,
-                "italic": italic,
+                # The effect, not the argument.
+                "bold": tristate.echo(want_bold),
+                "italic": tristate.echo(want_italic),
             },
             f"✔ Font updated: {detail}",
             backup,

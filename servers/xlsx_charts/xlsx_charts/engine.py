@@ -10,6 +10,7 @@ from openpyxl.chart.data_source import AxDataSource, StrRef
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import column_index_from_string
 
+from shared import tristate
 from shared.arg_alias import missing, pick
 from shared.file_utils import drop_snapshot_if_unwritten, hint_for_error, resolve_path, scrub_repr, sheet_names_hint
 from shared.live_edit import notify_reload
@@ -669,16 +670,32 @@ def set_cell_style(
     cell_address: str,
     font_name: str = "",
     font_size: float = 0,
-    bold: bool = False,
+    bold: str = "",
     fill_color: str = "",
     number_format: str = "",
     open_after: bool = False,
 ) -> dict[str, Any]:
-    """Apply font, fill color, and number format to a cell."""
+    """Apply font, fill color, and number format to a cell.
+
+    bold is "true", "false" or "" (leave unchanged) -- see shared/tristate.py.
+    """
     progress: list[dict[str, Any]] = []
     backup: str | None = None
     path: Path | None = None
     try:
+        # Parsed before anything is opened or snapshotted.
+        try:
+            want_bold = tristate.parse(bold, "bold")
+        except tristate.TriStateError as exc:
+            progress.append(fail(str(exc)))
+            return {
+                "success": False,
+                "error": str(exc),
+                "hint": exc.hint,
+                "progress": progress,
+                "token_estimate": 25,
+            }
+
         addr = cell_address.upper()
         if not _validate_cell(addr):
             progress.append(fail(f"Invalid cell address: {cell_address}"))
@@ -711,7 +728,11 @@ def set_cell_style(
         new_font_kwargs: dict[str, Any] = {
             "name": font_name if font_name else (existing_font.name if existing_font else None),
             "size": font_size if font_size > 0 else (existing_font.size if existing_font else None),
-            "bold": bold if bold else (existing_font.bold if existing_font else None),
+            # `bold if bold else existing` falls through on False, so bold
+            # could only ever be turned ON -- twice over here, because the
+            # comprehension below also used to drop it. False must reach Font()
+            # as False; only None means "keep what the cell had".
+            "bold": want_bold if want_bold is not None else (existing_font.bold if existing_font else None),
         }
         cell.font = Font(**{k: v for k, v in new_font_kwargs.items() if v is not None})
 
@@ -742,7 +763,7 @@ def set_cell_style(
             "cell": addr,
             "font_name": font_name,
             "font_size": font_size,
-            "bold": bold,
+            "bold": tristate.echo(want_bold),
             "fill_color": fill_color,
             "number_format": number_format,
             "backup": backup,

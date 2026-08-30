@@ -128,11 +128,11 @@ def set_cell_style(
     cell_address: str,
     font_name: str = "",
     font_size: float = 0,
-    bold: bool = False,
+    bold: str = "",
     fill_color: str = "",
     number_format: str = "",
 ) -> dict:
-    """Apply font, fill color, and number format styling to a cell."""
+    """Style a cell: font, fill, format. bold: "true"/"false"/""."""
     return engine.set_cell_style(
         file_path,
         sheet_name,

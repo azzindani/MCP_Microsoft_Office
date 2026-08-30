@@ -65,10 +65,10 @@ def set_font_style(
     shape_name: str,
     font_name: str = "",
     font_size: float = 0,
-    bold: bool = False,
+    bold: str = "",
     color_hex: str = "",
 ) -> dict:
-    """Apply font name, size, bold, color to all runs in a shape."""
+    """Set font on a shape. bold: "true", "false" or "" to leave."""
     return engine.set_font_style(
         file_path, slide_index, shape_name, font_name, font_size, bold, color_hex, open_after=True
     )
@@ -144,10 +144,10 @@ def set_font_all_slides(
     file_path: str,
     font_name: str = "",
     font_size: float = 0,
-    bold: bool = False,
+    bold: str = "",
     color_hex: str = "",
 ) -> dict:
-    """Apply font name/size/bold/color to every text run on all slides."""
+    """Set font on all slides. bold: "true", "false" or "" to leave."""
     return engine.set_font_all_slides(file_path, font_name, font_size, bold, color_hex, open_after=True)
 
 

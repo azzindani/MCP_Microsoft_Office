@@ -59,10 +59,10 @@ def set_font(
     paragraph_index: int,
     font_name: str = "",
     font_size: float = 0,
-    bold: bool = False,
-    italic: bool = False,
+    bold: str = "",
+    italic: str = "",
 ) -> dict:
-    """Set font name/size/bold/italic on all runs in paragraph N."""
+    """Set font on paragraph N. bold/italic: "true", "false" or ""."""
     return engine.set_font(file_path, paragraph_index, font_name, font_size, bold, italic, open_after=True)
 
 
