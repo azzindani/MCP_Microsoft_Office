@@ -64,16 +64,15 @@ def _table_dims(table: Any) -> tuple[int, int]:
 # figure still needs room not to break across lines.
 _MIN_COL_EMU = 457200  # 0.5 inch
 
-# Width is shared out on the SQUARE ROOT of each column's longest cell, not on
-# the length itself. Measured on a three-column reconciliation whose columns
-# run 58, 19 and 13 characters: straight proportion gives 3.21in / 1.52in /
-# 1.26in and the two narrow columns then break `CurrentYearDuration` and
-# `1.640.830.566` across lines -- trading a broken name for a broken number,
-# which is worse, because a wrapped identifier is still readable and a wrapped
-# figure invites a misread.
-#
-# The square root damps the extreme without ignoring it: the same columns come
-# out 3.19in / 1.82in / 1.50in, which fits all three.
+# Roughly the width of one character of body text, plus the cell's own padding.
+# Used to ask "how much does this column actually need", not to typeset -- the
+# real answer depends on the font, and a column an eighth of an inch too wide
+# costs nothing while one an eighth too narrow breaks a figure in half.
+_CHAR_EMU = 77000  # ~0.084 inch
+_CELL_PADDING_EMU = 137000  # ~0.15 inch
+
+# Leftover width is shared on the SQUARE ROOT of a column's longest cell rather
+# than on the length itself, so one enormous column does not take everything.
 _WEIGHT_EXPONENT = 0.5
 
 
@@ -91,6 +90,15 @@ def _fit_columns(doc: Any, table: Any, data: list[list[str]], cols: int) -> None
     Width has to be set on every CELL, not only on the column: Word reads
     `tcW` per cell and treats `gridCol` as a hint, so setting one and not the
     other leaves the layout unchanged in Word while looking right in LibreOffice.
+
+    **Columns that fit are served first, and the rest share what is left.** A
+    purely proportional split -- even damped by a square root -- still starves
+    the small column when another is enormous. Measured on the reconciliation
+    appendix, whose context column runs to 120 characters: the value column came
+    out at 1.13in and broke `-17.906.497` into `-17.906.4 / 97`. A wrapped
+    identifier is a cosmetic problem; a figure split across two lines invites a
+    misread, so a column asking for less than an even share is simply given what
+    it asks for, and only the greedy columns compete for the remainder.
     """
     from docx.shared import Emu  # type: ignore[import-untyped]
 
@@ -104,9 +112,22 @@ def _fit_columns(doc: Any, table: Any, data: list[list[str]], cols: int) -> None
         for c_idx in range(min(cols, len(row))):
             longest[c_idx] = max(longest[c_idx], len(str(row[c_idx])))
 
-    weights = [n**_WEIGHT_EXPONENT for n in longest]
-    total = sum(weights) or 1.0
-    widths = [max(_MIN_COL_EMU, int(usable * w / total)) for w in weights]
+    needed = [n * _CHAR_EMU + _CELL_PADDING_EMU for n in longest]
+    even = usable // cols
+
+    # A column that wants no more than an even share gets exactly what it wants.
+    modest = [c for c in range(cols) if needed[c] <= even]
+    widths = [0] * cols
+    for c_idx in modest:
+        widths[c_idx] = max(_MIN_COL_EMU, needed[c_idx])
+
+    greedy = [c for c in range(cols) if c not in modest]
+    remaining = usable - sum(widths)
+    if greedy:
+        weights = {c: longest[c] ** _WEIGHT_EXPONENT for c in greedy}
+        total = sum(weights.values()) or 1.0
+        for c_idx in greedy:
+            widths[c_idx] = max(_MIN_COL_EMU, int(remaining * weights[c_idx] / total))
 
     # Rounding and the floor can push the row past the printable width; scale
     # back proportionally rather than letting the last column run off the page.

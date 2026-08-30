@@ -120,6 +120,30 @@ class TestTheColumnsAreNotEqual:
         usable = Emu(int(section.page_width) - int(section.left_margin) - int(section.right_margin)).inches
         assert sum(c.width.inches for c in doc.tables[0].columns) <= usable + 0.01
 
+    def test_a_huge_column_does_not_starve_a_small_one(self, document):
+        """The case damping alone did not solve.
+
+        In the reconciliation appendix the context column runs to 120
+        characters. Sharing the whole width by weight -- even square-rooted --
+        left the value column at 1.08in and broke `-17.906.497` across two
+        lines. A column asking for less than an even share is now given what it
+        asks for, and only the greedy columns compete for what is left.
+        """
+        rows = [
+            ["XBRL fact", "context", "millions Rp"],
+            [
+                "DecreaseIncreaseInSecuritiesPurchasedUnderResaleAgreements",
+                "CurrentYearDuration_4611000_CarryingAmountAccumulatedDepreciationMember"
+                "_BuildingLeaseholdImprovementDirectlyOwnedMember",
+                "-17.906.497",
+            ],
+        ]
+        engine.add_table(document, 0, len(rows), 3, rows)
+        widths = [c.width.inches for c in _table(document).columns]
+        # 11 characters of figure plus cell padding. Below this the number wraps.
+        assert widths[2] >= 1.05, f"the figure column was starved at {widths[2]:.2f}in"
+        assert widths[1] > widths[2], "the 120-character column should still be the widest"
+
     def test_every_cell_carries_the_width_not_only_the_column(self, document):
         """Word reads per-cell `tcW` and treats `gridCol` as a hint.
 
