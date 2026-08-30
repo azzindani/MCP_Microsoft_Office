@@ -164,7 +164,7 @@ run docx-tables delete_table "{\"file_path\":\"$DOCX\",\"table_index\":0}" "dele
 echo
 echo "===== docx-layout (7 tools) ====="
 run docx-layout set_heading "{\"file_path\":\"$DOCX\",\"paragraph_index\":0,\"level\":1}" "make paragraph 0 a heading"
-run docx-layout set_font "{\"file_path\":\"$DOCX\",\"paragraph_index\":1,\"font_name\":\"Arial\",\"font_size\":12,\"bold\":true}" "bold paragraph 1 in Arial 12"
+run docx-layout set_font "{\"file_path\":\"$DOCX\",\"paragraph_index\":1,\"font_name\":\"Arial\",\"font_size\":12,\"bold\":\"true\"}" "bold paragraph 1 in Arial 12"
 run docx-layout set_paragraph_style "{\"file_path\":\"$DOCX\",\"paragraph_index\":1,\"style_name\":\"Body Text\"}" "set paragraph 1 to Body Text style"
 run docx-layout add_image "{\"file_path\":\"$DOCX\",\"paragraph_index\":0,\"image_path\":\"$IMG\",\"width_inches\":1.0}" "insert the logo image after paragraph 0"
 run docx-layout set_page_margins "{\"file_path\":\"$DOCX\",\"top\":1.0,\"bottom\":1.0,\"left\":1.0,\"right\":1.0}" "set 1-inch margins"
@@ -214,7 +214,7 @@ echo
 echo "===== xlsx-charts (5 tools) ====="
 run xlsx-charts add_chart "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"chart_type\":\"bar\",\"data_range\":\"A1:C4\",\"title\":\"Revenue by Region\",\"anchor_cell\":\"F2\"}" "add a bar chart of revenue by region"
 run xlsx-charts add_pivot_table "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"source_range\":\"A1:C4\",\"dest_cell\":\"F20\",\"rows\":\"Region\",\"values\":\"Revenue\"}" "add a pivot table of revenue by region and units"
-run xlsx-charts set_cell_style "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"cell_address\":\"A1\",\"bold\":true,\"fill_color\":\"DDDDDD\"}" "bold and shade the header cell"
+run xlsx-charts set_cell_style "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"cell_address\":\"A1\",\"bold\":\"true\",\"fill_color\":\"DDDDDD\"}" "bold and shade the header cell"
 run xlsx-charts update_chart "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"chart_index\":0,\"title\":\"Revenue by Region (updated)\"}" "retitle the chart"
 run xlsx-charts delete_chart "{\"file_path\":\"$XLSX\",\"sheet_name\":\"Sales\",\"chart_index\":0}" "delete the chart"
 
@@ -259,7 +259,34 @@ echo
 echo "===== pptx-design (8 tools) ====="
 run pptx-design set_background "{\"file_path\":\"$PPTX\",\"slide_index\":0,\"color_hex\":\"F0F0F0\"}" "set slide 0's background to light gray"
 if [ -n "$SHAPE" ]; then
-  run pptx-design set_font_style "{\"file_path\":\"$PPTX\",\"slide_index\":0,\"shape_name\":\"$SHAPE\",\"font_name\":\"Arial\",\"font_size\":32,\"bold\":true}" "make slide 0's title bold Arial"
+  run pptx-design set_font_style "{\"file_path\":\"$PPTX\",\"slide_index\":0,\"shape_name\":\"$SHAPE\",\"font_name\":\"Arial\",\"font_size\":32,\"bold\":\"true\"}" "make slide 0's title bold Arial"
+
+  # bold is a TRI-STATE STRING, not a boolean, and this is where that gets
+  # proved end to end. Round 22 found set_font_all_slides(bold=false) answering
+  # success:true, shapes_modified:6, bold:false with the title still bold --
+  # `if bold:` cannot tell "make this not bold" from "bold was not mentioned".
+  # The schema is now str: "" leaves, "true" sets, "false" clears.
+  #
+  # The three calls in this script passed a JSON boolean until now, which the
+  # new schema refuses outright -- so the smoke test was still requiring the
+  # defect, and that is why abb5e94's CI went red here.
+  echo "== prompt: \"take the bold off slide 0's title\" -> set_font_style(bold=false) =="
+  N=$((N+1))
+  OFF_R=$(call pptx-design "$N" set_font_style "{\"file_path\":\"$PPTX\",\"slide_index\":0,\"shape_name\":\"$SHAPE\",\"bold\":\"false\"}")
+  if ok_json "$OFF_R" && echo "$OFF_R" | grep -Eq '\\?"bold\\?"[[:space:]]*:[[:space:]]*\\?"false'; then
+    pass "bold=false is applied and reported as applied"
+  else
+    fail "set_font_style(bold=false) -> $OFF_R"
+  fi
+
+  echo "== a JSON boolean is refused, loudly, rather than silently ignored =="
+  N=$((N+1))
+  BOOL_R=$(call pptx-design "$N" set_font_style "{\"file_path\":\"$PPTX\",\"slide_index\":0,\"shape_name\":\"$SHAPE\",\"bold\":true}")
+  if ok_json "$BOOL_R"; then
+    fail "a JSON boolean was accepted for bold — the old silent-ignore path is back"
+  else
+    pass "a JSON boolean is rejected instead of accepted-and-ignored"
+  fi
 else
   fail "set_font_style skipped — no real shape_name captured"
 fi
