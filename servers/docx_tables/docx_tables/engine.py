@@ -6,7 +6,7 @@ from typing import Any
 from shared.file_utils import hint_for_error, hint_for_message, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import open_file
-from shared.progress import describe_error, fail, index_range, ok
+from shared.progress import describe_error, fail, index_range, ok, warn
 from shared.receipt import append_receipt
 from shared.version_control import snapshot
 
@@ -58,6 +58,67 @@ def _table_dims(table: Any) -> tuple[int, int]:
     rows = len(table.rows)
     cols = len(table.columns) if rows else 0
     return rows, cols
+
+
+# A column narrower than this is unreadable whatever is in it -- a date or a
+# figure still needs room not to break across lines.
+_MIN_COL_EMU = 457200  # 0.5 inch
+
+# Width is shared out on the SQUARE ROOT of each column's longest cell, not on
+# the length itself. Measured on a three-column reconciliation whose columns
+# run 58, 19 and 13 characters: straight proportion gives 3.21in / 1.52in /
+# 1.26in and the two narrow columns then break `CurrentYearDuration` and
+# `1.640.830.566` across lines -- trading a broken name for a broken number,
+# which is worse, because a wrapped identifier is still readable and a wrapped
+# figure invites a misread.
+#
+# The square root damps the extreme without ignoring it: the same columns come
+# out 3.19in / 1.82in / 1.50in, which fits all three.
+_WEIGHT_EXPONENT = 0.5
+
+
+def _fit_columns(doc: Any, table: Any, data: list[list[str]], cols: int) -> None:
+    """Size columns from their content instead of splitting the page evenly.
+
+    `table.autofit = True` is the obvious answer and it does not work: it sets
+    `tblLayout`, and both Word and LibreOffice still lay the table out on the
+    equal `gridCol` widths python-docx wrote. Rendered and looked at, a column
+    holding `DecreaseIncreaseInPlacementsWithOtherBanksAndBankIndonesia` got the
+    same third of the page as one holding `4.019`, and the identifier broke
+    mid-word across three lines -- `DecreaseIncreaseInPla / cementsWithOtherBan /
+    ksAndBankIndonesia`. Explicit widths are honoured by both.
+
+    Width has to be set on every CELL, not only on the column: Word reads
+    `tcW` per cell and treats `gridCol` as a hint, so setting one and not the
+    other leaves the layout unchanged in Word while looking right in LibreOffice.
+    """
+    from docx.shared import Emu  # type: ignore[import-untyped]
+
+    section = doc.sections[0]
+    usable = int(section.page_width - section.left_margin - section.right_margin)
+    if usable <= 0 or cols <= 0:
+        return
+
+    longest = [1] * cols
+    for row in data:
+        for c_idx in range(min(cols, len(row))):
+            longest[c_idx] = max(longest[c_idx], len(str(row[c_idx])))
+
+    weights = [n**_WEIGHT_EXPONENT for n in longest]
+    total = sum(weights) or 1.0
+    widths = [max(_MIN_COL_EMU, int(usable * w / total)) for w in weights]
+
+    # Rounding and the floor can push the row past the printable width; scale
+    # back proportionally rather than letting the last column run off the page.
+    over = sum(widths) - usable
+    if over > 0:
+        widths = [max(_MIN_COL_EMU, w - int(over * w / sum(widths))) for w in widths]
+
+    table.autofit = False
+    for c_idx, width in enumerate(widths):
+        table.columns[c_idx].width = Emu(width)
+        for cell in table.columns[c_idx].cells:
+            cell.width = Emu(width)
 
 
 def _set_cell_text(cell: Any, text: str) -> None:
@@ -629,14 +690,39 @@ def add_table(
         # empty in the reply describes a document that is not.
         body_before = [child for child in doc.element.body if not child.tag.endswith("}sectPr")]
 
-        # Create a new table (appended to body first by python-docx)
-        tbl = doc.add_table(rows=rows, cols=cols)
+        # Create a new table (appended to body first by python-docx).
+        #
+        # WITH BORDERS, and that is not decoration. python-docx's default style
+        # is "Normal Table", which draws no rules at all, so what Word shows is
+        # columns of text floating in whitespace -- and a table without rules is
+        # read as a table only where the columns happen to line up. Rendered and
+        # looked at, a three-column reconciliation came out as unreadable
+        # gutters; the same data under "Table Grid" is a table.
+        #
+        # `autofit` sizes columns to their content instead of splitting the page
+        # into equal fractions. Without it a column holding
+        # `DecreaseIncreaseInPlacementsWithOtherBanksAndBankIndonesia` gets the
+        # same third of the page as one holding `4.019`, and the long name is
+        # broken mid-word across three lines.
+        #
+        # "Table Grid" is a built-in Word style, present in the default template
+        # python-docx ships and in every real .docx, but a caller's template can
+        # omit it -- so a missing style falls back to the unstyled table rather
+        # than failing a write the caller asked for.
+        try:
+            tbl = doc.add_table(rows=rows, cols=cols, style="Table Grid")
+        except KeyError:
+            tbl = doc.add_table(rows=rows, cols=cols)
+            progress.append(
+                warn("This document's template has no 'Table Grid' style", "table inserted without borders")
+            )
 
         # Populate with data if provided
         if data:
             for r_idx in range(min(rows, len(data))):
                 for c_idx in range(min(cols, len(data[r_idx]))):
                     _set_cell_text(tbl.rows[r_idx].cells[c_idx], data[r_idx][c_idx])
+            _fit_columns(doc, tbl, data, cols)
 
         # Move the table element to appear after the target paragraph. With no
         # paragraphs there is no anchor to move to, and python-docx has already
