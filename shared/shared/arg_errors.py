@@ -123,7 +123,22 @@ def _refusal(name: str, known: list[str], message: str) -> dict[str, Any]:
         others = f" {name} accepts: {', '.join(known)}." if known else ""
         hint = f"{', '.join(missing)} is required.{others}"
     elif bad:
-        hint = f"Correct the type of {', '.join(bad)} and call again. Nothing was written."
+        # A bool rejected where a string is expected is, in this fleet, a
+        # THREE-STATE flag: bold and italic are spelled "true" / "false" / ""
+        # precisely so that "turn it off" can be said at all, which a plain
+        # bool cannot express (False is indistinguishable from unset). Naming
+        # the quoted form turns a refusal into a working call; "correct the
+        # type" leaves the caller guessing which type.
+        quoted = [f for f, w in problems if "valid string" in w and "bool" in w]
+        if quoted:
+            field = quoted[0]
+            hint = (
+                f"Pass {field} as a quoted string: {field}='true' to turn it on, "
+                f"{field}='false' to turn it off, or leave it out to keep the current value. "
+                "Nothing was written."
+            )
+        else:
+            hint = f"Correct the type of {', '.join(bad)} and call again. Nothing was written."
     elif known:
         hint = f"{name} accepts: {', '.join(known)}."
     else:
