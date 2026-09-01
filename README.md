@@ -2,6 +2,8 @@
 
 A self-hosted MCP server that gives local LLMs full control over Word, Excel, and PowerPoint files. No cloud APIs, no API keys — everything runs on your machine and writes directly to your files.
 
+**Release [`v0.1.2`](https://github.com/azzindani/MCP_Microsoft_Office/releases/tag/v0.1.2)** — source only. No wheel and no container image are published: install from the tag with the bundled installer, or build the image yourself from the `Dockerfile` in this repo.
+
 ## Features
 
 - **96 tools** across 11 servers — Word, Excel, PowerPoint read, edit, and create
@@ -754,7 +756,7 @@ vs ~650 MiB idle), and all 11 still share one bearer-token set.
 
 ```bash
 uv run python unified_server.py --port 8830
-curl http://localhost:8830/health              # {"status":"ok","version":"0.1.0","sub_servers":[...]}
+curl http://localhost:8830/health              # {"status":"ok","version":"0.1.2","sub_servers":[...]}
 curl http://localhost:8830/docx-basic/health   # per-server health
 ```
 

@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      publish_image:
+        description: "Also build and push the GHCR container image"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -49,8 +55,15 @@ jobs:
   # Publishes ghcr.io/<owner>/mcp-microsoft-office:<version> + :latest. Uses
   # the shared composite action hosted in MCP_Math so build/push mechanics
   # stay in one place across all azzindani MCP_* repos.
+  #
+  # Opt-in, not automatic: a tag push cuts the GitHub Release only. The fleet
+  # deploys from locally built images, so publishing a package on every tag
+  # spends CI minutes on an artefact nothing pulls. To publish one, run this
+  # workflow by hand against the tag with publish_image=true. `inputs` is null
+  # on a push event, so the condition is false there without a second clause.
   docker:
     name: Publish Docker image (GHCR)
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_image }}
     needs: ci
     runs-on: ubuntu-22.04
     permissions:

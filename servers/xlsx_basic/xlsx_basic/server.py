@@ -20,7 +20,7 @@ from xlsx_basic.helpers import find_duplicates as _find_duplicates
 from xlsx_basic.helpers import rename_sheet as _rename_sheet
 from xlsx_basic.helpers import sort_sheet as _sort_sheet
 
-_VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
+_VERSION = "0.1.2"  # keep in sync with pyproject.toml [project].version
 _HOST = os.environ.get("OFFICE_XLSX_BASIC_HOST", "127.0.0.1")
 _PORT = int(os.environ.get("OFFICE_XLSX_BASIC_PORT", "8834"))
 _oauth_bridge = build_oauth_bridge(

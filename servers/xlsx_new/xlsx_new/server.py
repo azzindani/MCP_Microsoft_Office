@@ -16,7 +16,7 @@ from shared.token_estimate import measure_responses
 from shared.tool_annotations import CREATES
 from xlsx_new import engine
 
-_VERSION = "0.1.1"  # keep in sync with pyproject.toml [project].version
+_VERSION = "0.1.2"  # keep in sync with pyproject.toml [project].version
 _HOST = os.environ.get("OFFICE_XLSX_NEW_HOST", "127.0.0.1")
 _PORT = int(os.environ.get("OFFICE_XLSX_NEW_PORT", "8837"))
 _oauth_bridge = build_oauth_bridge(

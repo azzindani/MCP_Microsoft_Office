@@ -44,7 +44,7 @@ from servers.xlsx_charts.xlsx_charts.server import mcp as xlsx_charts_mcp
 from servers.xlsx_formulas.xlsx_formulas.server import mcp as xlsx_formulas_mcp
 from servers.xlsx_new.xlsx_new.server import mcp as xlsx_new_mcp
 
-_VERSION = "0.1.0"
+_VERSION = "0.1.2"
 
 _SUB_SERVERS = {
     "docx-basic": docx_basic_mcp,
