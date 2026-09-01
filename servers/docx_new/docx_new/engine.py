@@ -638,9 +638,14 @@ def batch_create_from_template(
                 progress.append(warn(f"Item {idx} is not a dict, skipping"))
                 continue
 
-            # Determine output filename
+            # Determine output filename. The stem is a stem, so a caller who
+            # names the row's file the obvious way -- "alice.docx" -- must not
+            # get alice.docx.docx. Only the extension this tool would append is
+            # stripped, and only from the end: "alice.docx.bak" keeps its name.
             if filename_key and filename_key in data_dict:
                 stem = str(data_dict[filename_key])
+                if stem.lower().endswith(".docx"):
+                    stem = stem[: -len(".docx")]
             else:
                 stem = f"document_{idx + 1:03d}"
 

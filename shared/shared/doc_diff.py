@@ -209,6 +209,20 @@ def diff_pptx(path_a: str, path_b: str) -> dict[str, Any]:
     Compare two .pptx files at shape-text level, tables included.
 
     Returns structured diff with changed text per slide per shape.
+
+    `change_count` counts slides added and removed as well as shape text edits.
+    It used to be `len(text_changes)` alone, so deleting a slide came back
+    `change_count: 0`, progress "0 changes", in the same response whose own
+    summary read "Slide count changed: 2 -> 1 (removed 1)" and whose
+    `slide_count_changed` was true. A caller checking the count first -- which
+    is what the count is for -- concluded nothing had happened to a deck that
+    had just lost a slide. diff_docx beside it has always summed every kind of
+    change it found (`len(changes) + len(table_changes)`); this is that rule,
+    applied to the sibling that was missing it.
+
+    The zip below also walks only the slides the two decks have in common, so
+    the shapes on a dropped slide were invisible twice over. They are reported
+    as `slide_changes` entries carrying the text that went with them.
     """
     try:
         from pptx import Presentation  # type: ignore[import-untyped]
@@ -238,6 +252,17 @@ def diff_pptx(path_a: str, path_b: str) -> dict[str, Any]:
                         }
                     )
 
+        # Slides past the end of the shorter deck: never paired above, so their
+        # text has to be reported here or it is lost from the diff entirely.
+        slide_changes: list[dict[str, Any]] = []
+        common = min(count_a, count_b)
+        if count_b > count_a:
+            for i, slide in enumerate(list(prs_b.slides)[common:], start=common):
+                slide_changes.append({"slide_index": i, "change": "added", "shape_texts": _pptx_shape_texts(slide)})
+        elif count_a > count_b:
+            for i, slide in enumerate(list(prs_a.slides)[common:], start=common):
+                slide_changes.append({"slide_index": i, "change": "removed", "shape_texts": _pptx_shape_texts(slide)})
+
         summary = _summarise_pptx_diff(changes, count_a, count_b)
 
         return {
@@ -246,7 +271,8 @@ def diff_pptx(path_a: str, path_b: str) -> dict[str, Any]:
             "slide_count_b": count_b,
             "slide_count_changed": count_a != count_b,
             "text_changes": changes,
-            "change_count": len(changes),
+            "slide_changes": slide_changes,
+            "change_count": len(changes) + len(slide_changes),
             "summary": summary,
         }
     except Exception as e:

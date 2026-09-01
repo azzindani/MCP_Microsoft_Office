@@ -767,6 +767,22 @@ def create_from_docx(
         prs.save(str(path))
         progress.append(ok(f"Saved {path.name}", f"{slide_count} slides"))
 
+        # A deck with no slides is a valid file and a worthless deliverable: it
+        # carries no sldIdLst at all, and LibreOffice renders it as a single
+        # blank page. Saying so here is the difference between an empty result
+        # and a silent one -- every other tick is green, `success` is true, and
+        # a caller checking `success` first has nothing else to go on.
+        # data-visual's generate_chart warns the same way when it cannot honour
+        # the extension it was handed; this is that, for an empty source.
+        if slide_count == 0:
+            progress.append(
+                warn(
+                    "Deck is empty — 0 slides",
+                    f"{docx_file.name} has {source_para_count} paragraph(s), none of which could "
+                    "title a slide. The .pptx was written but has no content.",
+                )
+            )
+
         if open_after:
             open_file(path)
             progress.append(ok("Opened in default application"))

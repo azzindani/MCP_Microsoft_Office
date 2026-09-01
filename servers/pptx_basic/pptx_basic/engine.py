@@ -849,6 +849,7 @@ def diff_versions(file_path: str, timestamp_a: str, timestamp_b: str = "current"
             "slide_count_b": result["slide_count_b"],
             "slide_count_changed": result["slide_count_changed"],
             "text_changes": result["text_changes"],
+            "slide_changes": result["slide_changes"],
             "change_count": result["change_count"],
             "progress": progress,
             "token_estimate": len(str(result)) // 4,
