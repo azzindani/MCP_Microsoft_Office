@@ -287,6 +287,309 @@ def create_from_sections(
         )
 
 
+# The accent a document gets when the caller names none. Word's own "Dark
+# Blue, Text 2, Darker 25%" -- neutral enough for any subject and dark enough
+# to carry white text in a table header.
+_DEFAULT_ACCENT = "1F3864"
+
+# How far toward white the derived fills sit. Banded rows have to be barely
+# there; a callout can be a shade stronger without competing with body text.
+_BAND_TINT = 0.92
+_CALLOUT_TINT = 0.86
+
+BLOCK_KINDS: tuple[str, ...] = (
+    "heading",
+    "text",
+    "bullets",
+    "table",
+    "kpi",
+    "callout",
+    "rule",
+    "pagebreak",
+)
+
+
+def _block_kind(block: dict[str, Any]) -> str:
+    for key in ("kind", "type", "block", "block_type"):
+        value = block.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip().lower()
+    return ""
+
+
+def create_from_blocks(
+    output_path: str,
+    title: str,
+    blocks: list[dict[str, Any]],
+    accent: str = "",
+    open_after: bool = True,
+    return_content: bool = False,
+) -> dict[str, Any]:
+    """Create a .docx from typed blocks — headings, bullets, tables, KPIs.
+
+    `create_from_sections` takes {heading, body} strings and can only ever
+    produce one Heading and one Normal paragraph per section. That is not a
+    limitation you notice until someone reads the output: handed a data
+    summary it wrote ten headings over ten 180-word paragraphs, no bullets and
+    no tables, and the reply that came back was "so many text and numbers in
+    single paragraphs, not readable for my director".
+
+    The primitives to fix that by hand all exist, but only one paragraph at a
+    time and addressed by index, so a four-page brief is ~150 sequential calls
+    against indices that shift under every insert. A model that wants a
+    readable document reaches for python-docx instead, and did.
+
+    A block is {"kind": ..., ...}. Every kind below is one call:
+
+        heading   {kind, text, level}          level 1-6, accent coloured
+        text      {kind, text}
+        bullets   {kind, items[], numbered}    bulleted unless numbered
+        table     {kind, header[], rows[][]}   shaded header, banded body
+        kpi       {kind, items[{value,label}]} figures across the page
+        callout   {kind, text, title}          tinted box for the one message
+        rule      {kind}                       horizontal rule
+        pagebreak {kind}
+    """
+    progress: list[dict[str, Any]] = []
+    try:
+        from docx import Document  # type: ignore[import-untyped]
+        from docx.enum.text import WD_BREAK  # type: ignore[import-untyped]
+        from docx.shared import Pt  # type: ignore[import-untyped]
+
+        from shared import docx_style
+
+        if not isinstance(blocks, list):
+            progress.append(fail("blocks must be a list of dicts"))
+            return _err(
+                progress,
+                "blocks must be a list",
+                'Pass a list like [{"kind": "bullets", "items": ["First", "Second"]}].',
+            )
+
+        try:
+            hue = docx_style.parse_hex(accent, "accent") if accent else _DEFAULT_ACCENT
+        except docx_style.DocxStyleError as exc:
+            progress.append(fail(str(exc)))
+            return _err(progress, str(exc), "Accent is a 6-digit hex colour, e.g. '0B1D3A'.")
+        band = docx_style.tint(hue, _BAND_TINT)
+        callout_fill = docx_style.tint(hue, _CALLOUT_TINT)
+
+        path = resolve_output_path(output_path, "document.docx")
+        _ensure_parent(path)
+        progress.append(info("Creating block document", path.name))
+
+        doc = Document()
+        if title:
+            heading = doc.add_paragraph(title, style="Heading 1")
+            docx_style.style_runs(heading, color=hue)
+            docx_style.set_paragraph_rule(heading, color=hue, width_pt=1.0)
+            docx_style.set_spacing(heading, space_after=10)
+
+        counts: dict[str, int] = {}
+        unknown: list[str] = []
+        tables_made = 0
+
+        for index, block in enumerate(blocks):
+            if not isinstance(block, dict):
+                unknown.append(f"block {index} is {type(block).__name__}, not a dict")
+                continue
+            kind = _block_kind(block)
+            if kind not in BLOCK_KINDS:
+                unknown.append(f"block {index} has kind={kind or 'missing'!r}")
+                continue
+
+            if kind == "heading":
+                level = max(1, min(int(block.get("level", 2) or 2), 6))
+                text = entry_value(block, ENTRY_TEXT_KEYS) or entry_value(block, ENTRY_HEADING_KEYS)
+                para = doc.add_paragraph(text, style=f"Heading {level}")
+                docx_style.style_runs(para, color=hue)
+
+            elif kind == "text":
+                doc.add_paragraph(entry_value(block, ENTRY_TEXT_KEYS), style="Normal")
+
+            elif kind == "bullets":
+                items = block.get("items") or block.get("bullets") or []
+                # "List Bullet"/"List Number" are built-in Word styles; a
+                # caller's template can lack them, and a missing style must not
+                # cost the content.
+                style = "List Number" if block.get("numbered") else "List Bullet"
+                for item in items:
+                    text = entry_value(item, ENTRY_TEXT_KEYS) if isinstance(item, dict) else str(item)
+                    try:
+                        doc.add_paragraph(text, style=style)
+                    except KeyError:
+                        doc.add_paragraph(f"• {text}", style="Normal")
+
+            elif kind == "table":
+                header = block.get("header") or block.get("headers") or []
+                rows = block.get("rows") or []
+                if not header and not rows:
+                    unknown.append(f"block {index} is a table with no header and no rows")
+                    continue
+                _add_block_table(doc, header, rows, hue, band, block.get("widths") or [], docx_style)
+                _spacer(doc, docx_style)
+                tables_made += 1
+
+            elif kind == "kpi":
+                items = block.get("items") or []
+                if not items:
+                    unknown.append(f"block {index} is a kpi row with no items")
+                    continue
+                _add_kpi_row(doc, items, hue, docx_style)
+                _spacer(doc, docx_style)
+                tables_made += 1
+
+            elif kind == "callout":
+                _add_callout(doc, block, hue, callout_fill, docx_style)
+                _spacer(doc, docx_style)
+                tables_made += 1
+
+            elif kind == "rule":
+                para = doc.add_paragraph("")
+                docx_style.set_paragraph_rule(para, color=hue, width_pt=float(block.get("width_pt", 1.0) or 1.0))
+
+            elif kind == "pagebreak":
+                doc.add_paragraph("").add_run().add_break(WD_BREAK.PAGE)
+
+            counts[kind] = counts.get(kind, 0) + 1
+
+        # Body text at 11pt with a little air, so the default is a document
+        # somebody can read rather than one that merely opens.
+        normal = doc.styles["Normal"]
+        normal.font.size = Pt(11)  # type: ignore[reportAttributeAccessIssue]
+        normal.paragraph_format.space_after = Pt(6)  # type: ignore[reportAttributeAccessIssue]
+
+        doc.save(str(path))
+        progress.append(ok(f"Saved {path.name}", f"{sum(counts.values())} block(s), {tables_made} table(s)"))
+        if unknown:
+            progress.append(
+                warn(
+                    f"{len(unknown)} block(s) written nothing",
+                    "; ".join(unknown) + f". Valid kinds: {', '.join(BLOCK_KINDS)}.",
+                )
+            )
+
+        _open_if_requested(path, open_after, progress)
+
+        result: dict[str, Any] = {
+            "success": True,
+            "op": "create_from_blocks",
+            "output": str(path),
+            "output_name": path.name,
+            "block_count": sum(counts.values()),
+            "blocks_by_kind": counts,
+            "skipped": unknown,
+            "accent": f"#{hue}",
+            "progress": progress,
+        }
+        embed_content(result, path, return_content)
+        result["token_estimate"] = _token_estimate(result)
+        return result
+    except Exception as exc:
+        logger.warning("create_from_blocks failed: %s", exc)
+        progress.append(fail(str(exc)))
+        return _err(
+            progress,
+            str(exc),
+            f"Each block is a dict with a 'kind' of: {', '.join(BLOCK_KINDS)}.",
+        )
+
+
+def _spacer(doc: Any, docx_style: Any) -> None:
+    """A short empty paragraph after every table-shaped block.
+
+    Not only for air. Word merges two tables that sit next to each other in the
+    body with nothing between them, so a kpi row followed by a table would come
+    out as one seven-row grid -- the layout defect that is hardest to see in a
+    success response and obvious the moment anyone opens the file.
+    """
+    docx_style.set_spacing(doc.add_paragraph(""), space_after=6)
+
+
+def _add_block_table(
+    doc: Any,
+    header: list[Any],
+    rows: list[list[Any]],
+    hue: str,
+    band: str,
+    widths: list[Any],
+    docx_style: Any,
+) -> None:
+    """A header-shaded, row-banded table. Borders come from 'Table Grid'."""
+    body = [[str(cell) for cell in row] for row in rows]
+    n_cols = max([len(header)] + [len(r) for r in body]) or 1
+    n_rows = len(body) + (1 if header else 0)
+    try:
+        table = doc.add_table(rows=n_rows, cols=n_cols, style="Table Grid")
+    except KeyError:
+        table = doc.add_table(rows=n_rows, cols=n_cols)
+
+    offset = 0
+    if header:
+        for col in range(n_cols):
+            cell = table.rows[0].cells[col]
+            cell.text = str(header[col]) if col < len(header) else ""
+            docx_style.set_cell_fill(cell, hue)
+            for para in cell.paragraphs:
+                docx_style.style_runs(para, bold="true", color="FFFFFF")
+        offset = 1
+
+    for r, row in enumerate(body):
+        for col in range(n_cols):
+            cell = table.rows[r + offset].cells[col]
+            cell.text = row[col] if col < len(row) else ""
+        if r % 2 == 1:
+            for col in range(n_cols):
+                docx_style.set_cell_fill(table.rows[r + offset].cells[col], band)
+
+    if widths:
+        docx_style.set_column_widths(table, [float(w) for w in widths])
+
+
+def _add_kpi_row(doc: Any, items: list[Any], hue: str, docx_style: Any) -> None:
+    """Figures across the page: value large and coloured, label small beneath.
+
+    A borderless two-row table, because Word has no other way to put four
+    figures side by side that survives being edited afterwards.
+    """
+    from docx.shared import Pt  # type: ignore[import-untyped]
+
+    table = doc.add_table(rows=2, cols=len(items))
+    for column, item in enumerate(items):
+        value = str(item.get("value", "")) if isinstance(item, dict) else str(item)
+        label = str(item.get("label", "")) if isinstance(item, dict) else ""
+        value_cell = table.rows[0].cells[column]
+        value_cell.text = value
+        for para in value_cell.paragraphs:
+            docx_style.set_alignment(para, "center")
+            docx_style.style_runs(para, font_size=20, bold="true", color=hue)
+        label_cell = table.rows[1].cells[column]
+        label_cell.text = label
+        for para in label_cell.paragraphs:
+            docx_style.set_alignment(para, "center")
+            docx_style.style_runs(para, font_size=8, color="595959", all_caps="true")
+            para.paragraph_format.space_after = Pt(10)
+
+
+def _add_callout(doc: Any, block: dict[str, Any], hue: str, fill: str, docx_style: Any) -> None:
+    """One tinted, borderless cell for the single message that must land."""
+    heading = entry_value(block, ENTRY_HEADING_KEYS)
+    text = entry_value(block, ENTRY_TEXT_KEYS)
+    table = doc.add_table(rows=1, cols=1)
+    cell = table.rows[0].cells[0]
+    docx_style.set_cell_fill(cell, fill)
+    first = cell.paragraphs[0]
+    if heading:
+        first.text = heading
+        docx_style.style_runs(first, bold="true", color=hue)
+        if text:
+            body = cell.add_paragraph(text)
+            docx_style.style_runs(body, color="1A1A1A")
+    else:
+        first.text = text
+        docx_style.style_runs(first, color="1A1A1A")
+
+
 def create_from_template(
     template_path: str,
     output_path: str,

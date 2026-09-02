@@ -6,7 +6,7 @@ A self-hosted MCP server that gives local LLMs full control over Word, Excel, an
 
 ## Features
 
-- **96 tools** across 11 servers — Word, Excel, PowerPoint read, edit, and create
+- **98 tools** across 11 servers — Word, Excel, PowerPoint read, edit, and create
 - **Create new documents** — blank or structured, from text, sections, templates, or outlines
 - **Auto-open** — every creation and export tool opens the file in its native app automatically
 - **Batch generation** — one template + a list of data → N output files (offer letters, invoices, proposals)
@@ -255,7 +255,7 @@ Pick only what you need. Each block is standalone — paste it inside the `"mcpS
 </details>
 
 <details>
-<summary><strong>docx_tables</strong> — table CRUD in Word documents (9 tools)</summary>
+<summary><strong>docx_tables</strong> — table CRUD and cell shading in Word documents (10 tools)</summary>
 
 ```json
 "docx_tables": {
@@ -289,7 +289,7 @@ Pick only what you need. Each block is standalone — paste it inside the `"mcpS
 </details>
 
 <details>
-<summary><strong>docx_new</strong> — create Word documents from scratch (7 tools)</summary>
+<summary><strong>docx_new</strong> — create Word documents from scratch (8 tools)</summary>
 
 ```json
 "docx_new": {
@@ -448,7 +448,7 @@ Read, search, and edit existing `.docx` files surgically without touching surrou
 | `diff_versions` | Compare two versions — shows added, changed, and removed paragraphs |
 | `read_receipt` | Full audit trail of all tool operations on a file |
 
-### Word — docx_tables (9 tools)
+### Word — docx_tables (10 tools)
 
 | Tool | Purpose |
 |---|---|
@@ -457,6 +457,7 @@ Read, search, and edit existing `.docx` files surgically without touching surrou
 | `search_table_cells` | Scan all cells for matching text — returns coordinates |
 | `read_table_row` | Single row from table N |
 | `set_cell` | Write text to table[N] row[R] col[C] at run level |
+| `set_cell_style` | Shade and format cells — `fill`, `color`, `bold`, `align`; `row`/`col` `-1` means all; `band_fill` stripes alternate body rows |
 | `add_row` | Append a row with data values to table N |
 | `delete_row` | Remove row R from table N |
 | `add_table` | Insert a new table at paragraph position N |
@@ -467,14 +468,14 @@ Read, search, and edit existing `.docx` files surgically without touching surrou
 | Tool | Purpose |
 |---|---|
 | `set_heading` | Apply Heading 1–6 style to paragraph N |
-| `set_font` | Set font name, size, bold, italic on paragraph N |
+| `set_font` | Set font name, size, bold, italic, `color` (hex), `line_spacing` and `space_after` on paragraph N |
 | `set_paragraph_style` | Apply any named style from the document gallery |
 | `add_image` | Insert image at paragraph N with width control |
 | `set_page_margins` | Set top/bottom/left/right margins in cm |
-| `add_header_footer` | Set header or footer text for all pages |
+| `add_header_footer` | Set header or footer for all pages — `font_size`, `color`, `align`, and `page_numbers` for a live PAGE field |
 | `export_pdf` | Export to PDF via LibreOffice or Word. `open_after=True` opens it automatically |
 
-### Word — docx_new (7 tools)
+### Word — docx_new (8 tools)
 
 Create new Word documents from scratch. Every tool accepts `open_after=True`.
 
@@ -483,6 +484,30 @@ Create new Word documents from scratch. Every tool accepts `open_after=True`.
 | `create_document` | Blank `.docx` — save and open |
 | `create_from_text` | Build from a `[{text, style}]` paragraph list |
 | `create_from_sections` | Structured doc from `[{heading, body}]` sections — Heading 1 title, Heading 2 sections |
+| `create_from_blocks` | Designed doc in one call from typed blocks — `heading`, `text`, `bullets`, `table`, `kpi`, `callout`, `rule`, `pagebreak` (see below) |
+
+#### `create_from_blocks` — a readable document in one call
+
+`create_from_sections` writes one Heading and one paragraph per section, which
+is a wall of text whenever the content has figures or lists in it. Blocks carry
+the structure instead. One `accent` colour drives the headings, the table header
+fill, the callout tint and the rules, so the document reads as one design.
+
+```json
+[
+  {"kind": "callout", "title": "Bottom line", "text": "Volume is 46% below the 2000 peak."},
+  {"kind": "heading", "text": "At a glance", "level": 2},
+  {"kind": "kpi",     "items": [{"value": "12.69 M", "label": "Total tons"}, {"value": "43.6k", "label": "Avg / month"}]},
+  {"kind": "table",   "header": ["Region", "Share"], "rows": [["US", "42.7%"], ["Asia", "40.8%"]], "widths": [6, 3]},
+  {"kind": "rule"},
+  {"kind": "bullets", "numbered": true, "items": ["Re-price for reality.", "De-risk carriers."]},
+  {"kind": "pagebreak"}
+]
+```
+
+Tables get a shaded header and banded body rows; a `kpi` row sets the figures
+across the page with small-caps labels. An unrecognised `kind` is reported in
+`skipped` rather than silently dropped.
 | `create_from_template` | Copy a template and fill `{{PLACEHOLDER}}` substitutions |
 | `create_letter` | Formatted business letter with sender, recipient, subject, body |
 | `merge_documents` | Combine multiple `.docx` files into one with optional page breaks |
@@ -822,7 +847,7 @@ still requires a bearer token even while it's publicly reachable.
 
 Run in CI against a container (the `e2e` job) and by hand against the
 deployment. `pytest` itself stays offline. Exercises a running HTTP endpoint: auth enforcement plus a real
-handwritten-prompt-style call for **all 96 tools** across all 11 sub-servers
+handwritten-prompt-style call for **all 98 tools** across all 11 sub-servers
 (docx-new/basic/tables/layout, xlsx-new/basic/formulas/charts,
 pptx-new/basic/design), producing real `.docx`/`.xlsx`/`.pptx` files from a
 real generated logo image and CSV, chaining real outputs (paragraph indices,

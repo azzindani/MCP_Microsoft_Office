@@ -107,6 +107,22 @@ def delete_table(file_path: str, table_index: int) -> dict:
     return engine.delete_table(file_path, table_index, open_after=True)
 
 
+@mcp.tool(annotations=EDITS)
+def set_cell_style(
+    file_path: str,
+    table_index: int,
+    fill: str = "",
+    bold: str = "",
+    color: str = "",
+    align: str = "",
+    row: int = -1,
+    col: int = -1,
+    band_fill: str = "",
+) -> dict:
+    """Shade/format cells. Hex colors. row/col -1 = all. band_fill stripes."""
+    return engine.set_cell_style(file_path, table_index, fill, bold, color, align, row, col, band_fill, open_after=True)
+
+
 # The bundled FastMCP ignores an argument a tool does not declare, so a wrong
 # name yields a plausible answer with the argument silently dropped. Refuse it,
 # and name the ones that would have worked.

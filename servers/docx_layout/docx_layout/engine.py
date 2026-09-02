@@ -149,12 +149,21 @@ def set_font(
     bold: str = "",
     italic: str = "",
     open_after: bool = False,
+    color: str = "",
+    line_spacing: float = 0,
+    space_after: float = 0,
 ) -> dict[str, Any]:
     """Set font attributes on all runs in paragraph N.
 
     bold and italic are "true", "false" or "" (leave unchanged). They were
     bools, which could only ever turn an attribute ON -- see
     shared/tristate.py for what that cost.
+
+    `color` and the two spacing arguments were missing, and between them they
+    are most of what "format this so it reads well" means: a navy heading, a
+    body set at 1.07 line spacing, air between sections. With no way to ask for
+    any of it through the tool, a model rebuilding an unreadable brief wrote
+    the whole document in python-docx instead.
     """
     progress: list[dict[str, Any]] = []
     backup: str | None = None
@@ -168,7 +177,16 @@ def set_font(
         except tristate.TriStateError as exc:
             return _error(str(exc), exc.hint, progress, None)
         from docx import Document  # type: ignore[import-untyped]
-        from docx.shared import Pt  # type: ignore[import-untyped]
+        from docx.shared import Pt, RGBColor  # type: ignore[import-untyped]
+
+        from shared import docx_style
+
+        try:
+            rgb = RGBColor.from_string(docx_style.parse_hex(color)) if color else None
+            if line_spacing < 0 or space_after < 0:
+                raise docx_style.DocxStyleError("line_spacing and space_after cannot be negative; use 0 to skip.")
+        except docx_style.DocxStyleError as exc:
+            return _error(str(exc), "Colours are 6-digit hex, e.g. '0B1D3A'.", progress, None)
 
         path = resolve_path(file_path)
         if not path.exists():
@@ -189,7 +207,10 @@ def set_font(
         para = doc.paragraphs[paragraph_index]
         changes: list[str] = []
 
-        for run in para.runs:
+        # `para.runs` misses runs nested inside a w:hyperlink, so a paragraph
+        # that is entirely a link reports zero runs, reads its text back fine,
+        # and absorbs every change below without complaint.
+        for run in docx_style.all_runs(para):
             if font_name:
                 run.font.name = font_name
             if font_size > 0:
@@ -201,11 +222,18 @@ def set_font(
                 run.bold = want_bold
             if want_italic is not None:
                 run.italic = want_italic
+            if rgb is not None:
+                run.font.color.rgb = rgb
+
+        spacing_changed = docx_style.set_spacing(para, line_spacing=line_spacing, space_after=space_after)
+        changes.extend(spacing_changed)
 
         if font_name:
             changes.append(f"name={font_name}")
         if font_size > 0:
             changes.append(f"size={font_size}pt")
+        if color:
+            changes.append(f"color=#{docx_style.parse_hex(color)}")
         if want_bold is not None:
             changes.append(f"bold={want_bold}")
         if want_italic is not None:
@@ -230,6 +258,9 @@ def set_font(
                 # The effect, not the argument.
                 "bold": tristate.echo(want_bold),
                 "italic": tristate.echo(want_italic),
+                "color": color,
+                "line_spacing": line_spacing,
+                "space_after": space_after,
             },
             f"✔ Font updated: {detail}",
             backup,
@@ -576,13 +607,27 @@ def add_header_footer(
     text: str,
     location: str = "header",
     open_after: bool = False,
+    font_size: float = 0,
+    color: str = "",
+    align: str = "",
+    page_numbers: bool = False,
 ) -> dict[str, Any]:
-    """Set header or footer text for all sections. location: header or footer."""
+    """Set header or footer text for all sections. location: header or footer.
+
+    Text alone gets you 11pt black on the left, which is not what a running
+    head looks like in any real document. `page_numbers` inserts a live PAGE
+    field: writing the number as text is the obvious alternative and is wrong
+    on every page but the first, which is why a model building a board brief
+    left a "page number field will be auto, placeholder" comment and shipped
+    the footer without one.
+    """
     progress: list[dict[str, Any]] = []
     backup: str | None = None
     path: Path | None = None
     try:
         from docx import Document  # type: ignore[import-untyped]
+
+        from shared import docx_style
 
         path = resolve_path(file_path)
         if not path.exists():
@@ -597,6 +642,20 @@ def add_header_footer(
                 progress,
             )
 
+        # Validated before the snapshot, so a bad colour never leaves a backup
+        # of a file nothing was going to change.
+        try:
+            if color:
+                docx_style.parse_hex(color)
+            if align:
+                if align.strip().lower() not in docx_style.ALIGNMENTS:
+                    raise docx_style.DocxStyleError(
+                        f"align='{align}' is not valid. Use one of: {', '.join(docx_style.ALIGNMENTS)}."
+                    )
+        except docx_style.DocxStyleError as exc:
+            progress.append(fail(str(exc)))
+            return _error(str(exc), "Colours are 6-digit hex, e.g. '0B1D3A'.", progress, None)
+
         doc = Document(str(path))
         section_count = len(doc.sections)
         progress.append(ok(f"Opened {path.name}", f"{section_count} section(s)"))
@@ -605,12 +664,22 @@ def add_header_footer(
         progress.append(ok("Snapshot saved", Path(backup).name))
 
         for section in doc.sections:
-            if location == "header":
-                section.header.paragraphs[0].text = text
-            else:
-                section.footer.paragraphs[0].text = text
+            part = section.header if location == "header" else section.footer
+            para = part.paragraphs[0]
+            # Clearing the runs rather than assigning .text keeps this from
+            # leaving a stale run behind when the new text is shorter.
+            for run in list(para.runs):
+                run._r.getparent().remove(run._r)
+            if text:
+                para.add_run(text)
+            if page_numbers:
+                docx_style.add_page_number(para, prefix="  " if text else "")
+            if align:
+                docx_style.set_alignment(para, align)
+            docx_style.style_runs(para, font_size=font_size, color=color)
 
-        progress.append(ok(f"Set {location} text on {section_count} section(s)", f'"{text[:60]}"'))
+        detail = f'"{text[:60]}"' + (" + page number field" if page_numbers else "")
+        progress.append(ok(f"Set {location} on {section_count} section(s)", detail))
 
         doc.save(str(path))
         if open_after:
@@ -621,7 +690,14 @@ def add_header_footer(
             str(path),
             "add_header_footer",
             "docx_layout",
-            {"text": text, "location": location},
+            {
+                "text": text,
+                "location": location,
+                "font_size": font_size,
+                "color": color,
+                "align": align,
+                "page_numbers": page_numbers,
+            },
             f"✔ {location.capitalize()} set: {text[:60]}",
             backup,
             True,
@@ -632,6 +708,7 @@ def add_header_footer(
             "op": "add_header_footer",
             "location": location,
             "text": text,
+            "page_numbers": page_numbers,
             "sections_updated": section_count,
             "backup": backup,
             "progress": progress,

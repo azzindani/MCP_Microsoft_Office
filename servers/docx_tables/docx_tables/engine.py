@@ -476,6 +476,153 @@ def set_cell(
         return _error(str(e), hint_for_error(e, path), progress, backup)
 
 
+def set_cell_style(
+    file_path: str,
+    table_index: int,
+    fill: str = "",
+    bold: str = "",
+    color: str = "",
+    align: str = "",
+    row: int = -1,
+    col: int = -1,
+    band_fill: str = "",
+    open_after: bool = False,
+) -> dict[str, Any]:
+    """Shade and format table cells. row/col -1 means every row/column.
+
+    Nothing in this server could change how a cell *looks* -- only what it
+    said. A shaded header row and banded body rows are what separate a table a
+    director scans from a grid of numbers, and building one needs the w:shd
+    element python-docx does not expose, so the work left the tool surface
+    entirely: asked to make an executive brief readable, a model installed
+    python-docx and wrote the table styling by hand.
+
+    Addressing is by range, not by cell, because the alternative is one call
+    per cell -- a 6x4 table would be 24 writes, 24 snapshots and 24 receipts to
+    apply two colours. `row=0` with `fill` shades the header; `band_fill` on
+    its own stripes alternate body rows.
+    """
+    progress: list[dict[str, Any]] = []
+    backup: str | None = None
+    path: Path | None = None
+    try:
+        from docx import Document  # type: ignore[import-untyped]
+
+        from shared.docx_style import DocxStyleError, set_alignment, set_cell_fill, style_runs
+
+        path = resolve_path(file_path)
+        if not path.exists():
+            return _not_found(path, progress)
+        if path.suffix.lower() != ".docx":
+            return _wrong_type(path, ".docx", progress)
+
+        if not any((fill, bold, color, align, band_fill)):
+            return _error(
+                "No style given: pass at least one of fill, bold, color, align, band_fill",
+                "For a shaded header row: table_index=0, row=0, fill='0B1D3A', color='FFFFFF', bold='true'.",
+                progress,
+            )
+
+        doc = Document(str(path))
+        tables = doc.tables
+        progress.append(ok(f"Opened {path.name}", f"{len(tables)} tables"))
+
+        if table_index < 0 or table_index >= len(tables):
+            progress.append(fail(f"Table index {table_index} out of range"))
+            return _error(
+                f"Table index {table_index} out of range {index_range(len(tables), 'tables')}",
+                "Add one with add_table() first." if not tables else "Use list_tables to see available tables.",
+                progress,
+            )
+
+        tbl = tables[table_index]
+        n_rows, n_cols = _table_dims(tbl)
+        if row >= n_rows:
+            return _error(
+                f"Row index {row} out of range {index_range(n_rows, 'rows')}",
+                "Use -1 for every row, or read_table to see the structure.",
+                progress,
+            )
+        if col >= n_cols:
+            return _error(
+                f"Col index {col} out of range {index_range(n_cols, 'columns')}",
+                "Use -1 for every column, or read_table to see the structure.",
+                progress,
+            )
+
+        backup = snapshot(str(path))
+        progress.append(ok("Snapshot saved", Path(backup).name))
+
+        target_rows = range(n_rows) if row < 0 else [row]
+        target_cols = range(n_cols) if col < 0 else [col]
+
+        try:
+            styled = 0
+            for r in target_rows:
+                for c in target_cols:
+                    cell = tbl.rows[r].cells[c]
+                    if fill:
+                        set_cell_fill(cell, fill)
+                    for paragraph in cell.paragraphs:
+                        if align:
+                            set_alignment(paragraph, align)
+                        if bold or color:
+                            style_runs(paragraph, bold=bold, color=color)
+                    styled += 1
+
+            banded = 0
+            if band_fill:
+                # Stripe the body, never the header: banding exists to make
+                # long rows trackable, and a striped header row reads as data.
+                first_body = 1 if n_rows > 1 else 0
+                for r in range(first_body, n_rows):
+                    if (r - first_body) % 2 == 1:
+                        for c in range(n_cols):
+                            set_cell_fill(tbl.rows[r].cells[c], band_fill)
+                        banded += 1
+        except DocxStyleError as exc:
+            return _error(str(exc), "Colours are 6-digit hex, e.g. '0B1D3A'.", progress, backup)
+
+        doc.save(str(path))
+        if open_after:
+            open_file(path)
+        progress.append(ok(f"Styled {styled} cell(s)", f"{banded} banded row(s)" if banded else ""))
+        progress.append(notify_reload(str(path), "docx"))
+
+        append_receipt(
+            str(path),
+            tool="set_cell_style",
+            server="docx-tables",
+            args={"table_index": table_index, "row": row, "col": col, "fill": fill, "band_fill": band_fill},
+            result=f"✔ Styled {styled} cell(s) in table[{table_index}]",
+            backup=backup,
+            success=True,
+        )
+
+        return {
+            "success": True,
+            "op": "set_cell_style",
+            "table_index": table_index,
+            "cells_styled": styled,
+            "rows_banded": banded,
+            "backup": backup,
+            "progress": progress,
+            "token_estimate": len(str(progress)) // 4,
+        }
+    except Exception as e:
+        progress.append(fail(str(e)))
+        append_receipt(
+            file_path,
+            tool="set_cell_style",
+            server="docx-tables",
+            args={"table_index": table_index, "row": row, "col": col},
+            result=f"✘ {e}",
+            backup=backup,
+            success=False,
+        )
+        return _error(str(e), hint_for_error(e, path), progress, backup)
+
+
 def add_row(file_path: str, table_index: int, data: list[str], open_after: bool = False) -> dict[str, Any]:
     """Append a row to table N. data is a list of cell strings."""
     progress: list[dict[str, Any]] = []

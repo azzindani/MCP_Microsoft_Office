@@ -77,6 +77,18 @@ def create_from_sections(
 
 
 @mcp.tool(annotations=CREATES)
+def create_from_blocks(
+    title: str,
+    blocks: list[dict],
+    output_path: str = "",
+    accent: str = "",
+    return_content: bool = False,
+) -> dict:
+    """Create .docx from blocks: heading text bullets table kpi callout rule."""
+    return engine.create_from_blocks(output_path, title, blocks, accent, open_after=True, return_content=return_content)
+
+
+@mcp.tool(annotations=CREATES)
 def create_from_template(
     template_path: str,
     substitutions: dict = {},  # noqa: B006 -- read-only; engine only iterates it

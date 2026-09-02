@@ -99,8 +99,13 @@ call() {
 extract() {
   echo "$1" | grep -oE "\\\\?\"$2\\\\?\"[[:space:]]*:[[:space:]]*\\\\?\"[^\\\\\"]*" | head -1 | sed -E 's/.*"([^"]*)$/\1/'
 }
+# A tool's document arrives as the JSON *string* result.content[0].text, so its
+# keys come through escaped: \"block_count\": 4. This pattern matched only the
+# unescaped shape, so it returned nothing on every real response. It had no
+# callers when that was found, which is why nothing had noticed -- the same
+# defect the escaped-key rule in CLAUDE.md was written for.
 extract_num() {
-  echo "$1" | grep -oE "\"$2\"[[:space:]]*:[[:space:]]*[0-9]+" | head -1 | grep -oE '[0-9]+$'
+  echo "$1" | grep -oE "\\\\?\"$2\\\\?\"[[:space:]]*:[[:space:]]*[0-9]+" | head -1 | grep -oE '[0-9]+$'
 }
 
 N=10
@@ -114,10 +119,17 @@ run() {
 }
 
 echo
-echo "===== docx-new (7 tools) ====="
+echo "===== docx-new (8 tools) ====="
 run docx-new create_document "{\"output_path\":\"$D/blank.docx\"}" "create a blank document"
 run docx-new create_from_text "{\"output_path\":\"$DOCX\",\"paragraphs\":[{\"text\":\"Quarterly Report\",\"style\":\"Title\"},{\"text\":\"Revenue grew across all regions this quarter.\",\"style\":\"Normal\"},{\"text\":\"APAC led growth.\",\"style\":\"Normal\"}]}" "create the main report doc"
 run docx-new create_from_sections "{\"title\":\"Report Sections\",\"sections\":[{\"heading\":\"Summary\",\"body\":\"Overall performance was strong.\"},{\"heading\":\"Details\",\"body\":\"See appendix for details.\"}],\"output_path\":\"$D/sections.docx\"}" "create a doc with sections"
+run docx-new create_from_blocks "{\"title\":\"Executive Brief\",\"blocks\":[{\"kind\":\"callout\",\"title\":\"Bottom line\",\"text\":\"Revenue grew in every region.\"},{\"kind\":\"kpi\",\"items\":[{\"value\":\"1450.5\",\"label\":\"APAC\"}]},{\"kind\":\"table\",\"header\":[\"Region\",\"Revenue\"],\"rows\":[[\"APAC\",\"1450.5\"],[\"EMEA\",\"1120.2\"]]},{\"kind\":\"bullets\",\"items\":[\"Hold pricing.\",\"Watch EMEA.\"]}],\"accent\":\"0B1D3A\",\"output_path\":\"$D/blocks.docx\"}" "build a director-readable brief in one call"
+BLOCKS_N=$(extract_num "$LAST_R" block_count || true)
+case "$BLOCKS_N" in
+  4) pass "create_from_blocks wrote all 4 blocks" ;;
+  "") fail "create_from_blocks returned no block_count" ;;
+  *) fail "create_from_blocks wrote $BLOCKS_N blocks, expected 4" ;;
+esac
 run docx-new create_letter "{\"from_name\":\"Ops Team\",\"to_name\":\"Finance Team\",\"subject\":\"Q1 Summary\",\"body\":\"Please find the summary attached.\",\"output_path\":\"$D/letter.docx\"}" "create a letter"
 run docx-new merge_documents "{\"file_paths\":[\"$DOCX\",\"$D/sections.docx\"],\"output_path\":\"$D/merged.docx\"}" "merge the report and sections docs"
 run docx-new create_from_text "{\"output_path\":\"$DOCX_TPL\",\"paragraphs\":[{\"text\":\"Dear {{name}},\",\"style\":\"Normal\"},{\"text\":\"Your balance is {{balance}}.\",\"style\":\"Normal\"}]}" "create a template doc with placeholders"
@@ -150,7 +162,7 @@ else
 fi
 
 echo
-echo "===== docx-tables (9 tools) ====="
+echo "===== docx-tables (10 tools) ====="
 run docx-tables add_table "{\"file_path\":\"$DOCX\",\"after_paragraph_index\":0,\"rows\":2,\"cols\":2,\"data\":[[\"Region\",\"Revenue\"],[\"APAC\",\"1450.5\"]]}" "add a 2x2 table after paragraph 0"
 run docx-tables list_tables "{\"file_path\":\"$DOCX\"}" "list the tables in the doc"
 run docx-tables read_table "{\"file_path\":\"$DOCX\",\"table_index\":0}" "read table 0"
@@ -159,16 +171,20 @@ run docx-tables search_table_cells "{\"file_path\":\"$DOCX\",\"query\":\"APAC\"}
 run docx-tables set_cell "{\"file_path\":\"$DOCX\",\"table_index\":0,\"row\":1,\"col\":1,\"text\":\"1500.0\"}" "update the revenue cell"
 run docx-tables add_row "{\"file_path\":\"$DOCX\",\"table_index\":0,\"data\":[\"EMEA\",\"1120.2\"]}" "add an EMEA row to the table"
 run docx-tables delete_row "{\"file_path\":\"$DOCX\",\"table_index\":0,\"row\":2}" "delete the row I just added"
+run docx-tables set_cell_style "{\"file_path\":\"$DOCX\",\"table_index\":0,\"row\":0,\"fill\":\"0B1D3A\",\"color\":\"FFFFFF\",\"bold\":\"true\"}" "shade the table header navy with white text"
+run docx-tables set_cell_style "{\"file_path\":\"$DOCX\",\"table_index\":0,\"band_fill\":\"EEEEEE\"}" "stripe the body rows"
+BANDED_N=$(extract_num "$LAST_R" rows_banded || true)
+[ -n "$BANDED_N" ] || fail "set_cell_style returned no rows_banded"
 run docx-tables delete_table "{\"file_path\":\"$DOCX\",\"table_index\":0}" "delete the table entirely"
 
 echo
 echo "===== docx-layout (7 tools) ====="
 run docx-layout set_heading "{\"file_path\":\"$DOCX\",\"paragraph_index\":0,\"level\":1}" "make paragraph 0 a heading"
-run docx-layout set_font "{\"file_path\":\"$DOCX\",\"paragraph_index\":1,\"font_name\":\"Arial\",\"font_size\":12,\"bold\":\"true\"}" "bold paragraph 1 in Arial 12"
+run docx-layout set_font "{\"file_path\":\"$DOCX\",\"paragraph_index\":1,\"font_name\":\"Arial\",\"font_size\":12,\"bold\":\"true\",\"color\":\"0B1D3A\",\"line_spacing\":1.15,\"space_after\":6}" "bold navy Arial 12 with a little air under it"
 run docx-layout set_paragraph_style "{\"file_path\":\"$DOCX\",\"paragraph_index\":1,\"style_name\":\"Body Text\"}" "set paragraph 1 to Body Text style"
 run docx-layout add_image "{\"file_path\":\"$DOCX\",\"paragraph_index\":0,\"image_path\":\"$IMG\",\"width_inches\":1.0}" "insert the logo image after paragraph 0"
 run docx-layout set_page_margins "{\"file_path\":\"$DOCX\",\"top\":1.0,\"bottom\":1.0,\"left\":1.0,\"right\":1.0}" "set 1-inch margins"
-run docx-layout add_header_footer "{\"file_path\":\"$DOCX\",\"text\":\"Confidential\",\"location\":\"footer\"}" "add a confidential footer"
+run docx-layout add_header_footer "{\"file_path\":\"$DOCX\",\"text\":\"Confidential\",\"location\":\"footer\",\"font_size\":8,\"color\":\"595959\",\"align\":\"center\",\"page_numbers\":true}" "add a small grey centred footer that numbers its pages"
 run docx-layout export_pdf "{\"file_path\":\"$DOCX\",\"output_path\":\"$D/report.pdf\"}" "export the report to PDF"
 
 echo

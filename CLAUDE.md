@@ -112,9 +112,9 @@ MCP_Microsoft_Office/
 │   │   ├── helpers.py              # internal helpers for engine.py
 │   │   └── pyproject.toml
 │   │
-│   ├── docx_tables/                # 9 tools — table CRUD
+│   ├── docx_tables/                # 10 tools — table CRUD, cell shading
 │   ├── docx_layout/                # 7 tools — styles, fonts, margins, PDF export
-│   ├── docx_new/                   # 7 tools — create, template, batch, merge
+│   ├── docx_new/                   # 8 tools — create, blocks, template, batch, merge
 │   ├── xlsx_basic/                 # 14 tools — read, cell CRUD, sheets, sort, dedup
 │   │   └── helpers.py              # (has helpers.py alongside engine.py)
 │   ├── xlsx_formulas/              # 9 tools — formulas, fill-down, auto-sum
@@ -432,9 +432,9 @@ Rules:
 | Server | Tools | Description |
 |---|---|---|
 | `docx_basic` | 15 | read, search, edit paragraphs, history, diff, receipt |
-| `docx_tables` | 9 | table CRUD |
+| `docx_tables` | 10 | table CRUD + cell shading |
 | `docx_layout` | 7 | styles, fonts, margins, PDF export |
-| `docx_new` | 7 | create, template, batch, merge |
+| `docx_new` | 8 | create, blocks, template, batch, merge |
 | `xlsx_basic` | 14 | read, cell CRUD, sheets, sort, dedup |
 | `xlsx_formulas` | 9 | formulas, fill-down, auto-sum, validation |
 | `xlsx_charts` | 5 | charts, pivot tables, cell styles |
@@ -442,7 +442,7 @@ Rules:
 | `pptx_basic` | 10 | read, edit, slides, diff |
 | `pptx_design` | 8 | background, fonts, global changes, PDF export |
 | `pptx_new` | 6 | create, agenda, doc→deck |
-| **Total** | **96** | across 11 servers |
+| **Total** | **98** | across 11 servers |
 
 ### Tool count constraint
 
@@ -1260,4 +1260,4 @@ Rules for this module:
 ---
 
 *Last updated: 2026-04-11*
-*Covers: office-mcp — 11 servers, 96 tools, Python 3.14+*
+*Covers: office-mcp — 11 servers, 98 tools, Python 3.14+*

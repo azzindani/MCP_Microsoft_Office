@@ -61,9 +61,23 @@ def set_font(
     font_size: float = 0,
     bold: str = "",
     italic: str = "",
+    color: str = "",
+    line_spacing: float = 0,
+    space_after: float = 0,
 ) -> dict:
-    """Set font on paragraph N. bold/italic: "true", "false" or ""."""
-    return engine.set_font(file_path, paragraph_index, font_name, font_size, bold, italic, open_after=True)
+    """Font on paragraph N: name size bold italic color(hex) spacing."""
+    return engine.set_font(
+        file_path,
+        paragraph_index,
+        font_name,
+        font_size,
+        bold,
+        italic,
+        open_after=True,
+        color=color,
+        line_spacing=line_spacing,
+        space_after=space_after,
+    )
 
 
 @mcp.tool(annotations=EDITS)
@@ -101,9 +115,22 @@ def add_header_footer(
     file_path: str,
     text: str,
     location: str = "header",
+    font_size: float = 0,
+    color: str = "",
+    align: str = "",
+    page_numbers: bool = False,
 ) -> dict:
-    """Set header or footer text. location: 'header' or 'footer'."""
-    return engine.add_header_footer(file_path, text, location, open_after=True)
+    """Set header/footer. location: header footer. page_numbers adds PAGE."""
+    return engine.add_header_footer(
+        file_path,
+        text,
+        location,
+        open_after=True,
+        font_size=font_size,
+        color=color,
+        align=align,
+        page_numbers=page_numbers,
+    )
 
 
 @mcp.tool(annotations=CREATES)

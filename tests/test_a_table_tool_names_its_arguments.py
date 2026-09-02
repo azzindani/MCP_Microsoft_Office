@@ -53,6 +53,7 @@ class TestEveryTableToolNamesItsSelectors:
             ("read_table_row", ["table_index", "row"]),
             ("delete_row", ["table_index", "row"]),
             ("set_cell", ["table_index", "row", "col"]),
+            ("set_cell_style", ["row", "col"]),
             ("read_table", ["table_index"]),
             ("delete_table", ["table_index"]),
             ("add_row", ["table_index"]),
@@ -64,7 +65,7 @@ class TestEveryTableToolNamesItsSelectors:
         for name in expected:
             assert name in doc, f"{tool}: {name!r} not in {doc!r}"
 
-    @pytest.mark.parametrize("tool", ["read_table_row", "delete_row", "set_cell", "read_table"])
+    @pytest.mark.parametrize("tool", ["read_table_row", "delete_row", "set_cell", "read_table", "set_cell_style"])
     def test_every_name_it_mentions_is_a_real_parameter(self, tool: str):
         """A docstring naming an argument the tool does not take is worse than
         one naming none."""
@@ -91,6 +92,7 @@ class TestEveryTableToolNamesItsSelectors:
             "read_table": "Return",
             "list_tables": "List",
             "search_table_cells": "Scan",
+            "set_cell_style": "Shade",
         }
         for fn in tools_in(TABLES):
             doc = ast.get_docstring(fn) or ""
@@ -112,10 +114,10 @@ class TestTheClashIsConfinedToThisServer:
                     offenders.append(f"{server.name}.{fn.name}({', '.join(args)})")
         assert not offenders, offenders
 
-    def test_the_three_known_ones_are_still_the_only_ones_here(self):
+    def test_the_known_ones_are_still_the_only_ones_here(self):
         mixed = [
             fn.name
             for fn in tools_in(TABLES)
             if any(a.endswith("_index") for a in arg_names(fn)) and set(arg_names(fn)) & BARE_SELECTORS
         ]
-        assert sorted(mixed) == ["delete_row", "read_table_row", "set_cell"], mixed
+        assert sorted(mixed) == ["delete_row", "read_table_row", "set_cell", "set_cell_style"], mixed
