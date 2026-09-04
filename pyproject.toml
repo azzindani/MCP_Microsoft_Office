@@ -33,6 +33,17 @@ line-length = 120
 target-version = "py314"
 exclude = ["*.ipynb"]
 
+[tool.ruff.format]
+# Lint shared/, never rewrite it. These modules are meant to stay byte-identical
+# with their siblings in the other repos, and the formatter forks them silently.
+# MCP_File_System lints at line-length 100 and the rest at 120, which is how
+# shared/oauth_bridge.py ended up 77 lines different from its twin by pure
+# reflow, with nothing in the diff to say no logic had changed -- and how
+# shared/counts.py forked on a single f-string within a day of being written.
+# CI caught the second one: `ruff format --check` wanted to rewrite the file
+# whose whole purpose is being the one copy.
+exclude = ["shared/**"]
+
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP"]
 ignore = ["E501"]

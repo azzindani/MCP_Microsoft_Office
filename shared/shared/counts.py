@@ -60,8 +60,7 @@ def counted(returned: int, total: int, *, exact: bool = True) -> dict[str, Any]:
         # different populations -- the bug this module is here to make loud,
         # so it is not quietly clamped.
         raise ValueError(
-            f"returned ({returned}) exceeds total ({total}); "
-            "the two counts were taken over different sets"
+            f"returned ({returned}) exceeds total ({total}); the two counts were taken over different sets"
         )
     out: dict[str, Any] = {
         "returned": returned,
