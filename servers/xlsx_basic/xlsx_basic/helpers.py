@@ -11,6 +11,7 @@ from typing import Any
 import openpyxl
 from openpyxl.utils import column_index_from_string, get_column_letter
 
+from shared.counts import counted
 from shared.file_utils import drop_snapshot_if_unwritten, hint_for_error, resolve_path, scrub_repr, sheet_names_hint
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_max_search_results, open_file
@@ -712,7 +713,7 @@ def find_duplicates(
             "duplicate_count": total_duplicate_values,
             "duplicates_returned": len(duplicates),
             "duplicates": duplicates,
-            "truncated": truncated,
+            **counted(len(duplicates), total_duplicate_values),
             "rows_truncated": rows_truncated,
             "max_duplicates_returned": max_values,
             "max_rows_per_value": max_rows,

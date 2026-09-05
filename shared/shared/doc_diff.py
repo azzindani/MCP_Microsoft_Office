@@ -3,6 +3,8 @@
 import difflib
 from typing import Any
 
+from shared.counts import counted
+
 from .file_utils import scrub_repr
 
 MAX_CHANGED_CELLS = 500
@@ -168,8 +170,12 @@ def diff_xlsx(path_a: str, path_b: str, sheet_name: str | None = None) -> dict[s
             if truncated:
                 break
 
+        # Present on every diff, not only the cut ones: a caller could not tell
+        # a clean comparison from one this stopped short of finishing. The walk
+        # halts at MAX_CHANGED_CELLS, so when it fills, `total` is a floor and
+        # `counted()` marks it as one rather than implying an exact count.
+        result.update(counted(total_changes, total_changes, exact=not truncated))
         if truncated:
-            result["truncated"] = True
             result["total_changes_approx"] = f">{MAX_CHANGED_CELLS}"
 
         result["summary"] = _summarise_xlsx_diff(result)

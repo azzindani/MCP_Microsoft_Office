@@ -11,6 +11,7 @@ from openpyxl.utils import get_column_letter, range_boundaries
 from openpyxl.workbook.defined_name import DefinedName
 from openpyxl.worksheet.datavalidation import DataValidation
 
+from shared.counts import counted
 from shared.file_utils import drop_snapshot_if_unwritten, hint_for_error, resolve_path, scrub_repr, sheet_names_hint
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_max_cells, open_file
@@ -984,7 +985,7 @@ def convert_to_values(
             "formulas_converted": converted,
             "skipped_no_cached_value": skipped_shown,
             "skipped_count": len(skipped),
-            "truncated": len(skipped) > cap,
+            **counted(len(skipped_shown), len(skipped)),
             "backup": backup,
             "progress": progress,
         }

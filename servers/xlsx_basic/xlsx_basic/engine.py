@@ -10,6 +10,7 @@ from typing import Any
 import openpyxl
 from openpyxl.utils import column_index_from_string, get_column_letter, range_boundaries
 
+from shared.counts import counted
 from shared.file_utils import drop_snapshot_if_unwritten, hint_for_error, resolve_path, scrub_repr, sheet_names_hint
 from shared.live_edit import notify_reload
 from shared.platform_utils import get_max_cells, get_max_search_results, open_file
@@ -449,14 +450,20 @@ def search_cells(
                 total_scanned += 1
                 if cell.value is not None and query_lower in str(cell.value).lower():
                     matches.append({"cell": _coord(row_idx, col_idx), "value": cell.value})
-                    if len(matches) >= cap:
+                    if len(matches) > cap:
                         break
-            if len(matches) >= cap:
+            if len(matches) > cap:
                 break
 
         wb.close()
 
-        truncated = len(matches) >= cap
+        # One past the cap. `len(matches) >= cap` cannot distinguish "exactly
+        # cap matches exist" from "more exist", so a sheet with precisely that
+        # many came back truncated -- the third copy of this mistake in this
+        # repo, after docx_basic and docx_tables.
+        truncated = len(matches) > cap
+        found = len(matches)
+        matches = matches[:cap]
         progress.append(
             ok(
                 f"Found {len(matches)} match(es) for '{query}'",
@@ -468,8 +475,11 @@ def search_cells(
             "sheet": sheet_name,
             "query": query,
             "matches": matches,
+            # The cells read, which the loop stops early, so it is named for
+            # what it measures rather than for the size of the sheet. It is not
+            # the denominator for the matches; that one is below.
             "total_cells_scanned": total_scanned,
-            "truncated": truncated,
+            **counted(len(matches), found, exact=not truncated),
             "progress": progress,
         }
         if not matches:

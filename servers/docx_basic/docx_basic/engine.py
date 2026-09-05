@@ -11,6 +11,7 @@ from shared.address_resolver import (
     build_docx_index,
     fetch_section_content,
 )
+from shared.counts import counted
 from shared.file_utils import drop_snapshot_if_unwritten, hint_for_error, resolve_path, scrub_repr
 from shared.handover import make_context, make_handover
 from shared.live_edit import notify_reload
@@ -268,6 +269,11 @@ def read_document(file_path: str) -> dict[str, Any]:
             "file": str(path),
             "paragraph_count": total,
             "paragraphs": paragraphs,
+            # Present on every response, not only the cut ones. `truncated` used
+            # to be set inside the `if truncated:` block below, so a complete
+            # answer carried no flag at all and a caller could not tell "nothing
+            # was cut" from "this tool does not say".
+            **counted(len(paragraphs), total),
             "hint": "Call search_paragraphs() or get_document_index() to locate text before editing.",
             "context": make_context(
                 op="read_document",
@@ -303,7 +309,6 @@ def read_document(file_path: str) -> dict[str, Any]:
         }
 
         if truncated:
-            result["truncated"] = True
             result["truncated_at"] = max_p
             result["warning"] = "Large document. Use get_document_index + fetch_section for targeted access."
             progress.append(
@@ -404,12 +409,21 @@ def read_paragraph_range(file_path: str, start_index: int, end_index: int) -> di
         ]
         progress.append(ok(f"Read paragraphs {start}-{end}", f"{len(result_paras)} paragraphs"))
 
+        # `truncated: False` was a literal here -- a field that could never be
+        # anything else, which tells a caller nothing and cannot go wrong in the
+        # only direction that matters. Derived now, from a window bounded by
+        # where the document ends: asking for paragraphs 0-1000 of a 10
+        # paragraph file returns all 10 and withholds nothing, so it is not
+        # truncation. `total_paragraphs` says how big the document actually is,
+        # which the response never mentioned.
+        eligible = max(0, min(end_index, total - 1) - start + 1)
         return {
             "success": True,
             "start_index": start,
             "end_index": end,
             "paragraphs": result_paras,
-            "truncated": False,
+            "total_paragraphs": total,
+            **counted(len(result_paras), eligible),
             "progress": progress,
             "token_estimate": len(str(result_paras)) // 4,
         }
@@ -442,13 +456,24 @@ def search_paragraphs(file_path: str, query: str, max_results: int = 10) -> dict
         paras = doc.paragraphs
         total = len(paras)
 
+        # Collect one past the cap, then report what was actually found. The old
+        # loop stopped *at* max_results and set the flag from
+        # `len(matches) >= max_results`, which cannot tell "exactly this many
+        # exist" from "more exist": a document with precisely max_results
+        # matches came back truncated, sending a caller to page through nothing.
+        # MCP_File_System hit this in fs_query and fixed it the same way --
+        # compare counts, never infer from having reached a limit.
         matches: list[dict[str, Any]] = []
         q_lower = query.lower()
         for i, p in enumerate(paras):
             if q_lower in p.text.lower():
                 matches.append({"index": i, "text": p.text, "style": p.style.name})  # type: ignore[reportOptionalMemberAccess]
-                if len(matches) >= max_results:
+                if len(matches) > max_results:
                     break
+
+        truncated = len(matches) > max_results
+        found = len(matches)
+        matches = matches[:max_results]
 
         progress.append(
             ok(
@@ -461,8 +486,12 @@ def search_paragraphs(file_path: str, query: str, max_results: int = 10) -> dict
             "success": True,
             "query": query,
             "matches": matches,
+            # This was the only count in the response, and it is the scan
+            # denominator rather than the match denominator -- so a caller could
+            # not learn how many matches existed, only how many paragraphs were
+            # read. When the cap bit, the match total is a floor and says so.
             "total_paragraphs_scanned": total,
-            "truncated": len(matches) >= max_results,
+            **counted(len(matches), found, exact=not truncated),
             "progress": progress,
             "token_estimate": len(str(matches)) // 4,
         }

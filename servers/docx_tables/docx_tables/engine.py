@@ -3,6 +3,7 @@
 from pathlib import Path
 from typing import Any
 
+from shared.counts import counted
 from shared.file_utils import hint_for_error, hint_for_message, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import open_file
@@ -298,12 +299,20 @@ def search_table_cells(file_path: str, query: str, max_results: int = 10) -> dic
                                 "text": cell.text,
                             }
                         )
-                        if len(matches) >= max_results:
+                        if len(matches) > max_results:
                             break
-                if len(matches) >= max_results:
+                if len(matches) > max_results:
                     break
-            if len(matches) >= max_results:
+            if len(matches) > max_results:
                 break
+
+        # One past the cap, so the flag can tell "exactly this many exist" from
+        # "more exist". `len(matches) >= max_results` cannot: a document with
+        # precisely max_results matching cells reported truncated and sent the
+        # caller paging through nothing.
+        truncated = len(matches) > max_results
+        found = len(matches)
+        matches = matches[:max_results]
 
         progress.append(
             ok(
@@ -315,9 +324,11 @@ def search_table_cells(file_path: str, query: str, max_results: int = 10) -> dic
         return {
             "success": True,
             "query": query,
-            "matches": matches,
+            # Note this stops early too, so it counts the cells read rather than
+            # the cells in the document. It is named for what it measures.
             "total_cells_scanned": cells_scanned,
-            "truncated": len(matches) >= max_results,
+            "matches": matches,
+            **counted(len(matches), found, exact=not truncated),
             "progress": progress,
             "token_estimate": len(str(matches)) // 4,
         }
