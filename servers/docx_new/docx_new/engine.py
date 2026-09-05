@@ -210,6 +210,12 @@ def create_from_text(
         )
 
 
+# Where an image block, or a section attaching one, may name its file. One
+# tuple so `create_from_sections` and the `image` block kind cannot disagree
+# about which key a caller is allowed to use.
+IMAGE_SOURCE_KEYS: tuple[str, ...] = ("path", "src", "source", "url", "file", "file_path", "image")
+
+
 def create_from_sections(
     output_path: str,
     title: str,
@@ -217,7 +223,14 @@ def create_from_sections(
     open_after: bool = True,
     return_content: bool = False,
 ) -> dict[str, Any]:
-    """Create a structured document from a title and list of {heading, body} sections."""
+    """Create a structured document from a title and {heading, body, image} sections.
+
+    `image` (or `path` / `url` / `src`) attaches a picture under the section's
+    body, from a local path or an http(s) URL. A section carrying only an image
+    is a figure, not an empty section. An image that cannot be placed comes back
+    as a warning naming the reason -- an HTML chart needs converting to PNG
+    first -- rather than as a document quietly missing a picture.
+    """
     progress: list[dict[str, Any]] = []
     try:
         from docx import Document  # type: ignore[import-untyped]
@@ -244,11 +257,29 @@ def create_from_sections(
         # the document came back a level flatter than it was asked for with
         # nothing said about it. A section carrying neither is a typo, not a
         # request for a blank one.
+        # "create_from_sections (docx) cannot embed images/charts. The board
+        # paper references charts that live in separate HTML files. Room for
+        # improvement: an `image` block type accepting a `data/` path or URL."
+        #
+        # `create_from_blocks` answered that with an `image` block kind, and this
+        # tool stayed {heading, body}. But attaching a chart to a section is an
+        # ordinary request, and a caller who reaches for the simpler tool and
+        # passes `image` had the key silently dropped -- the exact shape of
+        # failure this fleet keeps closing. It shares `_add_image` with the block
+        # kind, so the two cannot diverge on what counts as a usable image, and
+        # a refusal comes back as a warning naming the way out rather than as a
+        # missing picture nobody mentioned.
+        from shared import docx_style
+
+        hue = _DEFAULT_ACCENT
         section_count = 0
+        images_placed = 0
         for i, sec in enumerate(sections):
             heading = entry_value(sec, ENTRY_HEADING_KEYS)
             body = entry_value(sec, ENTRY_TEXT_KEYS) if isinstance(sec, dict) else str(sec)
-            if not heading and not body:
+            image_src = entry_value(sec, IMAGE_SOURCE_KEYS) if isinstance(sec, dict) else ""
+            # A section carrying only a chart is a figure, not an empty section.
+            if not heading and not body and not image_src:
                 progress.append(
                     warn(
                         f"Section {i} written empty",
@@ -259,10 +290,19 @@ def create_from_sections(
                 doc.add_paragraph(heading, style="Heading 2")
             if body:
                 doc.add_paragraph(body, style="Normal")
+            if image_src:
+                note = _add_image(doc, sec, docx_style, hue)
+                if note:
+                    progress.append(warn(f"Section {i} image not placed", note))
+                else:
+                    images_placed += 1
             section_count += 1
 
         doc.save(str(path))
-        progress.append(ok(f"Saved {path.name}", f"{section_count} sections written"))
+        detail = f"{section_count} sections written"
+        if images_placed:
+            detail += f", {images_placed} image(s) placed"
+        progress.append(ok(f"Saved {path.name}", detail))
 
         _open_if_requested(path, open_after, progress)
 
@@ -272,6 +312,7 @@ def create_from_sections(
             "output": str(path),
             "output_name": path.name,
             "section_count": section_count,
+            "images_placed": images_placed,
             "progress": progress,
         }
         embed_content(result, path, return_content)
@@ -429,7 +470,7 @@ def _add_image(doc: Any, block: dict[str, Any], docx_style: Any, hue: str) -> st
     from docx.shared import Inches  # type: ignore[import-untyped]
 
     source = ""
-    for key in ("path", "src", "source", "url", "file", "file_path", "image"):
+    for key in IMAGE_SOURCE_KEYS:
         value = block.get(key)
         if isinstance(value, str) and value.strip():
             source = value.strip()

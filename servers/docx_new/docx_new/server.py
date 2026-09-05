@@ -72,7 +72,7 @@ def create_from_sections(
     output_path: str = "",
     return_content: bool = False,
 ) -> dict:
-    """Create structured .docx from title + [{heading, body}] sections."""
+    """Create structured .docx from [{heading, body, image}] sections."""
     return engine.create_from_sections(output_path, title, sections, open_after=True, return_content=return_content)
 
 
