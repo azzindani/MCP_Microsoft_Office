@@ -135,7 +135,12 @@ esac
 # every unit test and be unreachable because the serving wrapper never forwarded
 # the argument; only the deployed HTTP surface shows that.
 BRIEF_R=$(call docx-new 200 create_from_blocks "{\"title\":\"Board Paper\",\"blocks\":[{\"kind\":\"risks\",\"items\":[{\"risk\":\"Model may be leaking\",\"level\":\"high\",\"mitigation\":\"Retrain on a time split\"}]},{\"kind\":\"checklist\",\"items\":[{\"text\":\"Drop id\",\"done\":true},{\"text\":\"Re-split\",\"done\":false}]},{\"kind\":\"links\",\"items\":[{\"label\":\"Dashboard\",\"url\":\"https://example.test/dash.html\"}]}],\"accent\":\"0B1D3A\",\"font\":\"Georgia\",\"output_path\":\"$D/board.docx\"}")
-if echo "$BRIEF_R" | grep -q '"links_embedded": *1'; then pass "risks/checklist/links reached the deployed tool"; else fail "new block kinds -> $BRIEF_R"; fi
+LINKS_N=$(extract_num "$BRIEF_R" links_embedded)
+case "$LINKS_N" in
+  1) pass "risks/checklist/links reached the deployed tool" ;;
+  "") fail "new block kinds returned no links_embedded -> $BRIEF_R" ;;
+  *) fail "links_embedded was $LINKS_N, expected 1" ;;
+esac
 if echo "$BRIEF_R" | grep -q 'Georgia'; then pass "brand font applied over the wire"; else fail "font token dropped -> $BRIEF_R"; fi
 run docx-new create_letter "{\"from_name\":\"Ops Team\",\"to_name\":\"Finance Team\",\"subject\":\"Q1 Summary\",\"body\":\"Please find the summary attached.\",\"output_path\":\"$D/letter.docx\"}" "create a letter"
 run docx-new merge_documents "{\"file_paths\":[\"$DOCX\",\"$D/sections.docx\"],\"output_path\":\"$D/merged.docx\"}" "merge the report and sections docs"
