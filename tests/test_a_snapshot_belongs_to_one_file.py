@@ -130,8 +130,15 @@ class TestTheReceiptIsNamedForTheWholeFilename:
         append_receipt(str(xlsx), tool="sort_sheet")
         import json
 
+        # The log is a JSON array now, matching the three sibling repos, with
+        # the scope header at index 0. It used to be an object keyed "file" and
+        # "entries", which is why a File_System or Data_Analyst reader could
+        # find this file and still not read it. `file` moved into the header
+        # rather than being dropped: it is the same claim, in the shape
+        # everything else in the fleet already parses.
         data = json.loads((tmp_path / "report.xlsx.mcp_receipt.json").read_text(encoding="utf-8"))
-        assert data["file"] == "report.xlsx"
+        assert isinstance(data, list), "the fleet format is an array"
+        assert data[0]["file"] == "report.xlsx"
 
 
 class TestOlderReceiptsAreStillReadable:
