@@ -81,6 +81,10 @@ READ_ONLY = {
     "read_cell_range",
     "search_cells",
     "find_duplicates",
+    # Takes no path and opens no file: it returns the block vocabulary
+    # `create_from_blocks` accepts. Read-only in the strongest sense the probe
+    # measures -- there is nothing on disk for it to reach.
+    "list_block_kinds",
 }
 
 

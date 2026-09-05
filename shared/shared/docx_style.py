@@ -261,3 +261,52 @@ def set_column_widths(table: Any, widths_cm: list[float]) -> None:
         size = Cm(float(width))
         for cell in table.columns[index].cells:
             cell.width = size
+
+
+# A link that only reads as a link is not a link. Word draws these in the
+# document's hyperlink colour, so the values below only apply when a caller
+# passes none.
+_LINK_COLOR = "0563C1"
+
+
+def add_hyperlink(paragraph: Any, url: str, text: str = "", color: str = _LINK_COLOR, underline: bool = True) -> Any:
+    """Append a real, clickable hyperlink run to a paragraph. Returns the run.
+
+    python-docx has no API for this: a `w:hyperlink` needs a relationship on the
+    containing part, and a run written without one is blue underlined text that
+    does nothing when clicked. A user review asked for chart `public_url` links
+    in the board paper, and text that looks like a link and is not would have
+    been worse than the plain URL it replaced.
+
+    `url` is written verbatim as an external relationship target. Whether it is
+    reachable is the caller's business -- Word will not check either.
+    """
+    from docx.opc.constants import RELATIONSHIP_TYPE as RT  # type: ignore[import-untyped]
+
+    part = paragraph.part
+    r_id = part.relate_to(str(url), RT.HYPERLINK, is_external=True)
+
+    link = _element("w:hyperlink")
+    link.set(_qn("r:id"), r_id)
+
+    run = _element("w:r")
+    properties = _element("w:rPr")
+    if color:
+        node = _element("w:color")
+        node.set(_qn("w:val"), parse_hex(color, "color"))
+        properties.append(node)
+    if underline:
+        node = _element("w:u")
+        node.set(_qn("w:val"), "single")
+        properties.append(node)
+    run.append(properties)
+
+    label = _element("w:t")
+    # Without this, Word collapses a label with leading or trailing spaces.
+    label.set(_qn("xml:space"), "preserve")
+    label.text = str(text) if text else str(url)
+    run.append(label)
+
+    link.append(run)
+    paragraph._p.append(link)
+    return run

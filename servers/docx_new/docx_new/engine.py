@@ -297,17 +297,96 @@ _DEFAULT_ACCENT = "1F3864"
 _BAND_TINT = 0.92
 _CALLOUT_TINT = 0.86
 
-BLOCK_KINDS: tuple[str, ...] = (
-    "heading",
-    "text",
-    "bullets",
-    "table",
-    "kpi",
-    "callout",
-    "image",
-    "rule",
-    "pagebreak",
-)
+# The severity vocabulary a risks table is scored on. Three levels, the same
+# three the data side uses in `insights` and the quality alerts, so a document
+# assembled from those findings does not introduce a fourth scale.
+RISK_LEVELS: tuple[str, ...] = ("high", "medium", "low")
+
+# The one list. `BLOCK_KINDS` is derived from it below rather than written
+# beside it, because a second list is a list that can disagree -- and the whole
+# point of the census in `test_a_kind_the_tool_lists_and_cannot_draw.py` is that
+# the lists describing a capability keep drifting apart.
+#
+# It also exists because twelve kinds do not fit in an 80-character tool
+# description, and two of this review's asks met head-on: "no dead ops" wants
+# every kind named where an agent can read it, and the docstring cap wants the
+# description short. The review answered that itself, in its scaling section:
+# *"Never list 1000: expose `search/get_capabilities/get_state`, sparse outline
+# then detail"*. So the description points at `list_block_kinds`, and this is
+# what that returns.
+BLOCK_KIND_SPECS: dict[str, dict[str, Any]] = {
+    "heading": {
+        "does": "A section heading, coloured with the accent.",
+        "keys": {"text": "required", "level": "1-6, default 2"},
+        "example": {"kind": "heading", "text": "Findings", "level": 2},
+    },
+    "text": {
+        "does": "One body paragraph.",
+        "keys": {"text": "required"},
+        "example": {"kind": "text", "text": "Charge-off rate is 13.82%."},
+    },
+    "bullets": {
+        "does": "A bulleted or numbered list.",
+        "keys": {"items": "required, list of strings", "numbered": "bool, default false"},
+        "example": {"kind": "bullets", "items": ["First", "Second"]},
+    },
+    "table": {
+        "does": "A table with a shaded header and banded rows.",
+        "keys": {"header": "list", "rows": "list of lists", "widths": "optional cm per column"},
+        "example": {"kind": "table", "header": ["Metric", "Value"], "rows": [["Rows", "38,576"]]},
+    },
+    "kpi": {
+        "does": "Figures across the page, value large, label beneath.",
+        "keys": {"items": "required, [{value, label}]"},
+        "example": {"kind": "kpi", "items": [{"value": "13.82%", "label": "charge-off rate"}]},
+    },
+    "callout": {
+        "does": "A tinted box for the one message that must land.",
+        "keys": {"text": "required", "title": "optional"},
+        "example": {"kind": "callout", "title": "Risk", "text": "The model may be leaking."},
+    },
+    "image": {
+        "does": "A picture, from a local path or an http(s) URL.",
+        "keys": {"path": "or url", "width_in": "inches, default 6.0", "caption": "optional"},
+        "example": {"kind": "image", "path": "/data/chart.png", "width_in": 6.0},
+    },
+    "links": {
+        "does": "Clickable links out to charts or other artifacts.",
+        "keys": {"items": "required, [{label, url, note}]", "title": "optional"},
+        "example": {"kind": "links", "items": [{"label": "Dashboard", "url": "https://…/dash.html"}]},
+    },
+    "risks": {
+        "does": f"A risk table, severity coloured. Levels: {', '.join(RISK_LEVELS)}.",
+        "keys": {"items": "required, [{risk, level, impact, mitigation, owner}]"},
+        "example": {"kind": "risks", "items": [{"risk": "Leakage", "level": "high"}]},
+    },
+    "checklist": {
+        "does": "Ticked and unticked actions.",
+        "keys": {"items": "required, [{text, done}] or plain strings"},
+        "example": {"kind": "checklist", "items": [{"text": "Drop id", "done": True}]},
+    },
+    "rule": {
+        "does": "A horizontal rule.",
+        "keys": {"width_pt": "default 1.0"},
+        "example": {"kind": "rule"},
+    },
+    "pagebreak": {
+        "does": "A page break.",
+        "keys": {},
+        "example": {"kind": "pagebreak"},
+    },
+}
+
+BLOCK_KINDS: tuple[str, ...] = tuple(BLOCK_KIND_SPECS)
+
+# Red / amber / green, dark enough to carry white text.
+_RISK_FILLS: dict[str, str] = {"high": "C0392B", "medium": "D68910", "low": "1E8449"}
+
+# Word's own check-box glyphs render in every default font; a font-dependent
+# glyph would come out as a box on a machine without it, which is the one
+# outcome a checklist cannot survive.
+_CHECK_DONE = "☒"
+_CHECK_OPEN = "☐"
 
 # What python-docx can actually place. A user review put the gap plainly:
 # "create_from_sections (docx) cannot embed images/charts. The board paper
@@ -418,6 +497,8 @@ def create_from_blocks(
     accent: str = "",
     open_after: bool = True,
     return_content: bool = False,
+    font: str = "",
+    heading_font: str = "",
 ) -> dict[str, Any]:
     """Create a .docx from typed blocks — headings, bullets, tables, KPIs.
 
@@ -441,8 +522,17 @@ def create_from_blocks(
         table     {kind, header[], rows[][]}   shaded header, banded body
         kpi       {kind, items[{value,label}]} figures across the page
         callout   {kind, text, title}          tinted box for the one message
+        image     {kind, path|url, width_in}   a picture, from a file or a URL
+        links     {kind, items[{label,url}]}   clickable links to the charts
+        risks     {kind, items[{risk,level}]}  risk table, severity coloured
+        checklist {kind, items[{text,done}]}   ticked and unticked actions
         rule      {kind}                       horizontal rule
         pagebreak {kind}
+
+    `accent`, `font` and `heading_font` are the brand tokens: one colour and
+    two typefaces, applied to every block rather than to each one separately.
+    A review asked for "style/brand tokens" and this is the whole of them --
+    anything more would be a template, which `create_from_template` already is.
     """
     progress: list[dict[str, Any]] = []
     try:
@@ -483,6 +573,7 @@ def create_from_blocks(
         unknown: list[str] = []
         tables_made = 0
         images_made = 0
+        links_made = 0
 
         for index, block in enumerate(blocks):
             if not isinstance(block, dict):
@@ -546,6 +637,32 @@ def create_from_blocks(
                     continue
                 images_made += 1
 
+            elif kind == "links":
+                items = block.get("items") or block.get("links") or []
+                note = _add_links(doc, block, items, hue, docx_style)
+                if note:
+                    unknown.append(f"block {index}: {note}")
+                    continue
+                links_made += sum(1 for i in items if isinstance(i, dict) and i.get("url"))
+
+            elif kind == "risks":
+                items = block.get("items") or block.get("risks") or []
+                if not items:
+                    unknown.append(f"block {index} is a risks table with no items")
+                    continue
+                bad_level = _add_risks(doc, items, hue, band, docx_style)
+                _spacer(doc, docx_style)
+                tables_made += 1
+                if bad_level:
+                    unknown.append(f"block {index}: {bad_level}")
+
+            elif kind == "checklist":
+                items = block.get("items") or block.get("checklist") or []
+                if not items:
+                    unknown.append(f"block {index} is a checklist with no items")
+                    continue
+                _add_checklist(doc, items, hue, docx_style)
+
             elif kind == "rule":
                 para = doc.add_paragraph("")
                 docx_style.set_paragraph_rule(para, color=hue, width_pt=float(block.get("width_pt", 1.0) or 1.0))
@@ -560,6 +677,7 @@ def create_from_blocks(
         normal = doc.styles["Normal"]
         normal.font.size = Pt(11)  # type: ignore[reportAttributeAccessIssue]
         normal.paragraph_format.space_after = Pt(6)  # type: ignore[reportAttributeAccessIssue]
+        fonts_applied = _apply_fonts(doc, font, heading_font)
 
         doc.save(str(path))
         progress.append(ok(f"Saved {path.name}", f"{sum(counts.values())} block(s), {tables_made} table(s)"))
@@ -581,8 +699,10 @@ def create_from_blocks(
             "block_count": sum(counts.values()),
             "blocks_by_kind": counts,
             "images_embedded": images_made,
+            "links_embedded": links_made,
             "skipped": unknown,
             "accent": f"#{hue}",
+            "fonts": fonts_applied,
             "progress": progress,
         }
         embed_content(result, path, return_content)
@@ -672,6 +792,189 @@ def _add_kpi_row(doc: Any, items: list[Any], hue: str, docx_style: Any) -> None:
             docx_style.set_alignment(para, "center")
             docx_style.style_runs(para, font_size=8, color="595959", all_caps="true")
             para.paragraph_format.space_after = Pt(10)
+
+
+def list_block_kinds() -> dict[str, Any]:
+    """Every block kind `create_from_blocks` accepts, with its keys and an example.
+
+    The tool description cannot hold twelve kinds and stay inside the 80
+    character cap the docstring census enforces, and an undiscoverable kind is a
+    capability that does not exist. The review's own answer to that tension is
+    the sparse-then-detail shape: a short description that names this, and this
+    for the detail.
+
+    Reads `BLOCK_KIND_SPECS`, which is also what `BLOCK_KINDS` is derived from,
+    so this cannot fall out of step with what the validator accepts.
+    """
+    return {
+        "success": True,
+        "op": "list_block_kinds",
+        "kinds": [
+            {"kind": name, "does": spec["does"], "keys": spec["keys"], "example": spec["example"]}
+            for name, spec in BLOCK_KIND_SPECS.items()
+        ],
+        "kind_count": len(BLOCK_KIND_SPECS),
+        "risk_levels": list(RISK_LEVELS),
+        "brand": {
+            "accent": "6-digit hex, e.g. '0B1D3A'",
+            "font": "body typeface, e.g. 'Georgia'",
+            "heading_font": "heading typeface; defaults to font",
+        },
+        "token_estimate": 0,
+    }
+
+
+def _add_links(doc: Any, block: dict[str, Any], items: list[Any], hue: str, docx_style: Any) -> str:
+    """Clickable links to the artifacts the paper talks about.
+
+    A user review's board paper "references charts that live in separate HTML
+    files", and the fix it asked for was `public_url` links to them. Real
+    `w:hyperlink` elements, not blue text: text that looks like a link and does
+    nothing when clicked is a worse answer than the bare URL it replaced.
+
+    Returns "" or why the block wrote nothing.
+    """
+    rows = [i for i in items if isinstance(i, dict) and str(i.get("url", "")).strip()]
+    if not rows:
+        return "links block has no items with a url"
+
+    heading = entry_value(block, ENTRY_HEADING_KEYS)
+    if heading:
+        para = doc.add_paragraph(heading, style="Normal")
+        docx_style.style_runs(para, bold="true", color=hue)
+
+    for item in rows:
+        url = str(item["url"]).strip()
+        label = str(item.get("label") or item.get("text") or url)
+        note = str(item.get("note") or "")
+        para = doc.add_paragraph("", style="Normal")
+        para.add_run("• ")
+        docx_style.add_hyperlink(para, url, label)
+        if note:
+            from docx.shared import Pt  # type: ignore[import-untyped]
+
+            run = para.add_run(f" — {note}")
+            run.font.size = Pt(9)
+    return ""
+
+
+def _add_risks(doc: Any, items: list[Any], hue: str, band: str, docx_style: Any) -> str:
+    """The risks table, scored on the same three levels everything else uses.
+
+    A generic `table` block could hold this. It would also let every caller
+    invent its own columns and its own severity words, and the review asked for
+    a risks table beside a KPI table and a findings table precisely so a reader
+    meets the same shape each time.
+
+    Returns "" or a note about levels that were not recognised. An unrecognised
+    level is written through uncoloured rather than dropped -- losing a risk to
+    a spelling is the one failure a risk register must not have.
+    """
+    header = ["Risk", "Level", "Impact", "Mitigation", "Owner"]
+    present = [
+        column
+        for column in header
+        if column == "Risk"
+        or column == "Level"
+        or any(str(i.get(column.lower(), "")).strip() for i in items if isinstance(i, dict))
+    ]
+
+    rows: list[list[str]] = []
+    levels: list[str] = []
+    unrecognised: list[str] = []
+    for item in items:
+        if not isinstance(item, dict):
+            item = {"risk": str(item)}
+        level = str(item.get("level") or item.get("severity") or "").strip().lower()
+        if level and level not in RISK_LEVELS:
+            unrecognised.append(level)
+        levels.append(level)
+        rows.append(
+            [
+                str(item.get("risk") or item.get("text") or "") if c == "Risk" else str(item.get(c.lower(), ""))
+                for c in present
+            ]
+        )
+        rows[-1][present.index("Level")] = level.title() if level else ""
+
+    _add_block_table(doc, present, rows, hue, band, [], docx_style)
+
+    # Colour the Level cell after the table is built, so the banding underneath
+    # is already in place and this wins on top of it.
+    table = doc.tables[-1]
+    column = present.index("Level")
+    for row_index, level in enumerate(levels, start=1):
+        fill = _RISK_FILLS.get(level)
+        if not fill:
+            continue
+        cell = table.rows[row_index].cells[column]
+        docx_style.set_cell_fill(cell, fill)
+        for para in cell.paragraphs:
+            docx_style.style_runs(para, bold="true", color="FFFFFF")
+
+    if unrecognised:
+        return (
+            f"level(s) {sorted(set(unrecognised))} are not one of {', '.join(RISK_LEVELS)}; "
+            "those rows were written uncoloured"
+        )
+    return ""
+
+
+def _add_checklist(doc: Any, items: list[Any], hue: str, docx_style: Any) -> None:
+    """Ticked and unticked actions, as text rather than as form controls.
+
+    Word's real check-box content control needs a `w:sdt` and only behaves
+    inside a form-protected document; opened anywhere else it is an empty grey
+    rectangle. A glyph is what a reader can actually see, print and tick.
+    """
+    for item in items:
+        if isinstance(item, dict):
+            text = entry_value(item, ENTRY_TEXT_KEYS)
+            done = bool(item.get("done") or item.get("checked") or item.get("complete"))
+        else:
+            text, done = str(item), False
+        para = doc.add_paragraph("", style="Normal")
+        mark = para.add_run(f"{_CHECK_DONE if done else _CHECK_OPEN}  ")
+        mark.bold = True
+        if done:
+            from docx.shared import RGBColor  # type: ignore[import-untyped]
+
+            mark.font.color.rgb = RGBColor.from_string(_RISK_FILLS["low"])
+        para.add_run(text)
+
+
+def _apply_fonts(doc: Any, font: str, heading_font: str) -> dict[str, str]:
+    """Brand typefaces, applied to the styles rather than to every run.
+
+    Setting a style's font is what makes text a caller adds *afterwards* match
+    too. Word also needs the East-Asian name set, or it silently substitutes on
+    a machine with a different default -- the kind of difference that only shows
+    up on somebody else's screen.
+    """
+    applied: dict[str, str] = {}
+    body = str(font or "").strip()
+    heads = str(heading_font or font or "").strip()
+
+    def _set(style_name: str, family: str) -> bool:
+        try:
+            style = doc.styles[style_name]
+        except KeyError:
+            return False
+        style.font.name = family
+        element = style.element.rPr
+        if element is not None and element.rFonts is not None:
+            from docx.oxml.ns import qn  # type: ignore[import-untyped]
+
+            element.rFonts.set(qn("w:eastAsia"), family)
+        return True
+
+    if body and _set("Normal", body):
+        applied["body"] = body
+    if heads:
+        for level in range(1, 7):
+            _set(f"Heading {level}", heads)
+        applied["headings"] = heads
+    return applied
 
 
 def _add_callout(doc: Any, block: dict[str, Any], hue: str, fill: str, docx_style: Any) -> None:

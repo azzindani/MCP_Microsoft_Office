@@ -119,7 +119,8 @@ run() {
 }
 
 echo
-echo "===== docx-new (8 tools) ====="
+echo "===== docx-new (9 tools) ====="
+run docx-new list_block_kinds "{}" "what block kinds can I use?"
 run docx-new create_document "{\"output_path\":\"$D/blank.docx\"}" "create a blank document"
 run docx-new create_from_text "{\"output_path\":\"$DOCX\",\"paragraphs\":[{\"text\":\"Quarterly Report\",\"style\":\"Title\"},{\"text\":\"Revenue grew across all regions this quarter.\",\"style\":\"Normal\"},{\"text\":\"APAC led growth.\",\"style\":\"Normal\"}]}" "create the main report doc"
 run docx-new create_from_sections "{\"title\":\"Report Sections\",\"sections\":[{\"heading\":\"Summary\",\"body\":\"Overall performance was strong.\"},{\"heading\":\"Details\",\"body\":\"See appendix for details.\"}],\"output_path\":\"$D/sections.docx\"}" "create a doc with sections"
@@ -130,6 +131,12 @@ case "$BLOCKS_N" in
   "") fail "create_from_blocks returned no block_count" ;;
   *) fail "create_from_blocks wrote $BLOCKS_N blocks, expected 4" ;;
 esac
+# The three new kinds and the brand tokens, over the wire. A block kind can pass
+# every unit test and be unreachable because the serving wrapper never forwarded
+# the argument; only the deployed HTTP surface shows that.
+BRIEF_R=$(call docx-new 200 create_from_blocks "{\"title\":\"Board Paper\",\"blocks\":[{\"kind\":\"risks\",\"items\":[{\"risk\":\"Model may be leaking\",\"level\":\"high\",\"mitigation\":\"Retrain on a time split\"}]},{\"kind\":\"checklist\",\"items\":[{\"text\":\"Drop id\",\"done\":true},{\"text\":\"Re-split\",\"done\":false}]},{\"kind\":\"links\",\"items\":[{\"label\":\"Dashboard\",\"url\":\"https://example.test/dash.html\"}]}],\"accent\":\"0B1D3A\",\"font\":\"Georgia\",\"output_path\":\"$D/board.docx\"}")
+if echo "$BRIEF_R" | grep -q '"links_embedded": *1'; then pass "risks/checklist/links reached the deployed tool"; else fail "new block kinds -> $BRIEF_R"; fi
+if echo "$BRIEF_R" | grep -q 'Georgia'; then pass "brand font applied over the wire"; else fail "font token dropped -> $BRIEF_R"; fi
 run docx-new create_letter "{\"from_name\":\"Ops Team\",\"to_name\":\"Finance Team\",\"subject\":\"Q1 Summary\",\"body\":\"Please find the summary attached.\",\"output_path\":\"$D/letter.docx\"}" "create a letter"
 run docx-new merge_documents "{\"file_paths\":[\"$DOCX\",\"$D/sections.docx\"],\"output_path\":\"$D/merged.docx\"}" "merge the report and sections docs"
 run docx-new create_from_text "{\"output_path\":\"$DOCX_TPL\",\"paragraphs\":[{\"text\":\"Dear {{name}},\",\"style\":\"Normal\"},{\"text\":\"Your balance is {{balance}}.\",\"style\":\"Normal\"}]}" "create a template doc with placeholders"

@@ -62,19 +62,64 @@ def test_nothing_is_drawn_that_is_not_declared():
     assert not extra, f"these have a render branch but are refused by the validator: {extra}"
 
 
-def test_the_tool_description_names_every_kind():
-    """The docstring is the only one of the three lists an agent ever reads."""
+def _tool_doc(name: str) -> str:
     tree = ast.parse(SERVER.read_text(encoding="utf-8"))
-    doc = ""
     for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef) and node.name == "create_from_blocks":
-            doc = ast.get_docstring(node) or ""
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return ast.get_docstring(node) or ""
+    return ""
+
+
+def test_every_kind_is_discoverable_from_the_tool_surface():
+    """An agent sends what it is told to send.
+
+    This used to demand that the description name every kind. Twelve kinds do
+    not fit in eighty characters, and the cap below is not negotiable either --
+    every client pays for that string on every tools/list. The review's own
+    scaling section resolves it: *"Never list 1000: expose
+    `search/get_capabilities/get_state`, sparse outline then detail"*. So the
+    description points at `list_block_kinds`, and that is where the list has to
+    be complete.
+    """
+    doc = _tool_doc("create_from_blocks")
     assert doc, "create_from_blocks has no docstring, so its kinds are undiscoverable"
-    missing = [k for k in BLOCK_KINDS if k not in doc]
-    assert not missing, (
-        f"the tool description does not mention {missing}. An agent sends what it is told to "
-        "send, so an undocumented kind is a capability that does not exist."
+    assert "list_block_kinds" in doc, (
+        "the description neither names the kinds nor points at what does, so an agent "
+        "reading tools/list cannot find out that `risks` exists"
     )
+    assert _tool_doc("list_block_kinds"), "the tool the description points at does not exist"
+
+    listed = {entry["kind"] for entry in engine.list_block_kinds()["kinds"]}
+    assert listed == set(BLOCK_KINDS), listed.symmetric_difference(BLOCK_KINDS)
+
+
+def test_the_discovery_op_carries_enough_to_call_with():
+    """A list of names an agent still has to guess the arguments for is half an answer."""
+    for entry in engine.list_block_kinds()["kinds"]:
+        assert entry["does"], f"{entry['kind']} has no description"
+        assert entry["example"].get("kind") == entry["kind"], entry
+        # `rule` and `pagebreak` genuinely take nothing; everything else must
+        # say what it needs.
+        if entry["kind"] not in ("rule", "pagebreak"):
+            assert entry["keys"], f"{entry['kind']} lists no keys"
+
+
+def test_the_kinds_cannot_drift_from_the_specs():
+    """One list, not two: BLOCK_KINDS is derived, so disagreement is unrepresentable."""
+    assert BLOCK_KINDS == tuple(engine.BLOCK_KIND_SPECS)
+
+
+def test_every_example_in_the_discovery_op_actually_renders(tmp_path):
+    """The example is a promise. An example that does not work is a dead op with a manual."""
+    examples = [entry["example"] for entry in engine.list_block_kinds()["kinds"]]
+    # The image example points at a path that does not exist here; every other
+    # kind must draw from its own documented example unchanged.
+    drawable = [e for e in examples if e["kind"] != "image"]
+    out = tmp_path / "examples.docx"
+    r = create_from_blocks(str(out), "T", drawable, open_after=False)
+    assert r["success"] is True
+    assert r["skipped"] == [], r["skipped"]
+    assert r["block_count"] == len(drawable)
 
 
 def test_the_description_still_fits_the_cap():
@@ -106,6 +151,9 @@ def test_every_kind_actually_produces_something(tmp_path):
         {"kind": "table", "header": ["c1"], "rows": [["v"]]},
         {"kind": "kpi", "items": [{"label": "Rate", "value": "13.8%"}]},
         {"kind": "callout", "text": "note"},
+        {"kind": "links", "items": [{"label": "Chart", "url": "https://example.test/c.html"}]},
+        {"kind": "risks", "items": [{"risk": "Leakage", "level": "high"}]},
+        {"kind": "checklist", "items": [{"text": "Drop id", "done": True}]},
         {"kind": "rule"},
         {"kind": "pagebreak"},
     ]

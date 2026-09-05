@@ -14,7 +14,7 @@ from shared.arg_errors import contract_errors
 from shared.deploy_auth import build_auth, build_oauth_bridge
 from shared.strict_args import enforce_known_arguments
 from shared.token_estimate import measure_responses
-from shared.tool_annotations import CREATES
+from shared.tool_annotations import CREATES, READS
 
 _VERSION = "0.1.2"  # keep in sync with pyproject.toml [project].version
 _HOST = os.environ.get("OFFICE_DOCX_NEW_HOST", "127.0.0.1")
@@ -76,6 +76,12 @@ def create_from_sections(
     return engine.create_from_sections(output_path, title, sections, open_after=True, return_content=return_content)
 
 
+@mcp.tool(annotations=READS)
+def list_block_kinds() -> dict:
+    """Block kinds create_from_blocks accepts, with keys and an example each."""
+    return engine.list_block_kinds()
+
+
 @mcp.tool(annotations=CREATES)
 def create_from_blocks(
     title: str,
@@ -83,9 +89,24 @@ def create_from_blocks(
     output_path: str = "",
     accent: str = "",
     return_content: bool = False,
+    font: str = "",
+    heading_font: str = "",
 ) -> dict:
-    """Blocks to .docx: heading text bullets table kpi callout image rule pagebreak."""
-    return engine.create_from_blocks(output_path, title, blocks, accent, open_after=True, return_content=return_content)
+    # This string IS the MCP tool description, paid on every tools/list, so it
+    # points at the detail rather than carrying it. list_block_kinds() names
+    # every kind with its keys and an example; an unknown kind also comes back
+    # from the engine with the full list attached.
+    """Typed blocks to a .docx. Call list_block_kinds() for the 12 kinds."""
+    return engine.create_from_blocks(
+        output_path,
+        title,
+        blocks,
+        accent,
+        open_after=True,
+        return_content=return_content,
+        font=font,
+        heading_font=heading_font,
+    )
 
 
 @mcp.tool(annotations=CREATES)
