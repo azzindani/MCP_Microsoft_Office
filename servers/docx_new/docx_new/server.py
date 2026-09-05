@@ -84,7 +84,7 @@ def create_from_blocks(
     accent: str = "",
     return_content: bool = False,
 ) -> dict:
-    """Create .docx from blocks: heading text bullets table kpi callout rule."""
+    """Blocks to .docx: heading text bullets table kpi callout image rule pagebreak."""
     return engine.create_from_blocks(output_path, title, blocks, accent, open_after=True, return_content=return_content)
 
 

@@ -304,9 +304,103 @@ BLOCK_KINDS: tuple[str, ...] = (
     "table",
     "kpi",
     "callout",
+    "image",
     "rule",
     "pagebreak",
 )
+
+# What python-docx can actually place. A user review put the gap plainly:
+# "create_from_sections (docx) cannot embed images/charts. The board paper
+# references charts that live in separate HTML files... Room for improvement:
+# an `image` block type accepting a `data/` path or URL."
+_IMAGE_EXTS: tuple[str, ...] = (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".emf", ".wmf")
+
+# The one a caller most often has and most often tries: every chart this fleet
+# writes is a self-contained .html. Refusing it by name, with the tool that
+# converts it, is worth more than "unsupported image format".
+_HTML_EXTS: tuple[str, ...] = (".html", ".htm")
+
+# Wide enough to read a chart, narrow enough to sit inside default margins.
+_DEFAULT_IMAGE_WIDTH_IN = 6.0
+
+
+def _add_image(doc: Any, block: dict[str, Any], docx_style: Any, hue: str) -> str:
+    """Place one image block. Returns "" on success, or why it wrote nothing.
+
+    Accepts a local path or an http(s) URL, because the review's case was a
+    board paper referencing charts that this fleet had already written to the
+    shared output directory -- and the same directory is served over HTTP, so a
+    caller holds one or the other depending on where it is running.
+
+    Three refusals are worth more than a generic failure, and each names the way
+    out:
+
+    * **A .html chart.** Every chart these servers produce is a self-contained
+      HTML page, so it is the file a caller has in hand and the first thing they
+      will pass. python-docx cannot place it. Naming the converter is the whole
+      value of the message.
+    * **A missing file**, which is usually a path from the wrong side of the
+      container boundary.
+    * **A URL that did not fetch.** Reported with the status, because "the
+      document has no image" and "the file server refused" are different
+      problems.
+    """
+    from io import BytesIO
+
+    from docx.shared import Inches  # type: ignore[import-untyped]
+
+    source = ""
+    for key in ("path", "src", "source", "url", "file", "file_path", "image"):
+        value = block.get(key)
+        if isinstance(value, str) and value.strip():
+            source = value.strip()
+            break
+    if not source:
+        return "an image block with no path or url"
+
+    suffix = Path(source.split("?")[0]).suffix.lower()
+    if suffix in _HTML_EXTS:
+        return (
+            f"{source} is an HTML page, which cannot be placed in a .docx. "
+            "Charts from this fleet are self-contained HTML; render one to PNG first "
+            "(or ask the chart tool for an image) and pass that path"
+        )
+
+    stream: Any
+    if source.lower().startswith(("http://", "https://")):
+        try:
+            import urllib.request
+
+            with urllib.request.urlopen(source, timeout=20) as resp:  # noqa: S310
+                if getattr(resp, "status", 200) >= 400:
+                    return f"{source} returned HTTP {resp.status}"
+                stream = BytesIO(resp.read())
+        except Exception as exc:
+            return f"{source} could not be fetched ({type(exc).__name__}: {exc})"
+    else:
+        img_path = Path(source)
+        if not img_path.is_absolute():
+            img_path = (Path.cwd() / img_path).resolve()
+        if not img_path.exists():
+            return f"{source} does not exist (paths are resolved on the server, not the caller)"
+        if suffix and suffix not in _IMAGE_EXTS:
+            return f"{source} is a {suffix} file; python-docx places {', '.join(_IMAGE_EXTS)}"
+        stream = str(img_path)
+
+    try:
+        width_in = float(block.get("width_in") or block.get("width") or _DEFAULT_IMAGE_WIDTH_IN)
+    except TypeError, ValueError:
+        width_in = _DEFAULT_IMAGE_WIDTH_IN
+    try:
+        doc.add_picture(stream, width=Inches(max(0.5, min(width_in, 9.0))))
+    except Exception as exc:
+        return f"{source} is not a readable image ({type(exc).__name__}: {exc})"
+
+    caption = entry_value(block, ENTRY_TEXT_KEYS) or str(block.get("caption") or "")
+    if caption:
+        para = doc.add_paragraph(caption, style="Normal")
+        docx_style.style_runs(para, color=hue, italic="true", font_size=9.0)
+    return ""
 
 
 def _block_kind(block: dict[str, Any]) -> str:
@@ -388,6 +482,7 @@ def create_from_blocks(
         counts: dict[str, int] = {}
         unknown: list[str] = []
         tables_made = 0
+        images_made = 0
 
         for index, block in enumerate(blocks):
             if not isinstance(block, dict):
@@ -444,6 +539,13 @@ def create_from_blocks(
                 _spacer(doc, docx_style)
                 tables_made += 1
 
+            elif kind == "image":
+                note = _add_image(doc, block, docx_style, hue)
+                if note:
+                    unknown.append(f"block {index}: {note}")
+                    continue
+                images_made += 1
+
             elif kind == "rule":
                 para = doc.add_paragraph("")
                 docx_style.set_paragraph_rule(para, color=hue, width_pt=float(block.get("width_pt", 1.0) or 1.0))
@@ -478,6 +580,7 @@ def create_from_blocks(
             "output_name": path.name,
             "block_count": sum(counts.values()),
             "blocks_by_kind": counts,
+            "images_embedded": images_made,
             "skipped": unknown,
             "accent": f"#{hue}",
             "progress": progress,
