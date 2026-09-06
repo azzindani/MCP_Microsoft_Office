@@ -80,7 +80,10 @@ def create_report(
     output_path: str = "",
     return_content: bool = False,
 ) -> dict:
-    """Create multi-sheet .xlsx report from [{name,headers,rows}] list."""
+    # It also writes a Cover sheet from `title`, so two sheets in gives
+    # three out. The progress list said so all along; the description did
+    # not, and the description is the only thing a caller reads first.
+    """Multi-sheet .xlsx from [{name,headers,rows}], plus a Cover sheet."""
     return engine.create_report(output_path, title, sheets, open_after=True, return_content=return_content)
 
 
