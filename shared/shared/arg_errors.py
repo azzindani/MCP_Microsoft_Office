@@ -52,7 +52,7 @@ except ImportError:  # pragma: no cover - depends which flavour is installed
 # The line that sends a caller to the internet to understand a local error.
 _URL = re.compile(r"\s*For further information visit https?://\S+")
 # "Input should be a valid string [type=string_type, input_value=123, input_type=int]"
-_DETAIL = re.compile(r"^\s+(?P<why>.+?)\s*\[type=(?P<kind>[^,\]]+)(?:,[^\]]*input_type=(?P<got>[^,\]]+))?[^\]]*\]\s*$")
+_DETAIL = re.compile(r"^\s+(?P<why>.+?)\s*\[type=(?P<kind>[^,\]]+)(?:,.*?input_type=(?P<got>[^,\]]+))?\]\s*$")
 
 
 def _clean(message: str) -> str:

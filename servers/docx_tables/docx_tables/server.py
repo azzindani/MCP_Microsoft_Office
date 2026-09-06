@@ -118,9 +118,22 @@ def set_cell_style(
     row: int = -1,
     col: int = -1,
     band_fill: str = "",
+    fill_color: str = "",
 ) -> dict:
     """Shade/format cells. Hex colors. row/col -1 = all. band_fill stripes."""
-    return engine.set_cell_style(file_path, table_index, fill, bold, color, align, row, col, band_fill, open_after=True)
+    return engine.set_cell_style(
+        file_path,
+        table_index,
+        fill,
+        bold,
+        color,
+        align,
+        row,
+        col,
+        band_fill,
+        open_after=True,
+        fill_color=fill_color,
+    )
 
 
 # The bundled FastMCP ignores an argument a tool does not declare, so a wrong

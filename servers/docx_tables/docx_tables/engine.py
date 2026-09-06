@@ -498,6 +498,7 @@ def set_cell_style(
     col: int = -1,
     band_fill: str = "",
     open_after: bool = False,
+    fill_color: str = "",
 ) -> dict[str, Any]:
     """Shade and format table cells. row/col -1 means every row/column.
 
@@ -513,6 +514,12 @@ def set_cell_style(
     apply two colours. `row=0` with `fill` shades the header; `band_fill` on
     its own stripes alternate body rows.
     """
+    # xlsx_charts has a set_cell_style too, and there the shade is `fill_color`
+    # while here it is `fill` -- and `color` here means the TEXT colour, so a
+    # caller carrying the spreadsheet spelling was one letter from recolouring
+    # the wrong thing. Resolved in the engine, not the server, so a direct
+    # caller and an MCP caller cannot get different behaviour.
+    fill = fill or fill_color
     progress: list[dict[str, Any]] = []
     backup: str | None = None
     path: Path | None = None
@@ -804,6 +811,26 @@ def delete_row(file_path: str, table_index: int, row: int, open_after: bool = Fa
         return _error(str(e), hint_for_error(e, path), progress, backup)
 
 
+def _table_position(doc: Any, tbl: Any) -> int | None:
+    """How many tables precede `tbl` in the document body.
+
+    Counted on the live body before the save, matching on the XML element:
+    two tables built from the same `data` are identical by value, and telling
+    them apart is the entire point of the answer.
+    """
+    try:
+        target = tbl._element
+        seen = 0
+        for child in doc.element.body:
+            if child.tag.endswith("}tbl"):
+                if child is target:
+                    return seen
+                seen += 1
+    except Exception:  # noqa: BLE001 - an index is never worth an exception
+        return None
+    return None
+
+
 def add_table(
     file_path: str,
     after_paragraph_index: int,
@@ -956,16 +983,36 @@ def add_table(
             success=True,
         )
 
-        return {
+        # Which table this became. Every other tool here addresses tables by
+        # `table_index`, and add_table returned none -- so the caller had to
+        # call list_tables and guess which one was theirs. Worse, the index is
+        # POSITIONAL: inserting before an existing table renumbers it, so an
+        # index held from a moment ago silently means a different table. Round
+        # 28 lost a row out of the wrong table exactly this way.
+        new_index = _table_position(doc, tbl)
+        table_count = len(doc.tables)
+        if new_index is not None and new_index < table_count - 1:
+            progress.append(
+                warn(
+                    f"Existing tables renumbered from index {new_index + 1}",
+                    "table_index is positional, so any index held from before this call now "
+                    "points one table later. Re-read with list_tables before using an old index.",
+                )
+            )
+
+        result = {
             "success": True,
             "op": "add_table",
             "after_paragraph_index": after_paragraph_index,
+            "table_index": new_index,
+            "table_count": table_count,
             "rows": rows,
             "cols": cols,
             "backup": backup,
             "progress": progress,
-            "token_estimate": len(str(progress)) // 4,
         }
+        result["token_estimate"] = len(str(result)) // 4
+        return result
     except Exception as e:
         progress.append(fail(str(e)))
         append_receipt(

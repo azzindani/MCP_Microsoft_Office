@@ -723,13 +723,16 @@ def create_from_blocks(
         normal.paragraph_format.space_after = Pt(6)  # type: ignore[reportAttributeAccessIssue]
         fonts_applied = _apply_fonts(doc, font, heading_font)
 
+        written = sum(counts.values())
         doc.save(str(path))
-        progress.append(ok(f"Saved {path.name}", f"{sum(counts.values())} block(s), {tables_made} table(s)"))
+        progress.append(ok(f"Saved {path.name}", f"{written} block(s), {tables_made} table(s)"))
         if unknown:
             progress.append(
                 warn(
                     f"{len(unknown)} block(s) written nothing",
-                    "; ".join(unknown) + f". Valid kinds: {', '.join(BLOCK_KINDS)}.",
+                    "; ".join(unknown)
+                    + f". Valid kinds: {', '.join(BLOCK_KINDS)}. "
+                    + "Body text is kind='text'; call list_block_kinds for each kind's fields.",
                 )
             )
 
@@ -740,7 +743,7 @@ def create_from_blocks(
             "op": "create_from_blocks",
             "output": str(path),
             "output_name": path.name,
-            "block_count": sum(counts.values()),
+            "block_count": written,
             "blocks_by_kind": counts,
             "images_embedded": images_made,
             "links_embedded": links_made,

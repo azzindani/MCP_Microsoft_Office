@@ -95,7 +95,7 @@ def test_two_identical_documents_still_report_no_changes(tmp_path):
     result = diff_docx(a, b)
 
     assert result["change_count"] == 0
-    assert result["summary"] == "No changes detected."
+    assert result["summary"].startswith("No changes detected")
 
 
 def test_paragraph_changes_are_still_reported_as_before(tmp_path):
@@ -136,7 +136,7 @@ def test_two_identical_decks_still_report_no_changes(tmp_path):
     a = _pptx(tmp_path / "a.pptx", table=[["same"]])
     b = _pptx(tmp_path / "b.pptx", table=[["same"]])
 
-    assert diff_pptx(a, b)["summary"] == "No changes detected."
+    assert diff_pptx(a, b)["summary"].startswith("No changes detected")
 
 
 @pytest.mark.parametrize("fn", [diff_docx, diff_pptx])
@@ -179,3 +179,27 @@ def test_the_paragraph_summary_counts_paragraphs_not_opcodes(tmp_path):
     result = diff_docx(a, b)
 
     assert "3 paragraphs deleted" in result["summary"]
+
+
+def test_no_changes_says_what_it_did_not_compare(tmp_path):
+    """The verdict is about the comparison, not about the documents.
+
+    Round 28 changed one font -- set_font_all_slides itself reported
+    `slides_modified: 2, shapes_modified: 3` -- then asked diff_versions about
+    it and was told "No changes detected." on both docx and pptx. The scope is
+    a fair one: these diffs read text and structure. The sentence was not,
+    because it answered for the file when it could only answer for the diff,
+    and a caller using it to confirm an edit landed is told nothing happened.
+    """
+    from docx import Document
+
+    a = tmp_path / "a.docx"
+    b = tmp_path / "b.docx"
+    for path in (a, b):
+        doc = Document()
+        doc.add_paragraph("identical text")
+        doc.save(str(path))
+
+    summary = diff_docx(str(a), str(b))["summary"]
+    assert summary.startswith("No changes detected")
+    assert "formatting" in summary, summary

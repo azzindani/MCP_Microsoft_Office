@@ -61,7 +61,7 @@ def test_the_count_never_disagrees_with_the_summary(tmp_path):
 
     result = diff_pptx(a, b)
 
-    assert (result["summary"] == "No changes detected.") == (result["change_count"] == 0)
+    assert (result["summary"].startswith("No changes detected")) == (result["change_count"] == 0)
 
 
 def test_the_text_on_a_dropped_slide_is_reported(tmp_path):
@@ -101,4 +101,4 @@ def test_two_identical_decks_still_count_zero(tmp_path):
     result = diff_pptx(a, b)
 
     assert result["change_count"] == 0
-    assert result["summary"] == "No changes detected."
+    assert result["summary"].startswith("No changes detected")

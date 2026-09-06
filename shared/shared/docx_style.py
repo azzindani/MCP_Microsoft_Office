@@ -13,6 +13,7 @@ file I/O, no snapshots, no receipts — the calling engine owns all of that.
 
 from __future__ import annotations
 
+import difflib
 from typing import Any
 
 # Word measures border width in eighths of a point.
@@ -310,3 +311,56 @@ def add_hyperlink(paragraph: Any, url: str, text: str = "", color: str = _LINK_C
     link.append(run)
     paragraph._p.append(link)
     return run
+
+
+class UnknownStyle(KeyError):
+    """A paragraph style name the document does not define."""
+
+
+def resolve_style(doc: Any, name: str) -> Any:
+    """The style object for `name`, or raise `UnknownStyle` naming the real ones.
+
+    Both `append_text` and `insert_paragraph` used to do this:
+
+        try:
+            para.style = doc.styles[style]
+        except KeyError:
+            pass  # Default style
+
+    and then report `"style": style` -- the name the caller sent -- in a
+    response whose `success` was `True`. So `append_text(style="Headng 1")`
+    returned success saying "Heading 1"-ish had been applied, and the paragraph
+    in the file was Normal. Every downstream tool then agreed with the document
+    and not the response: get_document_outline would not list it, and
+    get_document_index would not open a section for it.
+
+    A style that does not exist is not a formatting preference the tool can
+    quietly decline; it is a request the document cannot honour, and the fleet
+    answers those by name -- as train_regressor does for an unknown model.
+    """
+    try:
+        return doc.styles[name]
+    except KeyError:
+        pass
+
+    available = []
+    try:
+        from docx.enum.style import WD_STYLE_TYPE  # type: ignore[import-untyped]
+
+        available = sorted(
+            s.name for s in doc.styles if getattr(s, "type", None) == WD_STYLE_TYPE.PARAGRAPH and s.name
+        )
+    except Exception:  # noqa: BLE001 - a listing is never worth an exception
+        available = sorted(s.name for s in doc.styles if getattr(s, "name", None))
+
+    near = difflib.get_close_matches(name, available, n=1, cutoff=0.6)
+    lead = f"Did you mean {near[0]!r}? " if near else ""
+    # The full set runs past a hundred on a stock template, which is a wall of
+    # text rather than an answer. The headings and body styles are what callers
+    # actually ask for; the rest are named by the count.
+    common = [s for s in available if s.startswith(("Heading", "Title", "Subtitle", "List", "Quote"))]
+    common = ["Normal", "Body Text", *common] if "Normal" in available else common
+    shown = ", ".join(dict.fromkeys(s for s in common if s in available))
+    rest = len(available) - len(set(common) & set(available))
+    more = f" ({rest} more in this document)" if rest > 0 else ""
+    raise UnknownStyle(f"{lead}Styles here include: {shown}{more}.")

@@ -674,11 +674,15 @@ def set_cell_style(
     fill_color: str = "",
     number_format: str = "",
     open_after: bool = False,
+    fill: str = "",
 ) -> dict[str, Any]:
     """Apply font, fill color, and number format to a cell.
 
     bold is "true", "false" or "" (leave unchanged) -- see shared/tristate.py.
     """
+    # docx_tables has a set_cell_style too, and there the shade is `fill`.
+    # Same tool name, same fleet, two spellings; both work at both.
+    fill_color = fill_color or fill
     progress: list[dict[str, Any]] = []
     backup: str | None = None
     path: Path | None = None

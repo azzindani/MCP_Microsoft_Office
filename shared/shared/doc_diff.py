@@ -335,6 +335,16 @@ def format_diff_as_text(diff: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+# What these diffs actually compare. Round 28 changed one font --
+# set_font_all_slides reported `slides_modified: 2, shapes_modified: 3`, and
+# set_font reported a run restyled -- then asked diff_versions about it and was
+# told "No changes detected." on both docx and pptx. The scope is a reasonable
+# one; the sentence was not, because it makes a claim about the DOCUMENTS when
+# it can only make one about the COMPARISON. This file's own opening paragraph
+# warns about exactly this shape of answer.
+_NOT_COMPARED = "no text or structural changes (formatting and styling are not compared)"
+
+
 def _summarise_docx_diff(
     changes: list[dict[str, Any]],
     count_a: int,
@@ -343,7 +353,7 @@ def _summarise_docx_diff(
 ) -> str:
     table_changes = table_changes or []
     if not changes and not table_changes:
-        return "No changes detected."
+        return f"No changes detected: {_NOT_COMPARED}."
 
     # Count the rows and paragraphs, not the opcodes. difflib returns one
     # opcode per contiguous run, so counting opcodes reported a 2-row table
@@ -389,12 +399,12 @@ def _summarise_xlsx_diff(result: dict[str, Any]) -> str:
         parts.append(f"{len(removed)} sheet{'s' if len(removed) != 1 else ''} removed")
     if result.get("truncated"):
         parts.append("(truncated at 500 changes)")
-    return ". ".join(parts) + "." if parts else "No changes detected."
+    return ". ".join(parts) + "." if parts else f"No changes detected: {_NOT_COMPARED}."
 
 
 def _summarise_pptx_diff(changes: list[dict[str, Any]], count_a: int, count_b: int) -> str:
     if not changes and count_a == count_b:
-        return "No changes detected."
+        return f"No changes detected: {_NOT_COMPARED}."
     parts = []
     if changes:
         parts.append(f"{len(changes)} shape text{'s' if len(changes) != 1 else ''} changed")

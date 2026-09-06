@@ -59,7 +59,7 @@ def add_chart(
     height: float = 10.0,
     dest_cell: str = "",
 ) -> dict:
-    """Create chart from data range. type: bar, line, pie, area, scatter."""
+    """Chart from a data range. chart_type: bar, line, pie, area, scatter."""
     return engine.add_chart(
         file_path,
         sheet_name,
@@ -131,6 +131,7 @@ def set_cell_style(
     bold: str = "",
     fill_color: str = "",
     number_format: str = "",
+    fill: str = "",
 ) -> dict:
     """Style a cell: font, fill, format. bold: "true"/"false"/""."""
     return engine.set_cell_style(
@@ -143,6 +144,7 @@ def set_cell_style(
         fill_color,
         number_format,
         open_after=True,
+        fill=fill,
     )
 
 

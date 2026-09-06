@@ -12,6 +12,7 @@ from shared.address_resolver import (
     fetch_section_content,
 )
 from shared.counts import counted
+from shared.docx_style import UnknownStyle, resolve_style
 from shared.file_utils import drop_snapshot_if_unwritten, hint_for_error, resolve_path, scrub_repr
 from shared.handover import make_context, make_handover
 from shared.live_edit import notify_reload
@@ -685,6 +686,24 @@ def insert_paragraph(
                 "token_estimate": 15,
             }
 
+        # The style is checked against the OPEN document, before the snapshot
+        # and before anything is written, so an unknown one costs nothing. It
+        # used to be applied inside a `try: ... except KeyError: pass` after the
+        # save, leaving the paragraph as Normal while the response echoed the
+        # name the caller sent under success: True.
+        try:
+            resolve_style(doc, style)
+        except UnknownStyle as exc:
+            progress.append(fail(f"Unknown paragraph style {style!r}"))
+            return {
+                "success": False,
+                "op": "insert_paragraph",
+                "error": f"Unknown paragraph style: {style!r}. Nothing was written.",
+                "hint": str(exc).strip("'"),
+                "progress": progress,
+                "token_estimate": 40,
+            }
+
         backup = snapshot(str(path))
         progress.append(ok("Snapshot saved", Path(backup).name))
 
@@ -719,10 +738,9 @@ def insert_paragraph(
         doc2 = Document(str(path))
         target_idx = inserted_at
         if target_idx < len(doc2.paragraphs):
-            try:
-                doc2.paragraphs[target_idx].style = doc2.styles[style]  # type: ignore[reportAttributeAccessIssue]
-            except KeyError:
-                pass  # Style doesn't exist — use default
+            # Guaranteed to exist: checked against the same template above,
+            # before this function wrote anything.
+            doc2.paragraphs[target_idx].style = doc2.styles[style]  # type: ignore[reportAttributeAccessIssue]
             doc2.save(str(path))
 
         if open_after:
@@ -892,14 +910,29 @@ def append_text(file_path: str, text: str, style: str = "Body Text", open_after:
         para_count = len(doc.paragraphs)
         progress.append(ok(f"Opened {path.name}", f"{para_count} paragraphs"))
 
+        # The style is checked against the OPEN document, before the snapshot
+        # and before anything is written, so an unknown one costs nothing. It
+        # used to be applied inside a `try: ... except KeyError: pass` after the
+        # save, leaving the paragraph as Normal while the response echoed the
+        # name the caller sent under success: True.
+        try:
+            resolve_style(doc, style)
+        except UnknownStyle as exc:
+            progress.append(fail(f"Unknown paragraph style {style!r}"))
+            return {
+                "success": False,
+                "op": "append_text",
+                "error": f"Unknown paragraph style: {style!r}. Nothing was written.",
+                "hint": str(exc).strip("'"),
+                "progress": progress,
+                "token_estimate": 40,
+            }
+
         backup = snapshot(str(path))
         progress.append(ok("Snapshot saved", Path(backup).name))
 
         new_para = doc.add_paragraph(text)
-        try:
-            new_para.style = doc.styles[style]  # type: ignore[reportAttributeAccessIssue]
-        except KeyError:
-            pass  # Default style
+        new_para.style = doc.styles[style]  # type: ignore[reportAttributeAccessIssue]
 
         doc.save(str(path))
         if open_after:

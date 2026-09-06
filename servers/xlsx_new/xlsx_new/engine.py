@@ -746,6 +746,24 @@ def create_invoice(
         if open_after and open_file(out_path):
             progress.append(ok("Opened in default application"))
 
+        # Every money cell in this file is a FORMULA -- =B7*C7, =SUM(D7:D7),
+        # =D9*0.1, =D9+D10 -- and this server has no calculation engine, so all
+        # four read back as `value: None` until Excel or LibreOffice opens and
+        # saves the file. The response used to show `subtotal` (computed here in
+        # Python, and correct) and nothing else, which read as a finished
+        # invoice while the artifact had four blank cells where the money goes.
+        # set_formula, auto_sum and fill_formula_down all say this in every
+        # response; the tool that writes a document for a client did not.
+        tax_amount = round(subtotal * tax_rate, 2)
+        total = round(subtotal + tax_amount, 2)
+        progress.append(
+            warn(
+                "Totals are formulas, not values",
+                f"Subtotal {subtotal:,.2f}, tax {tax_amount:,.2f}, total {total:,.2f} are "
+                f"written as formulas and have no cached result yet. They read as blank "
+                f"until Excel or LibreOffice opens and saves the file.",
+            )
+        )
         result: dict[str, Any] = {
             "success": True,
             "op": "create_invoice",
@@ -753,7 +771,18 @@ def create_invoice(
             "output_name": out_path.name,
             "item_count": len(items),
             "subtotal": round(subtotal, 2),
+            "tax_rate": tax_rate,
+            "tax": tax_amount,
+            "total": total,
             "currency": currency,
+            "calculated": False,
+            "note": (
+                "Stored, not computed. The line totals, subtotal, tax and total are formulas; "
+                "this server has no calculation engine, so those cells have no cached result "
+                "until Excel or LibreOffice opens the file and saves it. read_cell() reports "
+                "them as type 'formula_uncalculated'. The figures above are computed here and "
+                "are what those cells will show."
+            ),
             "progress": progress,
         }
         embed_content(result, out_path, return_content)
