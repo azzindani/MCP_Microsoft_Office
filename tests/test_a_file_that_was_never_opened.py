@@ -80,9 +80,7 @@ class TestNoWriteClaimsAnOpenThatDidNotHappen:
         sys.path.insert(0, str(ROOT / "servers" / "docx_new"))
         from docx_new import engine
 
-        out = engine.create_from_text(
-            str(tmp_path / "r.docx"), [{"text": "hello", "style": "Normal"}], open_after=True
-        )
+        out = engine.create_from_text(str(tmp_path / "r.docx"), [{"text": "hello", "style": "Normal"}], open_after=True)
         assert out["success"] is True, out.get("error")
         messages = " ".join(str(entry) for entry in out.get("progress", []))
         assert "Opened" not in messages, "claimed an open on a headless box"
