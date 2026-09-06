@@ -45,11 +45,36 @@ class TestOpenFileIsInertUnderPytest:
         assert called == [], "a test run tried to launch the desktop handler"
 
     def test_outside_a_test_run_it_still_opens(self, tmp_path, monkeypatch):
+        """On a machine where opening is possible, it still opens.
+
+        This used to assert the same thing with no environment set up, which
+        worked only because `open_file` would try `xdg-open` unconditionally.
+        It now declines when there is no handler or no display -- a headless
+        container is where these servers actually run, and claiming to have
+        opened a document there was the round-27 finding. So the machine has to
+        be described before the claim can be checked: the guard being tested is
+        PYTEST_CURRENT_TEST, and it must not disable a feature that would
+        otherwise work.
+        """
         called: list = []
         monkeypatch.setattr(platform_utils.subprocess, "Popen", lambda *a, **k: called.append(a))
         monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
-        platform_utils.open_file(tmp_path / "doc.docx")
+        monkeypatch.setenv("DISPLAY", ":0")
+        monkeypatch.setattr(platform_utils.shutil, "which", lambda _: "/usr/bin/xdg-open")
+        assert platform_utils.open_file(tmp_path / "doc.docx") is True
         assert len(called) == 1, "the guard must not disable the feature itself"
+
+    def test_and_it_declines_where_opening_is_impossible(self, tmp_path, monkeypatch):
+        """The other half: no display, no claim, and nothing launched."""
+        called: list = []
+        monkeypatch.setattr(platform_utils.subprocess, "Popen", lambda *a, **k: called.append(a))
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+        monkeypatch.delenv("DISPLAY", raising=False)
+        monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+        monkeypatch.setattr(platform_utils, "is_windows", lambda: False)
+        monkeypatch.setattr(platform_utils, "is_macos", lambda: False)
+        assert platform_utils.open_file(tmp_path / "doc.docx") is False
+        assert called == [], "it launched a handler on a box with no display"
 
 
 class TestWindowsOpensOutOfProcess:

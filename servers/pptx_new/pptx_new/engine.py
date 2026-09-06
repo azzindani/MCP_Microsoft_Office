@@ -100,8 +100,9 @@ def create_presentation(
         prs.save(str(path))
         progress.append(ok(f"Saved {path.name}", "1 slide"))
 
-        if open_after:
-            open_file(path)
+        # Only claim it if a handler actually started; open_file swallowed
+        # every failure, so this said "Opened" on every headless write.
+        if open_after and open_file(path):
             progress.append(ok("Opened in default application"))
 
         result: dict[str, Any] = {
@@ -272,8 +273,9 @@ def create_from_outline(
         prs.save(str(path))
         progress.append(ok(f"Saved {path.name}", f"{slide_count} slides"))
 
-        if open_after:
-            open_file(path)
+        # Only claim it if a handler actually started; open_file swallowed
+        # every failure, so this said "Opened" on every headless write.
+        if open_after and open_file(path):
             progress.append(ok("Opened in default application"))
 
         result: dict[str, Any] = {
@@ -357,8 +359,9 @@ def create_deck_from_data(
         prs.save(str(path))
         progress.append(ok(f"Saved {path.name}", f"{slide_count} slides"))
 
-        if open_after:
-            open_file(path)
+        # Only claim it if a handler actually started; open_file swallowed
+        # every failure, so this said "Opened" on every headless write.
+        if open_after and open_file(path):
             progress.append(ok("Opened in default application"))
 
         result: dict[str, Any] = {
@@ -524,8 +527,9 @@ def create_from_template(
             prs.save(str(path))
             progress.append(ok(f"Applied {applied} substitution(s)", f"{len(subs)} key(s) searched"))
 
-        if open_after:
-            open_file(path)
+        # Only claim it if a handler actually started; open_file swallowed
+        # every failure, so this said "Opened" on every headless write.
+        if open_after and open_file(path):
             progress.append(ok("Opened in default application"))
 
         result: dict[str, Any] = {
@@ -602,8 +606,9 @@ def create_agenda(
         prs.save(str(path))
         progress.append(ok(f"Saved {path.name}", "2 slides"))
 
-        if open_after:
-            open_file(path)
+        # Only claim it if a handler actually started; open_file swallowed
+        # every failure, so this said "Opened" on every headless write.
+        if open_after and open_file(path):
             progress.append(ok("Opened in default application"))
 
         result: dict[str, Any] = {
@@ -783,8 +788,9 @@ def create_from_docx(
                 )
             )
 
-        if open_after:
-            open_file(path)
+        # Only claim it if a handler actually started; open_file swallowed
+        # every failure, so this said "Opened" on every headless write.
+        if open_after and open_file(path):
             progress.append(ok("Opened in default application"))
 
         result: dict[str, Any] = {

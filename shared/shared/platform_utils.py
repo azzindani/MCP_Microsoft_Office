@@ -192,8 +192,21 @@ def resolve_output_path(output_path: str, default_name: str) -> Path:
     return resolved
 
 
-def open_file(path: Path) -> None:
-    """Open file in the default system application. Silently ignored on failure."""
+def open_file(path: Path) -> bool:
+    """Open file in the default system application. True only if a handler started.
+
+    Returns rather than swallowing, because the callers were appending
+    `ok("Opened <file> in default app")` unconditionally after calling this --
+    so every document written on a headless container reported, with status
+    `ok`, that it had been opened by a desktop application that does not exist
+    there. Nothing broke; the response simply said something untrue on every
+    write, and `open_after` defaults to True.
+
+    False means "no handler was launched", which is the honest answer in a
+    container, under pytest, and whenever the launcher raises. It does not
+    promise the document reached a window: `Popen` returning is the furthest
+    this can see, and a handler that starts and then fails is out of reach.
+    """
     # A test run must never launch Word. Every write wrapper passes
     # open_after=True, so a suite that exercises them asks the desktop shell to
     # open a document per call -- on the Windows runner that reached the COM
@@ -207,7 +220,7 @@ def open_file(path: Path) -> None:
     # with no failing test named and no traceback, because an access violation
     # is not an exception the `except` below can catch.
     if os.environ.get("PYTEST_CURRENT_TEST"):
-        return
+        return False
     try:
         if is_windows():
             # In a child process rather than in-process os.startfile(): the
@@ -217,6 +230,14 @@ def open_file(path: Path) -> None:
         elif is_macos():
             subprocess.Popen(["open", str(path.resolve())])
         else:
+            # A headless Linux box is the common deployment here, and it splits
+            # two ways: no xdg-open at all (this fleet's containers -- Popen
+            # raises and the except below is honest), or xdg-open present with
+            # no display, where Popen succeeds and the document opens nowhere.
+            # Both must answer False.
+            if not shutil.which("xdg-open") or not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+                return False
             subprocess.Popen(["xdg-open", str(path.resolve())])
     except Exception:
-        pass
+        return False
+    return True

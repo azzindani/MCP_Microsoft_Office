@@ -151,8 +151,9 @@ def create_workbook(
         wb.save(str(path))
         progress.append(ok(f"Saved {path.name}", f"sheet: {sheet_name}"))
 
-        if open_after:
-            open_file(path)
+        # Only claim it if a handler actually started; open_file swallowed
+        # every failure, so this said "Opened" on every headless write.
+        if open_after and open_file(path):
             progress.append(ok("Opened in default application"))
 
         result: dict[str, Any] = {
@@ -220,8 +221,9 @@ def create_from_data(
         wb.save(str(path))
         progress.append(ok(f"Saved {path.name}"))
 
-        if open_after:
-            open_file(path)
+        # Only claim it if a handler actually started; open_file swallowed
+        # every failure, so this said "Opened" on every headless write.
+        if open_after and open_file(path):
             progress.append(ok("Opened in default application"))
 
         result: dict[str, Any] = {
@@ -304,8 +306,9 @@ def create_report(
         wb.save(str(path))
         progress.append(ok(f"Saved {path.name}", f"{sheet_count + 1} sheets total"))
 
-        if open_after:
-            open_file(path)
+        # Only claim it if a handler actually started; open_file swallowed
+        # every failure, so this said "Opened" on every headless write.
+        if open_after and open_file(path):
             progress.append(ok("Opened in default application"))
 
         result: dict[str, Any] = {
@@ -420,8 +423,9 @@ def create_from_template(
         wb.save(str(dst))
         progress.append(ok(f"Saved {dst.name}"))
 
-        if open_after:
-            open_file(dst)
+        # Only claim it if a handler actually started; open_file swallowed
+        # every failure, so this said "Opened" on every headless write.
+        if open_after and open_file(dst):
             progress.append(ok("Opened in default application"))
 
         result: dict[str, Any] = {
@@ -511,8 +515,9 @@ def create_from_csv(
         wb.save(str(out_path))
         progress.append(ok(f"Saved {out_path.name}", f"{row_count} data row(s)"))
 
-        if open_after:
-            open_file(out_path)
+        # Only claim it if a handler actually started; open_file swallowed
+        # every failure, so this said "Opened" on every headless write.
+        if open_after and open_file(out_path):
             progress.append(ok("Opened in default application"))
 
         result: dict[str, Any] = {
@@ -736,8 +741,9 @@ def create_invoice(
         wb.save(str(out_path))
         progress.append(ok(f"Saved {out_path.name}"))
 
-        if open_after:
-            open_file(out_path)
+        # Only claim it if a handler actually started; open_file swallowed
+        # every failure, so this said "Opened" on every headless write.
+        if open_after and open_file(out_path):
             progress.append(ok("Opened in default application"))
 
         result: dict[str, Any] = {

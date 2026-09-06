@@ -57,9 +57,16 @@ def enforce_known_arguments(mcp: Any) -> None:
     ) -> Any:
         tool = manager.get_tool(name)
         if tool is not None and isinstance(arguments, dict):
-            known = sorted((tool.parameters or {}).get("properties", {}))
+            schema = tool.parameters or {}
+            known = sorted(schema.get("properties", {}))
             unknown = [k for k in arguments if k not in known]
-            if unknown and known:
+            # Gate on the schema being readable, not on it being non-empty. The
+            # first version tested `unknown and known`, so a tool taking NO
+            # arguments accepted every argument in silence: its `known` list is
+            # empty and the guard fell straight through. An explicit
+            # `properties: {}` is a tool that takes nothing, which is worth
+            # enforcing; a missing `properties` is a schema we cannot read.
+            if unknown and "properties" in schema:
                 first = unknown[0]
                 suggestion = _did_you_mean(first, known)
                 # The accepted names go in once. The first version of this

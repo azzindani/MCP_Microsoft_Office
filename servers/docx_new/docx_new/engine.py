@@ -70,8 +70,11 @@ def _ensure_parent(path: Path) -> None:
 
 
 def _open_if_requested(path: Path, open_after: bool, progress: list[dict[str, Any]]) -> None:
-    if open_after:
-        open_file(path)
+    # Only claim it if it happened. `open_file` swallows every failure, so this
+    # used to append "Opened <file> in default app" with status ok on a headless
+    # container where no desktop application exists -- on every write, since
+    # open_after defaults to True.
+    if open_after and open_file(path):
         progress.append(ok(f"Opened {path.name} in default app"))
 
 
