@@ -94,11 +94,29 @@ jobs:
         id: tag
         run: echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
 
+      # `generate_release_notes` alone lists merged PRs, and this repo pushes
+      # straight to main -- so v0.2.0's page was published with nothing on it
+      # but a compare link. The commit subjects are the record here; write them.
+      - name: Generate changelog
+        run: |
+          PREV_TAG=$(git tag --sort=-creatordate | head -2 | tail -1)
+          if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "${GITHUB_REF#refs/tags/}" ]; then
+            LOG=$(git log --oneline --no-decorate | head -50)
+          else
+            LOG=$(git log --oneline --no-decorate "${PREV_TAG}..HEAD" | head -50)
+          fi
+          {
+            echo "## What's Changed"
+            echo ""
+            echo "$LOG" | sed 's/^/- /'
+          } > /tmp/changelog.txt
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.version }}
           name: ${{ steps.tag.outputs.version }}
+          body_path: /tmp/changelog.txt
           draft: false
           prerelease: ${{ contains(steps.tag.outputs.version, '-rc') || contains(steps.tag.outputs.version, '-beta') || contains(steps.tag.outputs.version, '-alpha') }}
           generate_release_notes: true
