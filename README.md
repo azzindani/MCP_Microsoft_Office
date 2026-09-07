@@ -2,11 +2,11 @@
 
 A self-hosted MCP server that gives local LLMs full control over Word, Excel, and PowerPoint files. No cloud APIs, no API keys — everything runs on your machine and writes directly to your files.
 
-**Release [`v0.1.2`](https://github.com/azzindani/MCP_Microsoft_Office/releases/tag/v0.1.2)** — source only. No wheel and no container image are published: install from the tag with the bundled installer, or build the image yourself from the `Dockerfile` in this repo.
+**Release [`v0.2.0`](https://github.com/azzindani/MCP_Microsoft_Office/releases/tag/v0.2.0)** — source only. No wheel and no container image are published: install from the tag with the bundled installer, or build the image yourself from the `Dockerfile` in this repo.
 
 ## Features
 
-- **98 tools** across 11 servers — Word, Excel, PowerPoint read, edit, and create
+- **99 tools** across 11 servers — Word, Excel, PowerPoint read, edit, and create (90 distinct names; `add_chart`, `create_from_template` and six others are served by more than one app)
 - **Create new documents** — blank or structured, from text, sections, templates, or outlines
 - **Auto-open** — every creation and export tool opens the file in its native app automatically
 - **Batch generation** — one template + a list of data → N output files (offer letters, invoices, proposals)
@@ -289,7 +289,7 @@ Pick only what you need. Each block is standalone — paste it inside the `"mcpS
 </details>
 
 <details>
-<summary><strong>docx_new</strong> — create Word documents from scratch (8 tools)</summary>
+<summary><strong>docx_new</strong> — create Word documents from scratch (9 tools)</summary>
 
 ```json
 "docx_new": {
@@ -475,7 +475,7 @@ Read, search, and edit existing `.docx` files surgically without touching surrou
 | `add_header_footer` | Set header or footer for all pages — `font_size`, `color`, `align`, and `page_numbers` for a live PAGE field |
 | `export_pdf` | Export to PDF via LibreOffice or Word. `open_after=True` opens it automatically |
 
-### Word — docx_new (8 tools)
+### Word — docx_new (9 tools)
 
 Create new Word documents from scratch. Every tool accepts `open_after=True`.
 
@@ -485,6 +485,7 @@ Create new Word documents from scratch. Every tool accepts `open_after=True`.
 | `create_from_text` | Build from a `[{text, style}]` paragraph list |
 | `create_from_sections` | Structured doc from `[{heading, body}]` sections — Heading 1 title, Heading 2 sections |
 | `create_from_blocks` | Designed doc in one call from typed blocks — `heading`, `text`, `bullets`, `table`, `kpi`, `callout`, `rule`, `pagebreak` (see below) |
+| `list_block_kinds` | Every block kind `create_from_blocks` accepts, with its keys and an example each. The block grammar lives inside a `list[dict]`, so the schema cannot show it |
 
 #### `create_from_blocks` — a readable document in one call
 
