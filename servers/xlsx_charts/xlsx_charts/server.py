@@ -2,6 +2,7 @@
 
 import argparse
 import os
+from typing import TYPE_CHECKING
 
 from mcp.server.fastmcp import FastMCP
 from starlette.requests import Request
@@ -9,6 +10,7 @@ from starlette.responses import JSONResponse
 
 from shared.arg_errors import contract_errors
 from shared.deploy_auth import build_auth, build_oauth_bridge
+from shared.schema_enum import one_of
 from shared.strict_args import enforce_known_arguments
 from shared.token_estimate import measure_responses
 from shared.tool_annotations import EDITS
@@ -20,6 +22,15 @@ _PORT = int(os.environ.get("OFFICE_XLSX_CHARTS_PORT", "8836"))
 _oauth_bridge = build_oauth_bridge(
     "OFFICE", state_dir=os.environ.get("OFFICE_XLSX_CHARTS_OAUTH_STATE_DIR", "/tmp/office-xlsx-charts-oauth-state")
 )
+
+# The legal values each dispatch parameter names in its schema. Rendered
+# from the table the runtime switches on -- never a second copy -- and split
+# on TYPE_CHECKING because a call expression is not a type expression to a
+# static checker, while a checker only needs to know these are strings.
+if TYPE_CHECKING:
+    ChartType = str
+else:
+    ChartType = one_of("bar", "line", "pie", "area", "scatter")
 _public_origin = os.environ.get("OFFICE_PUBLIC_URL", "").rstrip("/")
 _public_url = f"{_public_origin}/xlsx-charts" if _public_origin else None
 _token_verifier, _auth_settings = build_auth("OFFICE", _HOST, _PORT, _oauth_bridge, public_url=_public_url)
@@ -51,7 +62,7 @@ async def version(request: Request) -> JSONResponse:
 def add_chart(
     file_path: str,
     sheet_name: str,
-    chart_type: str,
+    chart_type: ChartType,
     data_range: str,
     title: str = "",
     anchor_cell: str = "",
