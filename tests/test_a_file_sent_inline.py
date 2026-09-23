@@ -140,3 +140,107 @@ def test_the_routes_name_the_inline_form_and_its_cap(monkeypatch):
     assert "2 MB" in routes
     assert intake_routes("write it with fs_write").startswith("write it with fs_write")
     assert exchange.client_side_refusal("/mnt/user-data/uploads/x.csv").count("data:") == 1
+
+
+class TestAFileSentInParts:
+    """A file too big for one call arrives in parts; the tool runs once it is whole."""
+
+    WHOLE = b"id,value\n" + b"".join(f"{i},{i * i}\n".encode() for i in range(300))
+
+    def _parts(self, n: int = 3, name: str = "big.csv", whole: bytes | None = None, digest: str = ""):
+        import hashlib
+
+        whole = self.WHOLE if whole is None else whole
+        digest = digest or hashlib.sha256(whole).hexdigest()
+        size = -(-len(whole) // n)
+        chunks = [whole[i * size : (i + 1) * size] for i in range(n)]
+        return [
+            f"data:text/csv;name={name};part={i + 1}/{n};sha256={digest};base64,{base64.b64encode(c).decode()}"
+            for i, c in enumerate(chunks)
+        ]
+
+    def _tool(self):
+        ran = []
+
+        def read_it(file_path: str) -> dict:
+            ran.append(file_path)
+            return {"success": True, "file_path": file_path}
+
+        tool = SimpleNamespace(name="read_it", fn=read_it)
+        accept_inline_files(SimpleNamespace(_tool_manager=SimpleNamespace(_tools={"read_it": tool})))
+        return tool.fn, ran
+
+    def test_the_tool_runs_once_on_the_whole_file(self, inbox):
+        call, ran = self._tool()
+        first, second, third = self._parts()
+        pending = call(file_path=first)
+        assert pending["success"] is True and pending["tool_ran"] is False
+        assert pending["upload"] == {"name": "big.csv", "parts": 3, "received": [1], "missing": [2, 3]}
+        assert "read_it runs on big.csv" in pending["hint"]
+        call(file_path=second)
+        assert ran == []
+        done = call(file_path=third)
+        assert done["success"] is True and ran == [str(inbox / "big.csv")]
+        assert (inbox / "big.csv").read_bytes() == self.WHOLE
+        assert not any((inbox / ".parts").iterdir())
+
+    def test_parts_arrive_in_any_order_and_a_resent_part_replaces_itself(self, inbox):
+        call, ran = self._tool()
+        first, second, third = self._parts()
+        call(file_path=third)
+        call(file_path=first)
+        call(file_path=first)
+        assert call(file_path=second)["success"] is True
+        assert (inbox / "big.csv").read_bytes() == self.WHOLE
+
+    def test_parts_that_do_not_add_up_are_refused_and_dropped(self, inbox):
+        call, ran = self._tool()
+        parts = self._parts(digest="0" * 64)
+        call(file_path=parts[0])
+        call(file_path=parts[1])
+        refused = call(file_path=parts[2])
+        assert refused["success"] is False and "do not add up" in refused["error"]
+        assert ran == [] and not (inbox / "big.csv").exists()
+        assert not any((inbox / ".parts").iterdir())
+
+    def test_a_part_numbered_out_of_another_total_is_refused(self, inbox):
+        call, _ = self._tool()
+        call(file_path=self._parts(3)[0])
+        other = self._parts(4)[1]
+        assert "disagrees" in call(file_path=other)["error"]
+
+    def test_the_whole_file_is_capped(self, inbox, monkeypatch):
+        monkeypatch.setenv("MCP_MAX_UPLOAD_MB", "0.002")
+        call, ran = self._tool()
+        parts = self._parts(3)
+        results = [call(file_path=p) for p in parts]
+        assert any(r["success"] is False and "larger than" in r.get("error", "") for r in results)
+        assert ran == []
+
+    @pytest.mark.parametrize(
+        ("header", "says"),
+        [
+            ("part=2;sha256=" + "a" * 64, "part=<this part>/<all parts>"),
+            ("part=4/3;sha256=" + "a" * 64, "not one of"),
+            ("part=1/2", "SHA-256"),
+        ],
+    )
+    def test_a_malformed_part_is_refused_by_name(self, inbox, header, says):
+        call, _ = self._tool()
+        result = call(file_path=f"data:text/csv;name=x.csv;{header};base64,{base64.b64encode(b'a').decode()}")
+        assert result["success"] is False and says in result["error"]
+
+    def test_an_abandoned_upload_is_forgotten_after_an_hour(self, inbox):
+        import os
+        import time
+
+        call, _ = self._tool()
+        call(file_path=self._parts(3, name="old.csv", whole=b"x" * 30)[0])
+        stale = next((inbox / ".parts").iterdir())
+        hour_ago = time.time() - 3700
+        os.utime(stale, (hour_ago, hour_ago))
+        call(file_path=self._parts(3)[0])
+        assert not stale.exists()
+
+    def test_the_routes_say_how_to_send_parts(self):
+        assert "part=<i>/<n>;sha256=" in intake_routes()

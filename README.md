@@ -740,6 +740,7 @@ For lower-memory machines, set `MCP_CONSTRAINED_MODE=1` in the `env` section of 
 | `MCP_FETCH_ALLOW_PRIVATE` | `0` | `1` permits fetching hosts on private/loopback addresses |
 | `MCP_MAX_FETCH_MB` | `100` | Size cap for a fetched URL |
 | `MCP_MAX_INLINE_MB` | `10` | Size cap for a file sent inline, as a `data:` URI where a path goes |
+| `MCP_MAX_UPLOAD_MB` | `100` | Size cap for a whole file sent inline in parts |
 
 ### Hybrid local + remote file handling
 
@@ -772,6 +773,10 @@ are unset by default, so a local install stays offline and writes to
   claude.ai upload) with no link to give. Every byte is model output, so it
   is capped at `MCP_MAX_INLINE_MB` (default 10); the same bytes sent twice
   are one file, and a taken name is never overwritten.
+  A bigger file goes in parts: add `part=2/5;sha256=<of the whole file>` to
+  each. The tool answers `tool_ran: false` with the parts still missing until
+  the last lands, then runs on the joined, checked file (`MCP_MAX_UPLOAD_MB`,
+  default 100; an upload left unfinished for an hour is dropped).
 
 Document-creating tools also accept `return_content=True`, which embeds the
 file's bytes as `content_base64` for callers that have neither a shared

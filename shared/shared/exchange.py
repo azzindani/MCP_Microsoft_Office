@@ -34,6 +34,7 @@ import hashlib
 import ipaddress
 import os
 import re
+import shutil
 import socket
 import sys
 import tempfile
@@ -376,7 +377,8 @@ def intake_routes(inline_route: str = "") -> str:
         inline_route
         or (
             "send its contents in place of the path as data:<type>;name=<file name>;base64,<bytes> "
-            f"(up to {_max_inline_bytes() / (1024 * 1024):g} MB)"
+            f"(up to {_max_inline_bytes() / (1024 * 1024):g} MB a call; a bigger file in parts, adding "
+            "part=<i>/<n>;sha256=<of the whole file> to each)"
         )
     ]
     if url_fetch_enabled():
@@ -403,12 +405,45 @@ def client_side_refusal(raw: str, inline_route: str = "") -> str:
 # ---------------------------------------------------------------------------
 
 _DEFAULT_MAX_INLINE_MB = 10
+_DEFAULT_MAX_UPLOAD_MB = 100
+_STALE_PARTS_SECONDS = 3600
 _INLINE_URI = re.compile(r"^data:(?P<meta>[^,]*),(?P<body>.*)$", re.DOTALL | re.IGNORECASE)
+_PART = re.compile(r"^(\d{1,4})/(\d{1,4})$")
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
+
+
+class UploadPending(Exception):
+    """A part of a file sent in parts was stored; the file is not whole yet."""
+
+    def __init__(self, name: str, parts: int, received: list[int], missing: list[int]) -> None:
+        super().__init__(f"{name}: {len(received)} of {parts} parts received")
+        self.name = name
+        self.parts = parts
+        self.received = received
+        self.missing = missing
 
 
 def is_inline(raw: Any) -> bool:
     """True when `raw` is an inline file -- a data: URI -- rather than a path or a link."""
     return isinstance(raw, str) and raw.lstrip()[:5].lower() == "data:"
+
+
+def _max_upload_bytes() -> int:
+    """The cap on a whole file sent in parts, in bytes (MCP_MAX_UPLOAD_MB, default 100)."""
+    raw = os.environ.get("MCP_MAX_UPLOAD_MB", "").strip()
+    try:
+        megabytes = float(raw) if raw else _DEFAULT_MAX_UPLOAD_MB
+    except ValueError:
+        megabytes = _DEFAULT_MAX_UPLOAD_MB
+    return int(max(megabytes, 0.001) * 1024 * 1024)
+
+
+def _inline_params(raw: str) -> dict[str, str]:
+    """The `key=value` parameters of a data: URI's header, keys lower-cased."""
+    match = _INLINE_URI.match(raw.strip())
+    meta = match.group("meta") if match else ""
+    pairs = (p.split("=", 1) for p in meta.split(";") if "=" in p)
+    return {key.strip().lower(): unquote(value).strip() for key, value in pairs}
 
 
 def _max_inline_bytes() -> int:
@@ -472,15 +507,8 @@ def inline_bytes(raw: str) -> tuple[str, bytes]:
     return name, payload
 
 
-def save_inline(raw: str) -> Path:
-    """Write an inline file into the inbox and return its path.
-
-    The name the caller gave is kept, so the file is found by it afterwards.
-    Sent twice, the same bytes are the same file; different bytes under a name
-    already taken get the first eight hex digits of their SHA-256 appended,
-    so nothing already in the inbox is ever overwritten.
-    """
-    name, payload = inline_bytes(raw)
+def _store(name: str, payload: bytes) -> Path:
+    """Write `payload` into the inbox as `name`, never over a different file."""
     inbox = get_inbox_dir()
     target = inbox / name
     if target.exists():
@@ -490,7 +518,12 @@ def save_inline(raw: str) -> Path:
         target = inbox / f"{Path(name).stem}_{digest}{Path(name).suffix}"
         if target.exists() and target.is_file() and target.read_bytes() == payload:
             return target
-    handle, temp_name = tempfile.mkstemp(dir=str(inbox))
+    _write_atomically(target, payload)
+    return target
+
+
+def _write_atomically(target: Path, payload: bytes) -> None:
+    handle, temp_name = tempfile.mkstemp(dir=str(target.parent))
     try:
         with os.fdopen(handle, "wb") as stream:
             stream.write(payload)
@@ -499,7 +532,92 @@ def save_inline(raw: str) -> Path:
     except Exception:
         Path(temp_name).unlink(missing_ok=True)
         raise
-    return target
+
+
+def _drop_stale_parts(root: Path) -> None:
+    """Forget uploads left unfinished for an hour, so parts cannot pile up."""
+    if not root.is_dir():
+        return
+    cutoff = time.time() - _STALE_PARTS_SECONDS
+    for folder in root.iterdir():
+        try:
+            if folder.is_dir() and folder.stat().st_mtime < cutoff:
+                shutil.rmtree(folder, ignore_errors=True)
+        except OSError:
+            continue
+
+
+def _store_part(name: str, payload: bytes, params: dict[str, str]) -> Path:
+    """Keep one part of a file sent in parts; the whole file's path once the last arrives.
+
+    A file too big for one call -- every byte is model output -- is sent as
+    parts, each `data:;name=big.csv;part=2/5;sha256=<of the whole file>;base64,..`.
+    Parts wait in the inbox's hidden `.parts` folder, keyed by the whole
+    file's SHA-256, and arrive in any order; a part sent again replaces
+    itself. When the last one lands they are joined, checked against the
+    SHA-256 and written like any inline file.
+
+    Raises:
+        UploadPending: the part was stored and others are still missing.
+        ValueError: a malformed part, parts that disagree, a whole file over
+            MCP_MAX_UPLOAD_MB, or parts that do not add up to their SHA-256.
+    """
+    match = _PART.match(params.get("part", ""))
+    if not match:
+        raise ValueError("A part is numbered part=<this part>/<all parts>, e.g. part=2/5.")
+    index, total = int(match.group(1)), int(match.group(2))
+    if not 1 <= index <= total:
+        raise ValueError(f"part={index}/{total} is not one of the {total} parts.")
+    digest = params.get("sha256", "").lower()
+    if not _SHA256.match(digest):
+        raise ValueError("Every part names the SHA-256 of the whole file: sha256=<64 hex digits>.")
+    root = get_inbox_dir() / ".parts"
+    _drop_stale_parts(root)
+    folder = root / digest
+    folder.mkdir(parents=True, exist_ok=True)
+    declared = folder / "parts"
+    if declared.exists() and declared.read_text(encoding="utf-8").strip() != str(total):
+        raise ValueError(
+            f"This file was started as {declared.read_text(encoding='utf-8').strip()} parts; "
+            f"part={index}/{total} disagrees. Number every part out of the same total."
+        )
+    declared.write_text(str(total), encoding="utf-8")
+    held = sum(p.stat().st_size for p in folder.glob("*.part") if p.name != f"{index}.part")
+    limit = _max_upload_bytes()
+    if held + len(payload) > limit:
+        shutil.rmtree(folder, ignore_errors=True)
+        raise ValueError(
+            f"The file sent in parts is larger than the {limit / (1024 * 1024):g} MB limit; nothing was kept."
+        )
+    _write_atomically(folder / f"{index}.part", payload)
+    received = sorted(int(p.stem) for p in folder.glob("*.part"))
+    missing = [i for i in range(1, total + 1) if i not in received]
+    if missing:
+        raise UploadPending(name, total, received, missing)
+    whole = b"".join((folder / f"{i}.part").read_bytes() for i in range(1, total + 1))
+    shutil.rmtree(folder, ignore_errors=True)
+    if hashlib.sha256(whole).hexdigest() != digest:
+        raise ValueError(
+            "The parts do not add up to the sha256 they were sent with, so nothing was kept. "
+            "Send every part again."
+        )
+    return _store(name, whole)
+
+
+def save_inline(raw: str) -> Path:
+    """Write an inline file into the inbox and return its path.
+
+    The name the caller gave is kept, so the file is found by it afterwards.
+    Sent twice, the same bytes are the same file; different bytes under a name
+    already taken get the first eight hex digits of their SHA-256 appended,
+    so nothing already in the inbox is ever overwritten. A file sent in parts
+    (`part=` and `sha256=` in the header) is written once the last part lands.
+    """
+    name, payload = inline_bytes(raw)
+    params = _inline_params(raw)
+    if "part" in params:
+        return _store_part(name, payload, params)
+    return _store(name, payload)
 
 
 def inline_arguments(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -543,6 +661,26 @@ def _accepting_inline(fn: Any, name: str) -> Any:
         if any(_carries_inline(value) for value in kw.values()):
             try:
                 kw = inline_arguments(kw)
+            except UploadPending as pending:
+                shown = ", ".join(str(i) for i in pending.missing[:20])
+                more = f" and {len(pending.missing) - 20} more" if len(pending.missing) > 20 else ""
+                return {
+                    "success": True,
+                    "op": name,
+                    "tool_ran": False,
+                    "upload": {
+                        "name": pending.name,
+                        "parts": pending.parts,
+                        "received": pending.received,
+                        "missing": pending.missing,
+                    },
+                    "hint": (
+                        f"Part stored. Send the other parts the same way (missing: {shown}{more}); "
+                        f"{name} runs on {pending.name} when the last one arrives."
+                    ),
+                    "progress": [],
+                    "token_estimate": 0,
+                }
             except ValueError as exc:
                 return {
                     "success": False,
