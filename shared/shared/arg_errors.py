@@ -94,10 +94,21 @@ def explain(message: str) -> list[tuple[str, str]]:
     return out
 
 
+def _argument(field: str) -> str:
+    """The argument a pydantic field path belongs to: features.0.type -> features."""
+    return field.split(".", 1)[0]
+
+
+def _readable(field: str) -> str:
+    """A field path as a caller writes it: features.0.type -> features[0].type."""
+    head, *rest = field.split(".")
+    return head + "".join(f"[{part}]" if part.isdigit() else f".{part}" for part in rest)
+
+
 def _refusal(name: str, known: list[str], message: str) -> dict[str, Any]:
     problems = explain(message)
     if problems:
-        error = f"{name} rejected an argument: " + "; ".join(f"{f}: {w}" for f, w in problems)
+        error = f"{name} rejected an argument: " + "; ".join(f"{_readable(f)}: {w}" for f, w in problems)
     else:
         # Never invent a field name. If the message did not parse, pass it
         # through cleaned -- minus the URL, which is the one part that is
@@ -111,7 +122,10 @@ def _refusal(name: str, known: list[str], message: str) -> dict[str, Any]:
     # required argument" AND "Unexpected keyword argument" together.
     missing = [f for f, w in problems if w.startswith(("Field required", "Missing required argument"))]
     unexpected = [f for f, w in problems if w.startswith("Unexpected keyword argument")]
-    unknown = unexpected or [f for f in bad if known and f not in known]
+    # pydantic names a list or dict ELEMENT by its path -- features.0 -- which is
+    # not an argument name, so it read as a misspelling and the hint asked
+    # "Did you mean features=?" of a caller who had used exactly that.
+    unknown = unexpected or [f for f in bad if known and _argument(f) not in known]
     if unknown and known:
         near = difflib.get_close_matches(unknown[0], known, n=1, cutoff=0.6)
         lead = f"Did you mean {near[0]}=? " if near else ""
@@ -121,7 +135,7 @@ def _refusal(name: str, known: list[str], message: str) -> dict[str, Any]:
         # a type they never supplied sends them to look at the wrong thing, and
         # a hint naming a specific wrong fix is worse than a vague one.
         others = f" {name} accepts: {', '.join(known)}." if known else ""
-        hint = f"{', '.join(missing)} is required.{others}"
+        hint = f"{', '.join(_readable(f) for f in missing)} is required.{others}"
     elif bad:
         # A bool rejected where a string is expected is, in this fleet, a
         # THREE-STATE flag: bold and italic are spelled "true" / "false" / ""
@@ -138,7 +152,7 @@ def _refusal(name: str, known: list[str], message: str) -> dict[str, Any]:
                 "Nothing was written."
             )
         else:
-            hint = f"Correct the type of {', '.join(bad)} and call again. Nothing was written."
+            hint = f"Correct the type of {', '.join(_readable(f) for f in bad)} and call again. Nothing was written."
     elif known:
         hint = f"{name} accepts: {', '.join(known)}."
     else:
