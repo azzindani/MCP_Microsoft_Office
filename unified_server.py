@@ -36,6 +36,8 @@ from servers.docx_basic.docx_basic.server import mcp as docx_basic_mcp
 from servers.docx_layout.docx_layout.server import mcp as docx_layout_mcp
 from servers.docx_new.docx_new.server import mcp as docx_new_mcp
 from servers.docx_tables.docx_tables.server import mcp as docx_tables_mcp
+from servers.office_domain.office_domain.server import _oauth_bridge as _domain_bridge
+from servers.office_domain.office_domain.server import mcp as domain_mcp
 from servers.pptx_basic.pptx_basic.server import mcp as pptx_basic_mcp
 from servers.pptx_design.pptx_design.server import mcp as pptx_design_mcp
 from servers.pptx_new.pptx_new.server import mcp as pptx_new_mcp
@@ -65,16 +67,19 @@ _SUB_SERVERS = {
 # office.casava.space) forwarded via `header_up Host {host}`, so that check
 # rejects every real remote request with "Invalid Host header". Caddy is
 # already the trust boundary here, so disable it for the mounted sub-apps.
-for _sub_mcp in _SUB_SERVERS.values():
+for _sub_mcp in (*_SUB_SERVERS.values(), domain_mcp):
     _sub_mcp.settings.transport_security = TransportSecuritySettings(enable_dns_rebinding_protection=False)
 
 _sub_apps = {name: mcp.streamable_http_app() for name, mcp in _SUB_SERVERS.items()}
+# The ten domain tools, served at the root: /mcp. Every tier above keeps its
+# own endpoint; see servers/office_domain/office_domain/server.py.
+_domain_app = domain_mcp.streamable_http_app()
 
 
 @asynccontextmanager
 async def _combined_lifespan(app):
     async with AsyncExitStack() as stack:
-        for sub_app in _sub_apps.values():
+        for sub_app in (*_sub_apps.values(), _domain_app):
             await stack.enter_async_context(sub_app.router.lifespan_context(sub_app))
         yield
 
@@ -93,6 +98,7 @@ async def _root(request: Request) -> JSONResponse:
     return JSONResponse(
         {
             "server": "MCP_Microsoft_Office",
+            "mcp": "/mcp",
             "sub_servers": {name: f"/{name}/mcp" for name in _SUB_SERVERS},
         }
     )
@@ -133,13 +139,33 @@ _discovery_redirects = [
     )
 ]
 
+# Discovery for /mcp. A client connecting https://host/mcp asks, per RFC 9728,
+# for /.well-known/oauth-protected-resource/mcp, and the 401 names the bare
+# /.well-known/oauth-protected-resource. Mounted at the root, the SDK's own
+# metadata route would answer the second with the origin as the resource (not
+# .../mcp), and nothing would answer the first -- found live on
+# MCP_Data_Analyst. The bridge's metadata is the one consistent with its
+# authorization server at the root, so both paths go to it.
+_domain_discovery = (
+    []
+    if _domain_bridge is None
+    else [
+        Route("/.well-known/oauth-protected-resource/mcp", _domain_bridge.protected_resource),
+        Route("/.well-known/oauth-protected-resource", _domain_bridge.protected_resource),
+    ]
+)
+
 app = Starlette(
     routes=[
         Route("/health", _root_health),
         Route("/version", _root_version),
         Route("/", _root),
         *_discovery_redirects,
+        *_domain_discovery,
         *(Mount(f"/{name}", app=sub_app) for name, sub_app in _sub_apps.items()),
+        # Last, so every route above wins: /mcp and the domain server's own
+        # OAuth routes answer at the root.
+        Mount("", app=_domain_app),
     ],
     lifespan=_combined_lifespan,
 )

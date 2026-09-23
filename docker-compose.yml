@@ -60,6 +60,7 @@ services:
       OFFICE_PPTX_BASIC_OAUTH_STATE_DIR: /home/app/.oauth-state/pptx-basic
       OFFICE_PPTX_DESIGN_OAUTH_STATE_DIR: /home/app/.oauth-state/pptx-design
       OFFICE_PPTX_NEW_OAUTH_STATE_DIR: /home/app/.oauth-state/pptx-new
+      OFFICE_DOMAIN_OAUTH_STATE_DIR: /home/app/.oauth-state/domain
       OFFICE_OAUTH_CLIENT_ID: ${OFFICE_OAUTH_CLIENT_ID:-}
       OFFICE_OAUTH_CLIENT_SECRET: ${OFFICE_OAUTH_CLIENT_SECRET:-}
       # Hybrid file exchange — see README "Hybrid local + remote file handling".

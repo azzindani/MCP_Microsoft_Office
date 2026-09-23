@@ -6,6 +6,7 @@ A self-hosted MCP server that gives local LLMs full control over Word, Excel, an
 
 ## Features
 
+- **One endpoint, ten tools** — `/mcp` serves every Office tool as ten domain tools: `docx_read`, `docx_edit`, `docx_create`, `xlsx_read`, `xlsx_edit`, `xlsx_create`, `pptx_read`, `pptx_edit`, `pptx_create`, `office_history`. Each takes an `action` (one of the 99 tools below, by its own name) and an `args` object whose every property says which actions take it. Same validation and answers as the tiers; the eleven tier endpoints keep serving for small local models and existing connections
 - **99 tools** across 11 servers — Word, Excel, PowerPoint read, edit, and create (90 distinct names; `add_chart`, `create_from_template` and six others are served by more than one app)
 - **Create new documents** — blank or structured, from text, sections, templates, or outlines
 - **Auto-open** — every creation and export tool opens the file in its native app automatically
@@ -425,6 +426,35 @@ Pick only what you need. Each block is standalone — paste it inside the `"mcpS
 </details>
 
 ## Available Tools
+
+### One endpoint: ten domain tools at `/mcp`
+
+For a capable model, connect `/mcp` instead of the eleven tiers: ten tools
+instead of 99. `action` names a tool below; `args` holds its arguments.
+
+```json
+{"action": "get_document_outline", "args": {"file_path": "brief.docx"}}
+```
+
+| Tool | Actions |
+|---|---|
+| `docx_read` | get_document_outline, get_document_index, fetch_section, read_document, read_paragraph, read_paragraph_range, search_paragraphs, list_tables, read_table, search_table_cells, read_table_row, diff_versions |
+| `docx_edit` | replace_text, insert_paragraph, delete_paragraph, append_text, set_cell, add_row, delete_row, add_table, delete_table, set_cell_style, set_heading, set_font, set_paragraph_style, add_image, set_page_margins, add_header_footer, export_pdf |
+| `docx_create` | create_document, create_from_text, create_from_sections, list_block_kinds, create_from_blocks, create_from_template, create_letter, merge_documents, batch_create_from_template |
+| `xlsx_read` | list_sheets, get_sheet_summary, read_cell, read_cell_range, search_cells, find_duplicates |
+| `xlsx_edit` | set_cell, set_range, insert_row, delete_row, add_sheet, sort_sheet, rename_sheet, copy_sheet, set_formula, set_named_range, set_conditional_format, set_data_validation, freeze_panes, set_autofilter, fill_formula_down, auto_sum, convert_to_values, add_chart, delete_chart, update_chart, add_pivot_table, set_cell_style |
+| `xlsx_create` | create_workbook, create_from_data, create_report, create_from_template, create_from_csv, create_invoice |
+| `pptx_read` | read_presentation, read_slide, search_slides, read_slide_text, diff_versions |
+| `pptx_edit` | set_text, add_slide, delete_slide, reorder_slide, add_text_box, set_background, set_font_style, add_table, add_chart, duplicate_slide, export_pdf, add_image_to_all_slides, set_font_all_slides |
+| `pptx_create` | create_presentation, create_from_outline, create_deck_from_data, create_from_template, create_agenda, create_from_docx |
+| `office_history` | get_history, restore_version, read_receipt — any Office file |
+
+A name shared by file types is the right tool in each domain: `set_cell` in
+`docx_edit` sets a Word table cell, in `xlsx_edit` a worksheet cell. An action
+asked of the wrong tool is pointed at every tool that has it; an argument the
+action does not take is refused by name.
+
+### The tiers
 
 ### Word — docx_basic (15 tools)
 

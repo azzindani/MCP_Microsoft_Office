@@ -191,6 +191,12 @@ do not work around them by duplicating logic in `engine.py`.
 Tool descriptions consume context on every turn. Every `@mcp.tool()` description must
 be 80 characters or fewer. This is a CI check.
 
+It binds the **tier endpoints**, which serve local models with small context
+windows. The **domain endpoint** (`/mcp`, `servers/office_domain/`) serves
+capable models: ten tools whose descriptions list every action, generated from
+the tiers by `shared/domain_tools.py` and never hand-written. A new tier tool
+must be added to a domain in `DOMAINS`; a test fails until it is.
+
 ### P9 — tool parameter names are lowercase snake_case nouns
 
 `file_path`, `paragraph_index`, `sheet_name`, `cell_address`. Never verb-first names
