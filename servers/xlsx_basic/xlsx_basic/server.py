@@ -10,6 +10,7 @@ from starlette.responses import JSONResponse
 from shared.arg_alias import missing, pick
 from shared.arg_errors import contract_errors
 from shared.deploy_auth import build_auth, build_oauth_bridge
+from shared.missing_file import suggest_missing_files
 from shared.progress import info
 from shared.strict_args import enforce_known_arguments
 from shared.token_estimate import measure_responses
@@ -182,6 +183,9 @@ enforce_known_arguments(mcp)
 # this runs, and used to escape as a raw dump with no success/hint/token_estimate
 # and a pydantic.dev URL. Give it the fleet's failure shape instead.
 contract_errors(mcp)
+# A missing file is answered with the nearest files that exist; see
+# shared/missing_file.py for why this is a choke point.
+suggest_missing_files(mcp)
 measure_responses(mcp)
 
 
