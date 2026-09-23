@@ -339,3 +339,27 @@ class TestAPathOnTheCallersSideIsNamedAsOne:
     def test_any_other_outside_path_keeps_the_plain_refusal(self, served):
         with pytest.raises(PathOutsideRootError, match="outside the folders"):
             resolve_path("/etc/hostname")
+
+
+class TestAFileSentInlineIsRead:
+    """A .docx sent as data:...;base64 is read by a registered tool like any file."""
+
+    def test_the_outline_of_an_inline_document(self, served):
+        import base64
+        import importlib
+
+        from docx import Document
+
+        doc = Document()
+        doc.add_heading("Findings", level=1)
+        doc.add_paragraph("Body.")
+        built = served.parent / "built.docx"
+        doc.save(str(built))
+        uri = "data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;name=brief.docx;base64,"
+        uri += base64.b64encode(built.read_bytes()).decode()
+        tool = importlib.import_module("servers.docx_basic.docx_basic.server").mcp._tool_manager._tools
+        r = tool["get_document_outline"].fn(file_path=uri)
+        assert r["success"] is True, r
+        assert "Findings" in str(r)
+        assert "base64" not in str(r)
+        assert (served / "inbox" / "brief.docx").exists()

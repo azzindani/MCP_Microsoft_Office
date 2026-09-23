@@ -27,6 +27,10 @@ inward.
 
 from __future__ import annotations
 
+import base64
+import binascii
+import functools
+import hashlib
 import ipaddress
 import os
 import re
@@ -38,7 +42,7 @@ import urllib.request
 from http.cookiejar import CookieJar
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, parse_qsl, quote, unquote, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qs, parse_qsl, quote, unquote, unquote_to_bytes, urlencode, urlparse, urlunparse
 
 # One tool call can resolve the same argument more than once; without this
 # cache every one of those would re-download. The TTL is short so an updated
@@ -362,9 +366,19 @@ def client_side_path(raw: str) -> str:
     return ""
 
 
-def intake_routes() -> str:
-    """How a file on the caller's side reaches this server, naming only routes that work here."""
-    routes = []
+def intake_routes(inline_route: str = "") -> str:
+    """How a file on the caller's side reaches this server, naming only routes that work here.
+
+    `inline_route` names how this server takes a file's bytes; the default is
+    a data: URI in place of the path, which every tool here accepts.
+    """
+    routes = [
+        inline_route
+        or (
+            "send its contents in place of the path as data:<type>;name=<file name>;base64,<bytes> "
+            f"(up to {_max_inline_bytes() / (1024 * 1024):g} MB)"
+        )
+    ]
     if url_fetch_enabled():
         routes.append(
             "pass a link to it instead (a Google Drive, Dropbox or GitHub share link works once it is public)"
@@ -373,12 +387,176 @@ def intake_routes() -> str:
     return "; or ".join(routes)
 
 
-def client_side_refusal(raw: str) -> str:
+def client_side_refusal(raw: str, inline_route: str = "") -> str:
     """The refusal for a path on the caller's side, or '' for any other path."""
     where = client_side_path(raw)
     if not where:
         return ""
     return (
         f"{str(raw)!r} is a path in {where}, on the caller's side -- this server runs "
-        f"elsewhere and cannot see it. To bring the file here, {intake_routes()}."
+        f"elsewhere and cannot see it. To bring the file here, {intake_routes(inline_route)}."
     )
+
+
+# ---------------------------------------------------------------------------
+# Inline files: the bytes themselves, where a path was expected
+# ---------------------------------------------------------------------------
+
+_DEFAULT_MAX_INLINE_MB = 10
+_INLINE_URI = re.compile(r"^data:(?P<meta>[^,]*),(?P<body>.*)$", re.DOTALL | re.IGNORECASE)
+
+
+def is_inline(raw: Any) -> bool:
+    """True when `raw` is an inline file -- a data: URI -- rather than a path or a link."""
+    return isinstance(raw, str) and raw.lstrip()[:5].lower() == "data:"
+
+
+def _max_inline_bytes() -> int:
+    """The inline-file size cap in bytes (MCP_MAX_INLINE_MB, default 10)."""
+    raw = os.environ.get("MCP_MAX_INLINE_MB", "").strip()
+    try:
+        megabytes = float(raw) if raw else _DEFAULT_MAX_INLINE_MB
+    except ValueError:
+        megabytes = _DEFAULT_MAX_INLINE_MB
+    return int(max(megabytes, 0.001) * 1024 * 1024)
+
+
+def inline_bytes(raw: str) -> tuple[str, bytes]:
+    """(file name, bytes) of an inline file, decoded and size-capped.
+
+    The form is RFC 2397 with a `name` parameter:
+    `data:text/csv;name=sales.csv;base64,<bytes>`, or percent-encoded text
+    without `;base64`. A caller whose file is on its own side -- a claude.ai
+    upload -- has no path this server can see and, without network access
+    from its sandbox, no link either; the bytes are the one thing it can send.
+    Every byte is model output, so this is for small files.
+
+    Raises:
+        ValueError: not a data: URI, not decodable, empty, or over the cap.
+    """
+    match = _INLINE_URI.match(raw.strip())
+    if not match:
+        raise ValueError(
+            "An inline file is written data:<type>;name=<file name>;base64,<bytes> -- "
+            "a comma separates the header from the bytes."
+        )
+    params = [p.strip() for p in match.group("meta").split(";") if p.strip()]
+    encoded = any(p.lower() == "base64" for p in params)
+    media = params[0].lower() if params and "=" not in params[0] and params[0].lower() != "base64" else ""
+    name = next(
+        (unquote(p.split("=", 1)[1]).strip("\"'") for p in params if p.lower().startswith(("name=", "filename="))),
+        "",
+    )
+    body = match.group("body")
+    limit = _max_inline_bytes()
+    shown_limit = f"{limit / (1024 * 1024):g} MB"
+    if encoded:
+        compact = re.sub(r"\s+", "", body)
+        if len(compact) > (limit * 4) // 3 + 4:
+            raise ValueError(f"The inline file is larger than the {shown_limit} limit for inline files.")
+        try:
+            payload = base64.b64decode(compact, validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise ValueError(f"The inline file's base64 does not decode: {exc}.") from exc
+    else:
+        payload = unquote_to_bytes(body)
+    if len(payload) > limit:
+        raise ValueError(f"The inline file is larger than the {shown_limit} limit for inline files.")
+    if not payload:
+        raise ValueError("The inline file is empty.")
+    name = _UNSAFE_NAME_CHARS.sub("_", Path(name.replace("\\", "/")).name).strip("._")[:_MAX_FILENAME_LEN]
+    if not name:
+        name = "inline"
+    if not Path(name).suffix:
+        name += _TYPE_SUFFIXES.get(media, "")
+    return name, payload
+
+
+def save_inline(raw: str) -> Path:
+    """Write an inline file into the inbox and return its path.
+
+    The name the caller gave is kept, so the file is found by it afterwards.
+    Sent twice, the same bytes are the same file; different bytes under a name
+    already taken get the first eight hex digits of their SHA-256 appended,
+    so nothing already in the inbox is ever overwritten.
+    """
+    name, payload = inline_bytes(raw)
+    inbox = get_inbox_dir()
+    target = inbox / name
+    if target.exists():
+        if target.is_file() and target.read_bytes() == payload:
+            return target
+        digest = hashlib.sha256(payload).hexdigest()[:8]
+        target = inbox / f"{Path(name).stem}_{digest}{Path(name).suffix}"
+        if target.exists() and target.is_file() and target.read_bytes() == payload:
+            return target
+    handle, temp_name = tempfile.mkstemp(dir=str(inbox))
+    try:
+        with os.fdopen(handle, "wb") as stream:
+            stream.write(payload)
+        apply_default_mode(temp_name)
+        os.replace(temp_name, target)
+    except Exception:
+        Path(temp_name).unlink(missing_ok=True)
+        raise
+    return target
+
+
+def inline_arguments(arguments: dict[str, Any]) -> dict[str, Any]:
+    """`arguments` with every inline file saved and replaced by its path.
+
+    Done before a tool runs, so the tool only ever sees a path: tools echo
+    their `file_path` into results and hand-over hints, and an echoed data:
+    URI would send the whole file back through the caller's context.
+    """
+    saved: dict[str, Any] = {}
+    for key, value in arguments.items():
+        if is_inline(value):
+            saved[key] = str(save_inline(value))
+        elif isinstance(value, list) and any(is_inline(item) for item in value):
+            saved[key] = [str(save_inline(item)) if is_inline(item) else item for item in value]
+        else:
+            saved[key] = value
+    return saved
+
+
+def accept_inline_files(mcp: Any) -> None:
+    """Let every registered tool take an inline file wherever it takes a path.
+
+    A wrapper rather than a new argument on each tool, so no tool's schema
+    changes and every tier of every server takes it the same way.
+    """
+    for tool in mcp._tool_manager._tools.values():
+        fn = getattr(tool, "fn", None)
+        if fn is None or getattr(fn, "__accepts_inline_files__", False):
+            continue
+        tool.fn = _accepting_inline(fn, getattr(tool, "name", fn.__name__))
+
+
+def _carries_inline(value: Any) -> bool:
+    return is_inline(value) or (isinstance(value, list) and any(is_inline(item) for item in value))
+
+
+def _accepting_inline(fn: Any, name: str) -> Any:
+    @functools.wraps(fn)
+    def accepting(*a: Any, **kw: Any) -> Any:
+        if any(_carries_inline(value) for value in kw.values()):
+            try:
+                kw = inline_arguments(kw)
+            except ValueError as exc:
+                return {
+                    "success": False,
+                    "op": name,
+                    "error": str(exc),
+                    "hint": (
+                        "Send the file as data:<type>;name=<file name>;base64,<bytes> "
+                        f"(up to {_max_inline_bytes() / (1024 * 1024):g} MB), or pass a link or a path "
+                        "in the data folder."
+                    ),
+                    "progress": [],
+                    "token_estimate": 0,
+                }
+        return fn(*a, **kw)
+
+    accepting.__accepts_inline_files__ = True  # type: ignore[attr-defined]
+    return accepting

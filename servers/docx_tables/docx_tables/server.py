@@ -10,6 +10,7 @@ from starlette.responses import JSONResponse
 from docx_tables import engine
 from shared.arg_errors import contract_errors
 from shared.deploy_auth import build_auth, build_oauth_bridge
+from shared.exchange import accept_inline_files
 from shared.missing_file import suggest_missing_files
 from shared.strict_args import enforce_known_arguments
 from shared.token_estimate import measure_responses
@@ -149,6 +150,9 @@ contract_errors(mcp)
 # shared/missing_file.py for why this is a choke point.
 suggest_missing_files(mcp)
 measure_responses(mcp)
+# A file sent inline -- a data: URI where a path goes -- is saved to the inbox
+# and the tool sees its path; see shared/exchange.py.
+accept_inline_files(mcp)
 
 
 def main() -> None:
