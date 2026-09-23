@@ -84,6 +84,12 @@ code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$DOMAIN/docx-basic/mcp" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"1"}}}')
 [ "$code" = "401" ] && pass "no token -> 401" || fail "no token -> expected 401, got $code"
 
+echo "== upload route: a token this server did not sign writes nothing =="
+# 404 while upload URLs are off (the default), 403 when on: never a write.
+code=$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$DOMAIN/upload/not-a-token.not-a-signature" --data-binary 'x')
+{ [ "$code" = "404" ] || [ "$code" = "403" ]; } && pass "forged upload token -> $code" \
+  || fail "forged upload token -> expected 404 or 403, got $code"
+
 for tier in docx-basic docx-tables docx-layout docx-new xlsx-basic xlsx-formulas xlsx-charts xlsx-new pptx-basic pptx-design pptx-new; do
   SID[$tier]=$(init_session "$tier")
   init_notified "$tier" "${SID[$tier]}"

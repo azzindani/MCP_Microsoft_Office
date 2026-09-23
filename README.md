@@ -770,7 +770,10 @@ For lower-memory machines, set `MCP_CONSTRAINED_MODE=1` in the `env` section of 
 | `MCP_FETCH_ALLOW_PRIVATE` | `0` | `1` permits fetching hosts on private/loopback addresses |
 | `MCP_MAX_FETCH_MB` | `100` | Size cap for a fetched URL |
 | `MCP_MAX_INLINE_MB` | `10` | Size cap for a file sent inline, as a `data:` URI where a path goes |
-| `MCP_MAX_UPLOAD_MB` | `100` | Size cap for a whole file sent inline in parts |
+| `MCP_MAX_UPLOAD_MB` | `100` | Size cap for a whole file sent inline in parts, or through an upload URL |
+| `MCP_UPLOAD_URLS` | `0` | `1` (with `MCP_UPLOAD_BASE_URL`) hands a caller-side path a single-use upload URL |
+| `MCP_UPLOAD_BASE_URL` | _(unset)_ | This server's public origin, which upload URLs are built on |
+| `MCP_UPLOAD_SECRET` | _(per process)_ | Key upload URLs are signed with; set it to keep them valid across a restart |
 
 ### Hybrid local + remote file handling
 
@@ -807,6 +810,15 @@ are unset by default, so a local install stays offline and writes to
   each. The tool answers `tool_ran: false` with the parts still missing until
   the last lands, then runs on the joined, checked file (`MCP_MAX_UPLOAD_MB`,
   default 100; an upload left unfinished for an hour is dropped).
+- Upload URLs are off by default. With `MCP_UPLOAD_URLS=1` and `MCP_UPLOAD_BASE_URL`
+  (this server's public origin), the refusal for a path on the caller's side
+  carries a URL minted for that file: `curl -T <file> '<url>'` from the sandbox
+  writes it to `MCP_OUTPUT_DIR/inbox/`, and the answer is the path to pass. The
+  bytes never pass through the model. A URL writes one file, once, within 15
+  minutes, up to `MCP_MAX_UPLOAD_MB`, under the name fixed when it was minted; a
+  forged, expired or spent one writes nothing. The route takes no API key -- its
+  signed token (`MCP_UPLOAD_SECRET`, else a key made per process) is the
+  credential -- so turning it on is the operator's decision.
 
 Document-creating tools also accept `return_content=True`, which embeds the
 file's bytes as `content_base64` for callers that have neither a shared

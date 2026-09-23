@@ -87,6 +87,16 @@ services:
       MCP_FETCH_URLS: ${MCP_FETCH_URLS:-0}
       MCP_FETCH_ALLOW_PRIVATE: ${MCP_FETCH_ALLOW_PRIVATE:-0}
       MCP_MAX_FETCH_MB: ${MCP_MAX_FETCH_MB:-100}
+      # Upload URLs, off by default. With MCP_UPLOAD_URLS=1 and
+      # MCP_UPLOAD_BASE_URL (this server's public origin), a path from the
+      # caller's sandbox is refused with a single-use URL to PUT that file to:
+      # 15 minutes, one file, MCP_MAX_UPLOAD_MB, into the inbox. The token is
+      # the credential (no API key on that route), so turning it on is the
+      # operator's call. MCP_UPLOAD_SECRET keeps URLs valid across restarts.
+      MCP_UPLOAD_URLS: ${MCP_UPLOAD_URLS:-0}
+      MCP_UPLOAD_BASE_URL: ${MCP_UPLOAD_BASE_URL:-}
+      MCP_UPLOAD_SECRET: ${MCP_UPLOAD_SECRET:-}
+      MCP_MAX_UPLOAD_MB: ${MCP_MAX_UPLOAD_MB:-100}
     # Reads stream (openpyxl read_only), but writes cannot -- set_cell,
     # sort_sheet and friends have to materialise the whole workbook, and
     # openpyxl allocates a Python object per cell. A 16,834 x 16 sheet peaked at

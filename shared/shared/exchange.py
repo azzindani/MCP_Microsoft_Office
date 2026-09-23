@@ -17,6 +17,13 @@ local install keeps its existing offline, ~/Downloads behaviour untouched:
   MCP_FETCH_URLS       "1" lets file path arguments be http(s) URLs, fetched
                        into MCP_OUTPUT_DIR/inbox before the tool runs.
 
+Upload URLs are off by default too. With MCP_UPLOAD_URLS=1 and
+MCP_UPLOAD_BASE_URL (this server's public origin), a path from the caller's
+sandbox is refused with a single-use URL to PUT that file to: fifteen
+minutes, one file, MCP_MAX_UPLOAD_MB, into the inbox and nowhere else. Its
+token is the credential -- signed with MCP_UPLOAD_SECRET, or a key made fresh
+for each process -- so turning it on is the operator's decision.
+
 Fetching is off by default and, when on, refuses hosts that resolve to
 non-public addresses (loopback, link-local, private ranges, cloud metadata)
 unless MCP_FETCH_ALLOW_PRIVATE=1 — an authenticated caller must not be able to
@@ -31,9 +38,12 @@ import base64
 import binascii
 import functools
 import hashlib
+import hmac
 import ipaddress
+import json
 import os
 import re
+import secrets
 import shutil
 import socket
 import sys
@@ -367,13 +377,23 @@ def client_side_path(raw: str) -> str:
     return ""
 
 
-def intake_routes(inline_route: str = "") -> str:
+def intake_routes(inline_route: str = "", name: str = "") -> str:
     """How a file on the caller's side reaches this server, naming only routes that work here.
 
     `inline_route` names how this server takes a file's bytes; the default is
-    a data: URI in place of the path, which every tool here accepts.
+    a data: URI in place of the path, which every tool here accepts. With
+    upload URLs on, the first route is a URL minted for the file `name`: one
+    request carries the bytes, and none of them pass through the model.
     """
-    routes = [
+    routes = []
+    upload = mint_upload_url(name) if name else ""
+    if upload:
+        routes.append(
+            f"upload it with one request -- curl -T <the file> '{upload}' -- and pass the path it answers "
+            f"with (that URL takes this one file, once, within {_UPLOAD_TTL_SECONDS // 60} minutes, up to "
+            f"{_max_upload_bytes() / (1024 * 1024):g} MB)"
+        )
+    routes += [
         inline_route
         or (
             "send its contents in place of the path as data:<type>;name=<file name>;base64,<bytes> "
@@ -394,9 +414,10 @@ def client_side_refusal(raw: str, inline_route: str = "") -> str:
     where = client_side_path(raw)
     if not where:
         return ""
+    name = Path(str(raw).replace("\\", "/")).name
     return (
         f"{str(raw)!r} is a path in {where}, on the caller's side -- this server runs "
-        f"elsewhere and cannot see it. To bring the file here, {intake_routes(inline_route)}."
+        f"elsewhere and cannot see it. To bring the file here, {intake_routes(inline_route, name=name)}."
     )
 
 
@@ -698,3 +719,141 @@ def _accepting_inline(fn: Any, name: str) -> Any:
 
     accepting.__accepts_inline_files__ = True  # type: ignore[attr-defined]
     return accepting
+
+
+# ---------------------------------------------------------------------------
+# Upload URLs: a single-use address the caller's sandbox can send a file to
+# ---------------------------------------------------------------------------
+
+_UPLOAD_TTL_SECONDS = 15 * 60
+_used_upload_tokens: dict[str, float] = {}
+_upload_secret_cache: list[bytes] = []
+
+
+def uploads_enabled() -> bool:
+    """True when this server hands out upload URLs: MCP_UPLOAD_URLS=1 and a base URL to build them on.
+
+    Off by default. An upload URL is a public address that writes into the
+    inbox without the API key -- its token is the credential -- so it is an
+    operator's decision, never a default.
+    """
+    return _flag("MCP_UPLOAD_URLS") and bool(os.environ.get("MCP_UPLOAD_BASE_URL", "").strip())
+
+
+def _upload_secret() -> bytes:
+    """The key upload tokens are signed with: MCP_UPLOAD_SECRET, else one made for this process."""
+    configured = os.environ.get("MCP_UPLOAD_SECRET", "").strip()
+    if configured:
+        return configured.encode()
+    if not _upload_secret_cache:
+        _upload_secret_cache.append(secrets.token_bytes(32))
+    return _upload_secret_cache[0]
+
+
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode().rstrip("=")
+
+
+def _unb64url(text: str) -> bytes:
+    return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
+
+
+def _signed(body: str) -> str:
+    return _b64url(hmac.new(_upload_secret(), body.encode(), hashlib.sha256).digest())
+
+
+def mint_upload_url(name: str) -> str:
+    """A single-use URL that writes one file named `name` into the inbox, or '' when uploads are off.
+
+    The token carries the name, an expiry and a nonce, signed with HMAC-SHA256:
+    it writes that one file, once, within fifteen minutes, up to
+    MCP_MAX_UPLOAD_MB, into the inbox and nowhere else. The name is fixed
+    when the URL is minted, so the uploader cannot choose where it lands.
+    """
+    if not uploads_enabled():
+        return ""
+    safe = _UNSAFE_NAME_CHARS.sub("_", Path(str(name).replace("\\", "/")).name).strip("._")[:_MAX_FILENAME_LEN]
+    claims = {"n": safe or "upload", "e": int(time.time()) + _UPLOAD_TTL_SECONDS, "r": secrets.token_hex(8)}
+    body = _b64url(json.dumps(claims, separators=(",", ":")).encode())
+    base = os.environ.get("MCP_UPLOAD_BASE_URL", "").strip().rstrip("/")
+    return f"{base}/upload/{body}.{_signed(body)}"
+
+
+def _claims_of(token: str) -> dict[str, Any]:
+    """The claims of a valid, unexpired, unused upload token.
+
+    Raises:
+        PermissionError: the token is malformed, forged, expired or spent.
+    """
+    body, _, signature = token.partition(".")
+    # Bytes, not str: compare_digest raises TypeError on a non-ASCII str, and a
+    # path can carry any character -- that was a 500, not a refusal.
+    if not body or not hmac.compare_digest(signature.encode(), _signed(body).encode()):
+        raise PermissionError("This upload URL is not one this server issued.")
+    try:
+        claims = json.loads(_unb64url(body))
+    except ValueError as exc:
+        raise PermissionError("This upload URL is not one this server issued.") from exc
+    now = time.time()
+    for spent, expires in list(_used_upload_tokens.items()):
+        if expires < now:
+            _used_upload_tokens.pop(spent, None)
+    if claims.get("e", 0) < now:
+        raise PermissionError("This upload URL has expired; ask the tool for a new one.")
+    if claims.get("r") in _used_upload_tokens:
+        raise PermissionError("This upload URL was already used; each one takes a single file.")
+    return claims
+
+
+def _refused(status: int, error: str) -> Any:
+    from starlette.responses import JSONResponse
+
+    return JSONResponse({"success": False, "error": error}, status_code=status)
+
+
+async def upload_route(request: Any) -> Any:
+    """PUT or POST a file's bytes to /upload/<token>; answers with the path to pass to any tool.
+
+    Mounted at the server's root, outside the tiers' bearer auth: the token is
+    the credential, checked before a byte of the body is read. The token is
+    held while its upload runs, so two requests cannot both spend it, and
+    released when nothing was written, so a failed attempt can be retried.
+    """
+    from starlette.responses import JSONResponse
+
+    if not uploads_enabled():
+        return _refused(404, "Uploads are off on this server.")
+    try:
+        claims = _claims_of(str(request.path_params.get("token", "")))
+    except PermissionError as exc:
+        return _refused(403, str(exc))
+    nonce = str(claims["r"])
+    _used_upload_tokens[nonce] = float(claims["e"])
+    limit = _max_upload_bytes()
+    too_big = f"The file is larger than the {limit / (1024 * 1024):g} MB upload limit."
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > limit:
+        _used_upload_tokens.pop(nonce, None)
+        return _refused(413, too_big)
+    received = bytearray()
+    try:
+        async for chunk in request.stream():
+            received.extend(chunk)
+            if len(received) > limit:
+                _used_upload_tokens.pop(nonce, None)
+                return _refused(413, too_big)
+        if not received:
+            _used_upload_tokens.pop(nonce, None)
+            return _refused(400, "The upload was empty.")
+        target = _store(str(claims["n"]), bytes(received))
+    except BaseException:
+        _used_upload_tokens.pop(nonce, None)
+        raise
+    return JSONResponse(
+        {
+            "success": True,
+            "path": str(target),
+            "bytes": len(received),
+            "hint": f"Pass {target} as the file path to any tool on this server.",
+        }
+    )
