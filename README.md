@@ -759,6 +759,11 @@ are unset by default, so a local install stays offline and writes to
   `MCP_OUTPUT_DIR/inbox` before the tool runs. Hosts resolving to
   loopback/link-local/private addresses are refused, redirects included,
   unless `MCP_FETCH_ALLOW_PRIVATE=1`.
+  A Google Drive, Docs, Dropbox, GitHub or GitLab share link is read as the
+  file it points to, and a web page served where a file was asked for (a link
+  that is not public answers with a sign-in page) is refused, not parsed. A path
+  from the caller's side -- a chat's sandbox such as `/mnt/user-data/…` -- is
+  refused by name, with the ways to bring the file here.
 
 Document-creating tools also accept `return_content=True`, which embeds the
 file's bytes as `content_base64` for callers that have neither a shared

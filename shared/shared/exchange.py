@@ -31,13 +31,14 @@ import ipaddress
 import os
 import re
 import socket
+import sys
 import tempfile
 import time
 import urllib.request
 from http.cookiejar import CookieJar
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote, unquote, urlparse
+from urllib.parse import parse_qs, parse_qsl, quote, unquote, urlencode, urlparse, urlunparse
 
 # One tool call can resolve the same argument more than once; without this
 # cache every one of those would re-download. The TTL is short so an updated
@@ -217,14 +218,15 @@ def fetch_url(url: str, dest_dir: Path | None = None) -> Path:
     Raises:
         ValueError: fetching disabled, non-public host, or response too large.
     """
-    url = url.strip()
+    asked = url.strip()
+    url = direct_download_url(asked)
     if not url_fetch_enabled():
         raise ValueError(
-            f"This server does not fetch URLs: {url}. "
+            f"This server does not fetch URLs: {asked}. "
             "Set MCP_FETCH_URLS=1 on the server to enable it, or pass a local file path."
         )
 
-    cached = _fetch_cache.get(url)
+    cached = _fetch_cache.get(asked)
     if cached and time.time() - cached[0] < _FETCH_CACHE_TTL_SECONDS and cached[1].exists():
         return cached[1]
 
@@ -250,6 +252,18 @@ def fetch_url(url: str, dest_dir: Path | None = None) -> Path:
     if len(payload) > limit:
         raise ValueError(f"Download is larger than the {limit // (1024 * 1024)} MB limit: {url}")
 
+    # A web page where a file was asked for: a share link that is not public
+    # answers with a sign-in or preview page, and it was saved as data.csv and
+    # parsed. A rewritten share link must serve the file itself; any other URL
+    # may serve a page only when its name says it is one.
+    if _looks_like_html(payload) and (url != asked or Path(name).suffix.lower() not in _HTML_SUFFIXES):
+        via = f" (fetched as {url})" if url != asked else ""
+        raise ValueError(
+            f"{asked} returned a web page, not the file{via}. A share link answers with a sign-in or "
+            "preview page until the file is shared with anyone who has the link; pass that public "
+            "link, or the file's direct-download address."
+        )
+
     target = (dest_dir or get_inbox_dir()) / name
     target.parent.mkdir(parents=True, exist_ok=True)
     handle, temp_name = tempfile.mkstemp(dir=str(target.parent))
@@ -262,5 +276,109 @@ def fetch_url(url: str, dest_dir: Path | None = None) -> Path:
         Path(temp_name).unlink(missing_ok=True)
         raise
 
-    _fetch_cache[url] = (time.time(), target)
+    _fetch_cache[asked] = (time.time(), target)
     return target
+
+
+# ---------------------------------------------------------------------------
+# Intake: share links that serve a page, and paths that live on the caller's side
+# ---------------------------------------------------------------------------
+
+_GOOGLE_EXPORT_FORMAT = {"spreadsheets": "csv", "document": "docx", "presentation": "pptx"}
+_HTML_SUFFIXES = (".html", ".htm")
+
+# Paths that exist only on the caller's side of the conversation. A chat's own
+# sandbox (claude.ai, ChatGPT) or the caller's computer: a model holding such a
+# file passes the only path it knows, and "outside the folders this server can
+# use" names the rule without naming the situation.
+_CLIENT_SIDE_PREFIXES = (
+    ("/mnt/user-data/", "the chat's file area (claude.ai)"),
+    ("/home/claude/", "the chat's code sandbox (claude.ai)"),
+    ("/mnt/data/", "the chat's code sandbox (ChatGPT)"),
+)
+_WINDOWS_DRIVE = re.compile(r"^[A-Za-z]:[\\/]")
+
+
+def direct_download_url(url: str) -> str:
+    """The direct-download form of a share link, or `url` unchanged.
+
+    A Google Drive, Docs/Sheets/Slides, Dropbox, GitHub or GitLab link as the
+    browser shows it answers with a web page -- a viewer, a preview, a sign-in
+    wall -- not the file, and that page was saved as `data.csv` and parsed as
+    one. Each is rewritten to the address that serves the bytes: Drive to
+    `uc?export=download`, a Sheet to its CSV export (the tab in `gid` when the
+    link names one), a Doc to .docx, Slides to .pptx, Dropbox to `dl=1`, a
+    GitHub or GitLab `blob` page to its raw file.
+    """
+    raw = url.strip()
+    parsed = urlparse(raw)
+    host = (parsed.hostname or "").lower()
+    if host == "drive.google.com":
+        match = re.search(r"/file/d/([A-Za-z0-9_-]+)", parsed.path)
+        file_id = match.group(1) if match else parse_qs(parsed.query).get("id", [""])[0]
+        return f"https://drive.google.com/uc?export=download&id={file_id}" if file_id else raw
+    if host == "docs.google.com":
+        match = re.match(r"/(spreadsheets|document|presentation)/d/([A-Za-z0-9_-]+)", parsed.path)
+        if not match or "/export" in parsed.path:
+            return raw
+        kind, doc_id = match.groups()
+        direct = f"https://docs.google.com/{kind}/d/{doc_id}/export?format={_GOOGLE_EXPORT_FORMAT[kind]}"
+        gid = parse_qs(parsed.query).get("gid", [""])[0] or parse_qs(parsed.fragment).get("gid", [""])[0]
+        return direct + f"&gid={gid}" if kind == "spreadsheets" and gid else direct
+    if host in ("dropbox.com", "www.dropbox.com"):
+        query = [(k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True) if k not in ("dl", "raw")]
+        return urlunparse(parsed._replace(query=urlencode([*query, ("dl", "1")])))
+    if host == "github.com":
+        parts = parsed.path.split("/")
+        if len(parts) > 4 and parts[3] == "blob":
+            return f"https://raw.githubusercontent.com/{parts[1]}/{parts[2]}/{'/'.join(parts[4:])}"
+        return raw
+    if host == "gitlab.com" and "/-/blob/" in parsed.path:
+        return urlunparse(parsed._replace(path=parsed.path.replace("/-/blob/", "/-/raw/", 1), query="", fragment=""))
+    return raw
+
+
+def _looks_like_html(payload: bytes) -> bool:
+    """True when a download is a web page."""
+    head = payload[:1024].lstrip(b"\xef\xbb\xbf \t\r\n").lower()
+    return head.startswith((b"<!doctype html", b"<html"))
+
+
+def client_side_path(raw: str) -> str:
+    """Where a path that can only exist on the caller's side comes from, or ''."""
+    text = str(raw).strip()
+    # A Windows drive or a macOS home folder is the caller's computer only when
+    # this server is not itself running on that system.
+    if os.name != "nt" and _WINDOWS_DRIVE.match(text):
+        return "a Windows folder on the caller's own computer"
+    text = text.replace("\\", "/")
+    if sys.platform != "darwin" and text.startswith("/Users/"):
+        return "a folder on the caller's own computer"
+    # On a Windows server a rooted path arrives anchored to a drive (C:/mnt/...).
+    sandboxed = re.sub(r"^[A-Za-z]:(?=/)", "", text)
+    for prefix, where in _CLIENT_SIDE_PREFIXES:
+        if sandboxed.startswith(prefix):
+            return where
+    return ""
+
+
+def intake_routes() -> str:
+    """How a file on the caller's side reaches this server, naming only routes that work here."""
+    routes = []
+    if url_fetch_enabled():
+        routes.append(
+            "pass a link to it instead (a Google Drive, Dropbox or GitHub share link works once it is public)"
+        )
+    routes.append("have it placed in this server's data folder and pass its name")
+    return "; or ".join(routes)
+
+
+def client_side_refusal(raw: str) -> str:
+    """The refusal for a path on the caller's side, or '' for any other path."""
+    where = client_side_path(raw)
+    if not where:
+        return ""
+    return (
+        f"{str(raw)!r} is a path in {where}, on the caller's side -- this server runs "
+        f"elsewhere and cannot see it. To bring the file here, {intake_routes()}."
+    )

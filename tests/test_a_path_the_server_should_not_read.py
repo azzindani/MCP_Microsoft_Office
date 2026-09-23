@@ -317,3 +317,25 @@ class TestARefusedPathIsAnAnswer:
         suggest_missing_files(SimpleNamespace(_tool_manager=SimpleNamespace(_tools={"broken": registered})))
         with pytest.raises(RuntimeError, match="a real bug"):
             registered.fn()
+
+
+class TestAPathOnTheCallersSideIsNamedAsOne:
+    """A claude.ai upload path is refused for what it is, with the way in.
+
+    `/mnt/user-data/uploads/Ad_Data.csv` is the only path a chat's model holds
+    for an attached file. "Outside the folders this server can use" named the
+    rule and sent it guessing folders on a server that cannot see the file.
+    """
+
+    def test_the_refusal_says_the_file_is_on_the_callers_side(self, served, monkeypatch):
+        monkeypatch.setenv("MCP_FETCH_URLS", "1")
+        with pytest.raises(PathOutsideRootError) as caught:
+            resolve_path("/mnt/user-data/uploads/Ad_Data.csv")
+        message = str(caught.value)
+        assert "caller's side" in message
+        assert "cannot see it" in message
+        assert "link" in message
+
+    def test_any_other_outside_path_keeps_the_plain_refusal(self, served):
+        with pytest.raises(PathOutsideRootError, match="outside the folders"):
+            resolve_path("/etc/hostname")
