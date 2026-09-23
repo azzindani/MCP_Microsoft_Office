@@ -150,8 +150,11 @@ def resolve_output_path(output_path: str, default_name: str) -> Path:
 
     Rules:
     - Empty string or bare filename (no directory) → ~/Downloads/<name>
-    - Relative path (has directory component) → resolved from cwd
+    - Relative path (has directory component) → resolved from cwd, or from the
+      data folder on a confined server
     - Absolute path → used as-is
+    - Confined (every HTTP deployment): the result must lie inside a served
+      folder, else PathOutsideRootError
 
     Every one of this repo's 24 callers is about to write to the path it gets
     back, so the snapshot belongs here: it is the one place a new create_* tool
@@ -173,12 +176,27 @@ def resolve_output_path(output_path: str, default_name: str) -> Path:
         output_path: The path string provided by the caller (may be empty).
         default_name: Filename to use when output_path is empty.
     """
+    from shared.file_utils import confine, paths_confined
+
     if not output_path:
         resolved = get_downloads_dir() / default_name
     else:
         p = Path(output_path)
         # Bare filename: no directory separators
-        resolved = get_downloads_dir() / p.name if p.parent == Path(".") else p.expanduser().resolve()
+        if p.parent == Path("."):
+            resolved = get_downloads_dir() / p.name
+        elif paths_confined() and not p.expanduser().is_absolute():
+            # On a confined server a relative path means the data folder, as it
+            # does for every input -- not the container's working directory.
+            resolved = (get_downloads_dir() / p).resolve()
+        else:
+            resolved = p.expanduser().resolve()
+
+    # Where a tool WRITES is held to the served folders exactly as where it
+    # reads. A5-sec confined resolve_path (inputs) and missed this, the choke
+    # point for all 27 output paths: an absolute output_path was used as given,
+    # so a confined server still wrote wherever a caller pointed it.
+    resolved = confine(resolved, "output_path")
 
     if resolved.is_file():
         from shared.version_control import snapshot

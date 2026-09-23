@@ -16,7 +16,7 @@ if str(_ROOT) not in sys.path:
 from pptx import Presentation  # noqa: E402
 from pptx.util import Inches, Pt  # noqa: E402,F401
 
-from shared.file_utils import embed_content, hint_for_message, resolve_path  # noqa: E402
+from shared.file_utils import PathOutsideRootError, embed_content, hint_for_message, resolve_path  # noqa: E402
 from shared.platform_utils import open_file, resolve_output_path  # noqa: E402
 from shared.progress import describe_error, fail, info, ok, warn  # noqa: E402
 from shared.slide_text import strip_list_markers  # noqa: E402
@@ -78,7 +78,10 @@ def create_presentation(
 ) -> dict[str, Any]:
     """Create a blank presentation with a single title slide."""
     progress: list[dict[str, Any]] = []
-    path = resolve_output_path(output_path, "presentation.pptx")
+    try:
+        path = resolve_output_path(output_path, "presentation.pptx")
+    except PathOutsideRootError as exc:
+        return _error(str(exc), _OUTSIDE_HINT, progress)
 
     try:
         _ensure_parent(path)
@@ -120,6 +123,12 @@ def create_presentation(
     except Exception as exc:
         logger.exception("create_presentation failed")
         return _error(str(exc), "Check output_path is writable.", progress)
+
+
+# Every creator here resolved its output path on the line BEFORE its try, so a
+# refused path escaped the tool as an exception instead of answering like
+# every other failure. Resolved inside a handler now, with a hint that fits.
+_OUTSIDE_HINT = "Pass an output_path inside the data folder; a bare name or a relative path is written there."
 
 
 # Both deck builders take "a list of slide dicts" and each invented its own key
@@ -194,7 +203,10 @@ def create_from_outline(
 ) -> dict[str, Any]:
     """Create a presentation from a list of slide descriptor dicts."""
     progress: list[dict[str, Any]] = []
-    path = resolve_output_path(output_path, "presentation.pptx")
+    try:
+        path = resolve_output_path(output_path, "presentation.pptx")
+    except PathOutsideRootError as exc:
+        return _error(str(exc), _OUTSIDE_HINT, progress)
 
     if not slides:
         return _error(
@@ -304,7 +316,10 @@ def create_deck_from_data(
 ) -> dict[str, Any]:
     """Create a deck with a title slide followed by one content slide per data item."""
     progress: list[dict[str, Any]] = []
-    path = resolve_output_path(output_path, "presentation.pptx")
+    try:
+        path = resolve_output_path(output_path, "presentation.pptx")
+    except PathOutsideRootError as exc:
+        return _error(str(exc), _OUTSIDE_HINT, progress)
 
     if not data_slides:
         return _error(
@@ -471,7 +486,10 @@ def create_from_template(
     """Copy an existing .pptx and apply {key: value} text substitutions."""
     progress: list[dict[str, Any]] = []
     tmpl = resolve_path(template_path)
-    path = resolve_output_path(output_path, "presentation.pptx")
+    try:
+        path = resolve_output_path(output_path, "presentation.pptx")
+    except PathOutsideRootError as exc:
+        return _error(str(exc), _OUTSIDE_HINT, progress)
 
     if not tmpl.exists():
         return _error(
@@ -563,7 +581,10 @@ def create_agenda(
 ) -> dict[str, Any]:
     """Create a meeting agenda presentation with title and agenda slides."""
     progress: list[dict[str, Any]] = []
-    path = resolve_output_path(output_path, "presentation.pptx")
+    try:
+        path = resolve_output_path(output_path, "presentation.pptx")
+    except PathOutsideRootError as exc:
+        return _error(str(exc), _OUTSIDE_HINT, progress)
 
     try:
         _ensure_parent(path)
@@ -647,7 +668,10 @@ def create_from_docx(
 ) -> dict[str, Any]:
     """Convert a Word document outline into a PowerPoint presentation."""
     progress: list[dict[str, Any]] = []
-    path = resolve_output_path(output_path, "presentation.pptx")
+    try:
+        path = resolve_output_path(output_path, "presentation.pptx")
+    except PathOutsideRootError as exc:
+        return _error(str(exc), _OUTSIDE_HINT, progress)
     docx_file = Path(docx_path)
 
     if not docx_file.exists():

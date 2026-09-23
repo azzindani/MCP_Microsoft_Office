@@ -105,3 +105,39 @@ class TestLocal:
         monkeypatch.setenv("MCP_WORKSPACE_DIR", str(tmp_path))
         with pytest.raises(ValueError, match="not a plain name"):
             get_workspace_dir(name)
+
+
+class TestOutputsConfined:
+    """Where a tool WRITES is held to the served folders too.
+
+    A5-sec confined resolve_path, which every INPUT goes through, and missed
+    platform_utils.resolve_output_path, the one choke point for all 27 output
+    paths: an absolute output_path was used as given and a relative one with a
+    folder resolved from the container's working directory. So a confined server
+    still created documents wherever a caller pointed it. Found by reading the
+    output resolver during a direct sweep of the deployed fleet.
+    """
+
+    @pytest.mark.parametrize(
+        ("module", "func", "suffix"),
+        [
+            ("docx_new.engine", "create_document", ".docx"),
+            ("xlsx_new.engine", "create_workbook", ".xlsx"),
+            ("pptx_new.engine", "create_presentation", ".pptx"),
+        ],
+    )
+    def test_a_creator_refuses_an_outside_output(self, served, tmp_path, module, func, suffix):
+        import importlib
+
+        target = tmp_path / "elsewhere" / f"planted{suffix}"
+        r = getattr(importlib.import_module(module), func)(str(target), open_after=False)
+        assert r["success"] is False, r
+        assert "outside the folders" in r["error"]
+        assert not target.parent.exists(), "a refused output must leave nothing behind"
+
+    def test_a_relative_output_is_written_into_the_data_folder(self, served):
+        from docx_new import engine as dne  # type: ignore[reportMissingImports]
+
+        r = dne.create_document("reports/q3.docx", open_after=False)
+        assert r["success"] is True, r
+        assert (served / "reports" / "q3.docx").exists()
