@@ -570,6 +570,30 @@ def create_from_template(
         return _error(str(exc), "Check template_path and output_path are valid.", progress)
 
 
+def _agenda_line(item: Any) -> str:
+    """One agenda line: a topic string, or {topic, duration?, owner?}.
+
+    A part left out is left out of the line -- "Budget ()  — " was what an item
+    with only a topic used to print.
+    """
+    if isinstance(item, dict):
+        topic = str(item.get("topic") or "").strip()
+        if not topic:
+            raise ValueError(f"Agenda item {item!r} has no 'topic'.")
+        duration = str(item.get("duration") or "").strip()
+        owner = str(item.get("owner") or "").strip()
+    else:
+        topic, duration, owner = str(item).strip(), "", ""
+        if not topic:
+            raise ValueError("An agenda item is empty.")
+    line = f"• {topic}"
+    if duration:
+        line += f" ({duration})"
+    if owner:
+        line += f" — {owner}"
+    return line
+
+
 def create_agenda(
     output_path: str,
     meeting_title: str,
@@ -581,6 +605,16 @@ def create_agenda(
 ) -> dict[str, Any]:
     """Create a meeting agenda presentation with title and agenda slides."""
     progress: list[dict[str, Any]] = []
+    # The natural input is a list of topics; each item was read with .get(), so
+    # ["Budget", "Hiring"] answered "'str' object has no attribute 'get'".
+    try:
+        agenda_lines = [_agenda_line(item) for item in items]
+    except ValueError as exc:
+        return _error(
+            str(exc),
+            "Pass each item as a topic string, or as {topic, duration?, owner?}. Nothing was written.",
+            progress,
+        )
     try:
         path = resolve_output_path(output_path, "presentation.pptx")
     except PathOutsideRootError as exc:
@@ -607,12 +641,6 @@ def create_agenda(
         agenda_slide = prs.slides.add_slide(content_layout)
         _set_placeholder_text(agenda_slide, 0, "Agenda")
 
-        agenda_lines = []
-        for item in items:
-            topic = item.get("topic", "")
-            duration = item.get("duration", "")
-            owner = item.get("owner", "")
-            agenda_lines.append(f"• {topic} ({duration}) — {owner}")
         agenda_text = "\n".join(agenda_lines)
 
         try:

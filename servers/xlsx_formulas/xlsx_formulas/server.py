@@ -12,7 +12,7 @@ from shared.arg_errors import contract_errors
 from shared.deploy_auth import build_auth, build_oauth_bridge
 from shared.exchange import accept_inline_files
 from shared.missing_file import suggest_missing_files
-from shared.schema_enum import one_of
+from shared.schema_enum import any_of, one_of
 from shared.strict_args import enforce_known_arguments
 from shared.token_estimate import measure_responses
 from shared.tool_annotations import EDITS
@@ -32,9 +32,13 @@ _oauth_bridge = build_oauth_bridge(
 if TYPE_CHECKING:
     Rule = str
     ValidationType = str
+    Color = str
 else:
     Rule = one_of("greater_than", "less_than", "equal_to", "between")
     ValidationType = one_of("list", "decimal", "whole")
+    # A closed set the runtime checks against COLOR_MAP; the schema said only
+    # "string", so the four legal names lived in prose alone.
+    Color = any_of(engine.COLOR_MAP)
 _public_origin = os.environ.get("OFFICE_PUBLIC_URL", "").rstrip("/")
 _public_url = f"{_public_origin}/xlsx-formulas" if _public_origin else None
 _token_verifier, _auth_settings = build_auth("OFFICE", _HOST, _PORT, _oauth_bridge, public_url=_public_url)
@@ -91,10 +95,10 @@ def set_conditional_format(
     range_address: str,
     rule: Rule,
     value: float,
-    color: str,
+    color: Color,
     value2: float = 0.0,
 ) -> dict:
-    """Apply color rule to range. rule: gt/lt/between/eq. color: green/red/yellow/blue."""
+    """Apply color rule to range: greater_than/less_than/equal_to/between (gt/lt/eq)."""
     return engine.set_conditional_format(
         file_path, sheet_name, range_address, rule, value, color, value2, open_after=True
     )

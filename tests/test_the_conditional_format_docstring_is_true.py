@@ -53,12 +53,16 @@ def book(tmp_path: Path) -> str:
     return str(path)
 
 
-def documented(kind: str) -> list[str]:
-    """Read a vocabulary out of the docstring the caller actually sees."""
-    doc = tool.__doc__ or ""
-    body = re.search(rf"{kind}:\s*([^.]+)\.", doc)
-    assert body, doc
-    return [v.strip() for v in body.group(1).replace(",", "/").split("/") if v.strip()]
+def documented_rules() -> list[str]:
+    """Every rule name the docstring the caller sees gives, long and short."""
+    return re.findall(r"[a-z_]+", (tool.__doc__ or "").split(":", 1)[1])
+
+
+def published_colours() -> list[str]:
+    """The colour names tools/list publishes -- an enum on the schema since the S4 sweep fix."""
+    from xlsx_formulas.server import mcp  # type: ignore[reportMissingImports]
+
+    return mcp._tool_manager._tools["set_conditional_format"].parameters["properties"]["color"]["enum"]
 
 
 class TestEveryRuleTheDocstringNamesWorks:
@@ -80,8 +84,13 @@ class TestEveryRuleTheDocstringNamesWorks:
         assert len(rules) == 1, rules
 
     def test_the_docstring_vocabulary_has_not_moved(self):
-        """If the docstring is reworded, the list above must move with it."""
-        assert documented("rule") == ["gt", "lt", "between", "eq"], documented("rule")
+        """If the docstring is reworded, the lists above must move with it.
+
+        The schema publishes the long names as an enum, so the docstring gives
+        those and keeps the short forms beside them; every name it gives is one
+        the tests above and TestTheCanonicalNamesStillWork prove works.
+        """
+        assert documented_rules() == ["greater_than", "less_than", "equal_to", "between", "gt", "lt", "eq"]
 
 
 class TestEveryColourTheDocstringNamesWorks:
@@ -90,8 +99,10 @@ class TestEveryColourTheDocstringNamesWorks:
         r = set_conditional_format(book, "Spend", "B2:B3", "gt", 100000.0, color)
         assert r["success"] is True, f"{color}: {r.get('error')}"
 
-    def test_the_docstring_names_exactly_the_supported_colours(self):
-        assert sorted(documented("color")) == sorted(VALID_COLORS), documented("color")
+    def test_the_schema_names_exactly_the_supported_colours(self):
+        # The colours moved out of the 80-character docstring into an enum on
+        # the schema, which is where a caller reading tools/list looks for them.
+        assert sorted(published_colours()) == sorted(VALID_COLORS), published_colours()
 
 
 class TestTheCanonicalNamesStillWork:

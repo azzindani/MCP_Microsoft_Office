@@ -8,7 +8,7 @@ import openpyxl
 from openpyxl.chart import AreaChart, BarChart, LineChart, PieChart, Reference, ScatterChart
 from openpyxl.chart.data_source import AxDataSource, StrRef
 from openpyxl.styles import Font, PatternFill
-from openpyxl.utils import column_index_from_string
+from openpyxl.utils import column_index_from_string, get_column_letter, range_boundaries
 
 from shared import tristate
 from shared.arg_alias import missing, pick
@@ -199,6 +199,32 @@ def _bind_data(chart: Any, ws: Any, data_range: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _chart_listing(sheet_name: str, charts: list) -> str:
+    """The charts a sheet holds, by index and title -- what an out-of-range index needs to be corrected.
+
+    The hint used to say "Use add_chart to see chart indices": add_chart makes
+    a chart and lists nothing, so following it added a chart nobody wanted.
+    """
+    if not charts:
+        return f"Sheet '{sheet_name}' has no charts. add_chart creates one."
+    shown = ", ".join(f"{i} '{_chart_title_text(c) or f'chart_{i}'}'" for i, c in enumerate(charts[:20]))
+    more = f", and {len(charts) - 20} more" if len(charts) > 20 else ""
+    return f"Sheet '{sheet_name}' has {len(charts)} chart(s): {shown}{more}. chart_index counts from 0."
+
+
+def _beside_the_data(ws: Any, data_range: str) -> str:
+    """The default chart anchor: two columns right of the sheet's used area, level with the data's top row.
+
+    Beside the data is where a chart is read, and nothing the sheet holds is in
+    a column past max_column, so the chart covers no cell.
+    """
+    try:
+        _, top, _, _ = range_boundaries(data_range.split("!")[-1].replace("$", ""))
+    except ValueError, TypeError:
+        top = 1
+    return f"{get_column_letter((ws.max_column or 0) + 2)}{top or 1}"
+
+
 def add_chart(
     file_path: str,
     sheet_name: str,
@@ -216,8 +242,9 @@ def add_chart(
     # add_pivot_table, 235 lines below in this same file, calls the cell it
     # places its output at `dest_cell`. Nothing distinguishes the two names.
     anchor_cell, note = pick("add_chart", "anchor_cell", anchor_cell, dest_cell)
-    if not anchor_cell:
-        return missing("add_chart", "anchor_cell", "dest_cell")
+    # tools/list marks anchor_cell optional, and the runtime refused without it:
+    # a caller that trusted the schema was turned away. With no anchor the
+    # chart goes beside the data -- see _beside_the_data -- and says where.
     if note:
         progress.append(info("Argument alias", note))
     backup: str | None = None
@@ -255,7 +282,9 @@ def add_chart(
 
         labelled = _bind_data(chart, ws, data_range)
 
-        anchor = anchor_cell.upper()
+        anchor = anchor_cell.upper() if anchor_cell else _beside_the_data(ws, data_range)
+        if not anchor_cell:
+            progress.append(info("No anchor_cell given", f"placed at {anchor}, two columns right of the sheet's data"))
         ws.add_chart(chart, anchor)
 
         wb.save(str(path))
@@ -276,6 +305,7 @@ def add_chart(
             "chart_type": chart_type,
             "title": title,
             "anchor_cell": anchor,
+            **({"anchor_note": "no anchor_cell given: placed beside the data"} if not anchor_cell else {}),
             "data_range": data_range,
             "backup": backup,
             "progress": progress,
@@ -326,7 +356,7 @@ def delete_chart(
             return {
                 "success": False,
                 "error": f"chart_index {chart_index} out of range {index_range(len(charts), 'charts')}",
-                "hint": "Use add_chart to see chart indices.",
+                "hint": _chart_listing(sheet_name, charts),
                 "backup": drop_snapshot_if_unwritten(backup, path, progress),
                 "progress": progress,
                 "token_estimate": 15,
@@ -397,7 +427,7 @@ def update_chart(
             return {
                 "success": False,
                 "error": f"chart_index {chart_index} out of range {index_range(len(charts), 'charts')}",
-                "hint": "Use add_chart to see chart indices.",
+                "hint": _chart_listing(sheet_name, charts),
                 "backup": drop_snapshot_if_unwritten(backup, path, progress),
                 "progress": progress,
                 "token_estimate": 15,

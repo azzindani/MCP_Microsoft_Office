@@ -127,7 +127,16 @@ def suggest(result: dict[str, Any], arguments: dict[str, Any]) -> dict[str, Any]
         key=lambda pair: (-pair[0], pair[1]),
     )
     close = [shown for _, shown in scored[:MAX_SUGGESTIONS]]
-    if close:
+    # The exact name was found where the tool did not look. Saying "Nothing is
+    # named X there. Closest: X" contradicted itself; say where it is instead.
+    exact = [shown for _, shown in scored if Path(shown).name == name]
+    if exact:
+        result["did_you_mean"] = exact[:MAX_SUGGESTIONS]
+        result["hint"] = (
+            f"{exact[0]!r} is in the data folder -- the tool looked for {name!r} somewhere else. "
+            f"Pass {exact[0]!r} as the path; a relative path is read from the data folder."
+        )
+    elif close:
         result["did_you_mean"] = close
         result["hint"] = (
             f"Nothing is named {name!r} there. Closest: {', '.join(close)}. "

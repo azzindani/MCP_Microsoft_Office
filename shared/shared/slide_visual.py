@@ -221,6 +221,25 @@ class NoRoomOnSlide(Exception):
     """Raised when a shape cannot be placed without covering existing content."""
 
 
+def is_title(shape) -> bool:
+    """A title placeholder, whose whole frame is the title's.
+
+    A title's text is centred in its frame, not drawn from the top, so measuring
+    it from the frame's top edge -- as body text is -- stopped short of where it
+    is drawn: a text box at the default 1in was judged clear of a title whose
+    text reaches past 1.2in, and covered it.
+    """
+    try:
+        from pptx.enum.shapes import PP_PLACEHOLDER  # type: ignore[import-untyped]
+
+        return bool(shape.is_placeholder) and shape.placeholder_format.type in (
+            PP_PLACEHOLDER.TITLE,
+            PP_PLACEHOLDER.CENTER_TITLE,
+        )
+    except AttributeError, ValueError:
+        return False
+
+
 def _occupied_bottom(slide, left: float, width: float, margin: float) -> float:
     """Return the lowest bottom edge, in inches, of content already on the slide.
 
@@ -245,7 +264,8 @@ def _occupied_bottom(slide, left: float, width: float, margin: float) -> float:
         if getattr(shape, "has_text_frame", False):
             if not shape.text_frame.text.strip():
                 continue  # empty placeholder or textbox draws nothing
-            s_height = _text_height(shape, s_width)
+            if not is_title(shape):
+                s_height = _text_height(shape, s_width)
 
         # No horizontal overlap means no collision.
         if s_left + s_width <= left + margin or s_left >= left + width - margin:

@@ -5,12 +5,13 @@ from typing import Any
 
 from shared.address_resolver import build_pptx_index
 from shared.doc_diff import diff_pptx
-from shared.file_utils import hint_for_error, hint_for_message, resolve_path
+from shared.file_utils import drop_snapshot_if_unwritten, hint_for_error, hint_for_message, resolve_path
 from shared.live_edit import notify_reload
 from shared.platform_utils import open_file
 from shared.progress import describe_error, fail, index_range, info, ok
 from shared.receipt import append_receipt
 from shared.slide_text import strip_list_markers
+from shared.slide_visual import NoRoomOnSlide, _text_height, is_title, place_below_content
 from shared.version_control import get_history, snapshot
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -689,6 +690,27 @@ def reorder_slide(file_path: str, from_index: int, to_index: int, open_after: bo
         )
 
 
+def _shapes_under(slide: Any, left: float, top: float, width: float, height: float) -> int:
+    """How many shapes that draw something intersect the box (inches)."""
+    count = 0
+    for shape in slide.shapes:
+        try:
+            s_left, s_top = (shape.left or 0) / 914400, (shape.top or 0) / 914400
+            s_width, s_height = (shape.width or 0) / 914400, (shape.height or 0) / 914400
+        except AttributeError, TypeError:
+            continue
+        if s_width <= 0 or s_height <= 0:
+            continue
+        if getattr(shape, "has_text_frame", False):
+            if not shape.text_frame.text.strip():
+                continue
+            if not is_title(shape):
+                s_height = _text_height(shape, s_width)
+        if s_left < left + width and left < s_left + s_width and s_top < top + height and top < s_top + s_height:
+            count += 1
+    return count
+
+
 def add_text_box(
     file_path: str,
     slide_index: int,
@@ -729,6 +751,32 @@ def add_text_box(
         progress.append(ok("Snapshot saved", Path(backup).name))
 
         slide = prs.slides[slide_index]
+        # The default spot (1in, 1in, 5x1in) sat 55% over a Title-and-Content
+        # slide's title and a second call landed exactly on the first. It moves
+        # clear of existing content now, as add_table and add_chart do. A
+        # position the caller chose is theirs -- a caption over a picture is
+        # deliberate -- so it is kept, and an overlap is said, not fixed.
+        placement_note = ""
+        if (left, top, width, height) == (1.0, 1.0, 5.0, 1.0):
+            try:
+                left, top, width, height, placement_note = place_below_content(prs, slide, left, top, width, height)
+            except NoRoomOnSlide as exc:
+                progress.append(fail("No room for the text box", str(exc)))
+                return {
+                    "success": False,
+                    "op": "add_text_box",
+                    "error": str(exc),
+                    "hint": "Pass left/top to place it yourself, or add a slide with add_slide and put it there.",
+                    "backup": drop_snapshot_if_unwritten(backup, path, progress),
+                    "progress": progress,
+                    "token_estimate": 40,
+                }
+        else:
+            covered = _shapes_under(slide, left, top, width, height)
+            if covered:
+                placement_note = f"Placed as asked, over {covered} existing shape(s) with text or content."
+        if placement_note:
+            progress.append(info("Placement", placement_note))
         txBox = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
         tf = txBox.text_frame
         tf.text = strip_list_markers(text)
@@ -761,6 +809,7 @@ def add_text_box(
             "slide_index": slide_index,
             "text": text,
             "position": {"left": left, "top": top, "width": width, "height": height},
+            **({"placement_note": placement_note} if placement_note else {}),
             "backup": backup,
             "progress": progress,
             "token_estimate": len(str(progress)) // 4,

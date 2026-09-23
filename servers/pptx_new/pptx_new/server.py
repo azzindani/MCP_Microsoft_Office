@@ -105,7 +105,7 @@ def create_agenda(
     output_path: str = "",
     return_content: bool = False,
 ) -> dict:
-    """Create a meeting agenda .pptx from {topic,duration,owner} items."""
+    """Create a meeting agenda .pptx from topics or {topic,duration,owner} items."""
     return engine.create_agenda(
         output_path,
         meeting_title,
