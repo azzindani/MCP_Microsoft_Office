@@ -276,3 +276,44 @@ class TestReceiptsFollowTheDocument:
         assert log["entries"], log
         assert (served / "doc.docx.mcp_receipt.json").exists()
         assert not list(elsewhere.iterdir())
+
+
+class TestARefusedPathIsAnAnswer:
+    """A refusal raised anywhere inside a tool comes back in the failure shape.
+
+    On the ML server a resolver outside a tool's own `try` let the refusal
+    escape: nothing was written, but the caller got "Error executing tool ...:
+    Path ... is outside" with no success, op or hint. The per-tool wrapper
+    answers it here too, whichever resolver raised it.
+    """
+
+    def test_a_refusal_raised_inside_a_tool_is_answered(self):
+        from types import SimpleNamespace
+
+        from shared.file_utils import PathOutsideRootError  # type: ignore[reportMissingImports]
+        from shared.missing_file import suggest_missing_files  # type: ignore[reportMissingImports]
+
+        def save_it(output_path: str = "") -> dict:
+            raise PathOutsideRootError(f"Path '{output_path}' is outside the folders this server can use.")
+
+        registered = SimpleNamespace(name="save_it", fn=save_it)
+        mcp = SimpleNamespace(_tool_manager=SimpleNamespace(_tools={"save_it": registered}))
+        suggest_missing_files(mcp)
+        r = registered.fn(output_path="/elsewhere/out.csv")
+        assert r["success"] is False, r
+        assert r["op"] == "save_it"
+        assert "outside the folders" in r["error"]
+        assert "data folder" in r["hint"]
+
+    def test_any_other_error_still_propagates(self):
+        from types import SimpleNamespace
+
+        from shared.missing_file import suggest_missing_files  # type: ignore[reportMissingImports]
+
+        def broken() -> dict:
+            raise RuntimeError("a real bug")
+
+        registered = SimpleNamespace(name="broken", fn=broken)
+        suggest_missing_files(SimpleNamespace(_tool_manager=SimpleNamespace(_tools={"broken": registered})))
+        with pytest.raises(RuntimeError, match="a real bug"):
+            registered.fn()

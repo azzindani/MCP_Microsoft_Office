@@ -144,18 +144,39 @@ def suggest(result: dict[str, Any], arguments: dict[str, Any]) -> dict[str, Any]
 
 
 def suggest_missing_files(mcp: Any) -> None:
-    """Answer every tool's "File not found" with the nearest files that exist."""
+    """Answer every tool's "File not found" with the nearest files that exist.
+
+    A path refused by confinement is answered here too, in the same shape.
+    """
     for tool in mcp._tool_manager._tools.values():
         fn = getattr(tool, "fn", None)
         if fn is None or getattr(fn, "__suggests_missing_files__", False):
             continue
-        tool.fn = _suggesting(fn)
+        tool.fn = _suggesting(fn, getattr(tool, "name", fn.__name__))
 
 
-def _suggesting(fn: Any) -> Any:
+def refused(tool: str, exc: PathOutsideRootError) -> dict[str, Any]:
+    """The fleet's failure shape for a path the server will not touch."""
+    return {
+        "success": False,
+        "op": tool,
+        "error": str(exc),
+        "hint": "Name a path inside the data folder; a relative path is read from it and written to it.",
+        "progress": [],
+        "token_estimate": 0,
+    }
+
+
+def _suggesting(fn: Any, name: str) -> Any:
     @functools.wraps(fn)
     def suggesting(*a: Any, **kw: Any) -> Any:
-        result = fn(*a, **kw)
+        # A refused path is an answer, not a crash: a resolver outside a tool's
+        # own try let the refusal escape as "Error executing tool" with no
+        # success, hint or op. Found live on the ML server's anomaly_detection.
+        try:
+            result = fn(*a, **kw)
+        except PathOutsideRootError as exc:
+            return refused(name, exc)
         if isinstance(result, dict) and result.get("success") is False:
             try:
                 return suggest(result, kw)
