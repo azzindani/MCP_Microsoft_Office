@@ -16,7 +16,7 @@ if str(_ROOT) not in sys.path:
 from pptx import Presentation  # noqa: E402
 from pptx.util import Inches, Pt  # noqa: E402,F401
 
-from shared.file_utils import embed_content, hint_for_message  # noqa: E402
+from shared.file_utils import embed_content, hint_for_message, resolve_path  # noqa: E402
 from shared.platform_utils import open_file, resolve_output_path  # noqa: E402
 from shared.progress import describe_error, fail, info, ok, warn  # noqa: E402
 from shared.slide_text import strip_list_markers  # noqa: E402
@@ -470,7 +470,7 @@ def create_from_template(
 ) -> dict[str, Any]:
     """Copy an existing .pptx and apply {key: value} text substitutions."""
     progress: list[dict[str, Any]] = []
-    tmpl = Path(template_path)
+    tmpl = resolve_path(template_path)
     path = resolve_output_path(output_path, "presentation.pptx")
 
     if not tmpl.exists():

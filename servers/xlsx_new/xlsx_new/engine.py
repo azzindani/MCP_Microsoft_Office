@@ -19,7 +19,7 @@ import openpyxl  # noqa: E402
 from openpyxl.cell.cell import Cell  # noqa: E402
 from openpyxl.styles import Font  # noqa: E402
 
-from shared.file_utils import embed_content  # noqa: E402
+from shared.file_utils import embed_content, resolve_path  # noqa: E402
 from shared.platform_utils import open_file, resolve_output_path  # noqa: E402
 from shared.progress import fail, info, ok, warn  # noqa: E402
 from shared.template_fill import ordered_pairs, resolve_targets, substitute_once  # noqa: E402
@@ -348,7 +348,7 @@ def create_from_template(
     """Copy a .xlsx template, apply {key: value} substitutions, save to output_path."""
     progress: list[dict[str, Any]] = []
     try:
-        src = Path(template_path).resolve()
+        src = resolve_path(template_path)
         if not src.exists():
             progress.append(fail("Template not found", str(src)))
             return {

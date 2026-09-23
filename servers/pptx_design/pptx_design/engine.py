@@ -239,7 +239,7 @@ def set_background(
             progress.append(ok(f"Set background color #{clean}", scope))
 
         elif image_path:
-            img_path = Path(image_path).resolve()
+            img_path = resolve_path(image_path)
             if not img_path.exists():
                 progress.append(fail(f"Image not found: {img_path.name}"))
                 return {
@@ -969,7 +969,7 @@ def add_image_to_all_slides(
             return err
 
         # Validate image path and format
-        img_path = Path(image_path).resolve()
+        img_path = resolve_path(image_path)
         if not img_path.exists():
             progress.append(fail(f"Image not found: {img_path.name}"))
             return {

@@ -96,6 +96,26 @@ call() {
     -H "Authorization: Bearer $KEY" -H "mcp-session-id: ${SID[$tier]}" \
     -d "{\"jsonrpc\":\"2.0\",\"id\":$id,\"method\":\"tools/call\",\"params\":{\"name\":\"$name\",\"arguments\":$args}}"
 }
+echo
+echo "== paths are held to the served folders =="
+# Unconfined, any authenticated caller could name any file in the container,
+# and the path went through os.path.expandvars: "$HOME/x.docx" came back as
+# "/home/app/x.docx", so a variable holding a secret would have too.
+R=$(call docx-basic 9 get_document_outline '{"file_path":"/etc/probe.docx"}')
+if ok_json "$R"; then
+  fail "opened /etc/probe.docx -- paths are not confined"
+elif echo "$R" | grep -q 'outside the folders'; then
+  pass "/etc/probe.docx refused as outside the served folders"
+else
+  fail "/etc/probe.docx refused without naming why: $(echo "$R" | head -c 300)"
+fi
+R=$(call docx-basic 8 get_document_outline '{"file_path":"$HOME/probe.docx"}')
+if echo "$R" | grep -q '/home/app'; then
+  fail "a caller path was expanded against the server environment"
+else
+  pass "a caller path is not expanded against the server environment"
+fi
+
 extract() {
   echo "$1" | grep -oE "\\\\?\"$2\\\\?\"[[:space:]]*:[[:space:]]*\\\\?\"[^\\\\\"]*" | head -1 | sed -E 's/.*"([^"]*)$/\1/'
 }

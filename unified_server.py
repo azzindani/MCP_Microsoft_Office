@@ -161,6 +161,11 @@ def main() -> None:
     # caller hung until its own timeout believing it had failed. Measured
     # against the deployment: idle 2s reused fine, idle 7s closed.
     keepalive = int(os.environ.get("MCP_KEEPALIVE_SECONDS", "300"))
+    # Serving over HTTP means the caller is remote: paths are held to the data
+    # folder and workspaces, and a caller's path is never expanded against this
+    # server's environment. On by default here as well as in docker-compose.yml,
+    # so a deployment started any other way is confined too.
+    os.environ.setdefault("MCP_CONFINE_PATHS", "1")
     uvicorn.run(app, host=args.host, port=args.port, timeout_keep_alive=keepalive)
 
 

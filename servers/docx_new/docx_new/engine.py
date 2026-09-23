@@ -18,7 +18,7 @@ from shared.arg_alias import (  # noqa: E402
     entry_value,
     unnamed_entry_note,
 )
-from shared.file_utils import embed_content  # noqa: E402
+from shared.file_utils import embed_content, resolve_path  # noqa: E402
 from shared.platform_utils import open_file, resolve_output_path  # noqa: E402
 from shared.progress import fail, info, ok, warn  # noqa: E402
 from shared.template_fill import ordered_pairs, resolve_targets, sentinel_for  # noqa: E402
@@ -1058,7 +1058,7 @@ def create_from_template(
         import docxedit  # type: ignore[import-untyped]
         from docx import Document  # type: ignore[import-untyped]
 
-        tpl_path = Path(template_path).resolve()
+        tpl_path = resolve_path(template_path)
         if not tpl_path.exists():
             progress.append(fail("Template not found", str(tpl_path)))
             return _err(
@@ -1359,7 +1359,7 @@ def batch_create_from_template(
         import docxedit  # type: ignore[import-untyped]
         from docx import Document  # type: ignore[import-untyped]
 
-        tpl_path = Path(template_path).resolve()
+        tpl_path = resolve_path(template_path)
         if not tpl_path.exists():
             progress.append(fail("Template not found", str(tpl_path)))
             return _err(

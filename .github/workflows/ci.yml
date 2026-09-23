@@ -102,6 +102,10 @@ jobs:
 
       - name: Smoke test every tool over HTTP
         uses: azzindani/MCP_Math/.github/actions/e2e-smoke@main
+        env:
+          # The smoke test seeds its documents under /tmp in the container, which
+          # a confined server refuses; this run serves that one folder as well.
+          MCP_ALLOWED_ROOTS: /tmp/remote-smoke-test
         with:
           port: "8830"
           key-env: OFFICE_API_KEY

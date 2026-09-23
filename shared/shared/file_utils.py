@@ -70,6 +70,53 @@ except ImportError:
     _HAS_JSON5 = False
 
 
+class PathOutsideRootError(PermissionError):
+    """A path outside every folder this server may read or write."""
+
+
+def paths_confined() -> bool:
+    """True when paths are held to the served folders (every HTTP deployment).
+
+    A remote caller shares no filesystem with this server. Unconfined, any
+    authenticated caller could name any file the container could read; and
+    because the caller's string went through os.path.expandvars, a path of
+    "$HOME/x.docx" came back in the error as "/home/app/x.docx" -- so a
+    variable holding a secret would have been echoed the same way. A local
+    stdio install is the caller's own machine and stays unrestricted.
+    """
+    return os.environ.get("MCP_CONFINE_PATHS", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def allowed_roots() -> list[Path]:
+    """The folders a confined server serves: the data folder, MCP_DATA_ROOT and MCP_ALLOWED_ROOTS."""
+    raws = [os.environ.get("MCP_OUTPUT_DIR", ""), os.environ.get("MCP_DATA_ROOT", "")]
+    raws += os.environ.get("MCP_ALLOWED_ROOTS", "").split(os.pathsep)
+    roots = [Path(r).expanduser().resolve() for r in raws if r.strip()]
+    from shared.workspace_utils import get_workspace_root
+
+    roots.append(get_workspace_root("", confine=False).expanduser().resolve())
+    return roots
+
+
+def confine(path: Path, what: str = "Path") -> Path:
+    """Return `path`, or refuse it when paths are confined and it lies outside every served folder.
+
+    Judged on the resolved path, so a symlink inside the data folder that
+    points out of it is refused for where it leads.
+    """
+    if not paths_confined():
+        return path
+    resolved = path.resolve()
+    roots = allowed_roots()
+    if any(resolved == root or resolved.is_relative_to(root) for root in roots):
+        return path
+    shown = ", ".join(str(r) for r in roots[:3]) or "none configured"
+    raise PathOutsideRootError(
+        f"{what} {str(path)!r} is outside the folders this server can use ({shown}). "
+        "Pass a path inside the data folder -- a relative path is read from it -- or a URL."
+    )
+
+
 def resolve_path(raw: str) -> Path:
     """Normalise any user-provided file path to an absolute resolved Path.
 
@@ -113,8 +160,11 @@ def resolve_path(raw: str) -> Path:
     if "\x00" in s:
         raise ValueError("Path contains null byte — invalid path.")
 
-    # Expand environment variables and ~
-    s = os.path.expandvars(s)
+    # Expand environment variables and ~. A remote caller's string is never run
+    # through the server's environment: "$OFFICE_API_KEY" would have come back
+    # in a "File not found" error as the key itself.
+    if not paths_confined():
+        s = os.path.expandvars(s)
     s = os.path.expanduser(s)
 
     # Normalise backslashes on Windows
@@ -130,7 +180,14 @@ def resolve_path(raw: str) -> Path:
         if downloads_candidate.exists():
             p = downloads_candidate
 
-    path = p.resolve()
+    # On a confined server a relative path means the data folder, not the
+    # container's working directory the caller cannot see.
+    if paths_confined() and not p.is_absolute():
+        root = os.environ.get("MCP_DATA_ROOT", "").strip() or os.environ.get("MCP_OUTPUT_DIR", "").strip()
+        if root:
+            p = Path(root).expanduser() / p
+
+    path = confine(p.resolve())
 
     # Reject paths inside .mcp_versions/ to prevent snapshot-of-snapshot loops.
     #

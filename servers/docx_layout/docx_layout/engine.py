@@ -404,7 +404,7 @@ def add_image(
         if path.suffix.lower() != ".docx":
             return _wrong_type(path, ".docx", progress)
 
-        img_path = Path(image_path).resolve()
+        img_path = resolve_path(image_path)
         if not img_path.exists():
             progress.append(fail("Image file not found", str(img_path.name)))
             return _error(

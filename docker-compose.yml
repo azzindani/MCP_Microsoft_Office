@@ -72,6 +72,13 @@ services:
       # hole for any remote caller.
       MCP_OUTPUT_DIR: ${MCP_OUTPUT_DIR:-/files}
       MCP_PUBLIC_BASE_URL: ${MCP_PUBLIC_BASE_URL:-}
+      # Every path a caller names must lie inside MCP_OUTPUT_DIR, the workspace
+      # root, or a folder in MCP_ALLOWED_ROOTS (os.pathsep-separated), and is
+      # never expanded against this container's environment -- "$OFFICE_API_KEY"
+      # used to come back in a "File not found" error. Leave it on for anything
+      # reachable from outside.
+      MCP_CONFINE_PATHS: ${MCP_CONFINE_PATHS:-1}
+      MCP_ALLOWED_ROOTS: ${MCP_ALLOWED_ROOTS:-}
       # Off by default. With it on, any file path argument may be an http(s)
       # URL. Hosts resolving to loopback/link-local/private addresses are
       # refused unless MCP_FETCH_ALLOW_PRIVATE=1 — don't relax that on a
