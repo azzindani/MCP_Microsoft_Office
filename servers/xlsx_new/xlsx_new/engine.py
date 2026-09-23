@@ -469,7 +469,9 @@ def create_from_csv(
     try:
         import csv
 
-        src = Path(csv_path).resolve()
+        # Through the resolver (see merge_documents): a bare resolve read any
+        # text file the process could see into a workbook, past confinement.
+        src = resolve_path(csv_path)
         if not src.exists():
             progress.append(fail("CSV file not found", str(src)))
             return {

@@ -141,3 +141,138 @@ class TestOutputsConfined:
         r = dne.create_document("reports/q3.docx", open_after=False)
         assert r["success"] is True, r
         assert (served / "reports" / "q3.docx").exists()
+
+
+class TestEveryInputIsResolved:
+    """Two tools read their inputs with a bare Path(...).resolve().
+
+    merge_documents(file_paths) and create_from_csv(csv_path) looked a relative
+    name up from the process cwd -- so a file the caller had just created in the
+    data folder was "not found" -- and took an absolute one from anywhere,
+    past the confinement every other input goes through. Found live: merging
+    two documents created a moment earlier answered "File not found".
+    """
+
+    def test_merge_documents_reads_relative_names_from_the_data_folder(self, served):
+        from docx_new import engine as dne  # type: ignore[reportMissingImports]
+
+        assert dne.create_document("a.docx", open_after=False)["success"] is True
+        assert dne.create_document("b.docx", open_after=False)["success"] is True
+        r = dne.merge_documents(["a.docx", "b.docx"], output_path="ab.docx", open_after=False)
+        assert r["success"] is True, r
+        assert (served / "ab.docx").exists()
+
+    def test_merge_documents_refuses_an_outside_input(self, served, tmp_path):
+        from docx import Document
+
+        from docx_new import engine as dne  # type: ignore[reportMissingImports]
+
+        outside = tmp_path / "private.docx"
+        Document().save(str(outside))
+        r = dne.merge_documents([str(outside)], output_path="leak.docx", open_after=False)
+        assert r["success"] is False, r
+        assert "outside the folders" in r["error"]
+        assert not (served / "leak.docx").exists()
+
+    def test_create_from_csv_refuses_an_outside_input(self, served, tmp_path):
+        from xlsx_new import engine as xne  # type: ignore[reportMissingImports]
+
+        outside = tmp_path / "private.csv"
+        outside.write_text("k,v\na,1\n")
+        r = xne.create_from_csv(str(outside), output_path="leak.xlsx", open_after=False)
+        assert r["success"] is False, r
+        assert "outside the folders" in r["error"]
+        assert not (served / "leak.xlsx").exists()
+
+
+class TestImageSourcesGoThroughTheGuard:
+    """An image block's URL was fetched with urllib directly.
+
+    No MCP_FETCH_URLS check and no refusal of loopback, private or cloud-metadata
+    hosts -- the two things shared/exchange.fetch_url exists to enforce -- so a
+    deployed server with URL fetching off still requested any address a caller
+    put in an image block. A local image source resolved from the process cwd.
+    Found by reading the block renderer during a direct sweep of the fleet.
+    """
+
+    @pytest.fixture
+    def no_direct_fetch(self, monkeypatch):
+        import urllib.request
+
+        def refuse(*a, **k):
+            raise AssertionError("fetched a URL directly, past the fleet's guard")
+
+        monkeypatch.setattr(urllib.request, "urlopen", refuse)
+
+    def _blocks(self, source: str) -> dict:
+        from docx_new import engine as dne  # type: ignore[reportMissingImports]
+
+        return dne.create_from_blocks(
+            title="T", blocks=[{"kind": "image", "path": source}], output_path="img.docx", open_after=False
+        )
+
+    def test_a_url_is_refused_when_fetching_is_off(self, served, monkeypatch, no_direct_fetch):
+        monkeypatch.delenv("MCP_FETCH_URLS", raising=False)
+        r = self._blocks("http://127.0.0.1:9/pixel.png")
+        assert "does not fetch URLs" in str(r), r
+
+    def test_a_private_address_is_refused_when_fetching_is_on(self, served, monkeypatch, no_direct_fetch):
+        monkeypatch.setenv("MCP_FETCH_URLS", "1")
+        monkeypatch.delenv("MCP_FETCH_ALLOW_PRIVATE", raising=False)
+        r = self._blocks("http://169.254.169.254/latest/meta-data/x.png")
+        assert "non-public address" in str(r), r
+
+    def test_a_local_image_outside_is_refused(self, served, tmp_path):
+        outside = tmp_path / "private.png"
+        outside.write_bytes(b"\x89PNG\r\n\x1a\n")
+        r = self._blocks(str(outside))
+        assert "outside the folders" in str(r), r
+
+
+class TestCreateFromDocxInput:
+    def test_a_relative_docx_is_read_from_the_data_folder(self, served):
+        from docx_new import engine as dne  # type: ignore[reportMissingImports]
+        from pptx_new import engine as pne  # type: ignore[reportMissingImports]
+
+        assert dne.create_from_sections(output_path="src.docx", title="T", sections=[{"heading": "H", "body": "B"}])[
+            "success"
+        ]
+        r = pne.create_from_docx("src.docx", output_path="deck.pptx", open_after=False)
+        assert r["success"] is True, r
+
+    def test_an_outside_docx_is_refused(self, served, tmp_path):
+        from docx import Document
+
+        from pptx_new import engine as pne  # type: ignore[reportMissingImports]
+
+        outside = tmp_path / "private.docx"
+        Document().save(str(outside))
+        r = pne.create_from_docx(str(outside), output_path="deck.pptx", open_after=False)
+        assert r["success"] is False
+        assert "outside the folders" in r["error"]
+
+
+class TestReceiptsFollowTheDocument:
+    """An edit made with a relative path left no receipt.
+
+    append_receipt and read_receipt_log resolved what the caller typed with a
+    bare Path(...).resolve(), so a relative name meant the process cwd -- /app
+    on a deployed server, where the write failed and was swallowed -- and
+    read_receipt then reported an empty log after four edits. Found live.
+    """
+
+    def test_an_edit_by_relative_name_is_recorded_and_readable(self, served, monkeypatch, tmp_path):
+        from docx_basic import engine as dbe  # type: ignore[reportMissingImports]
+        from docx_new import engine as dne  # type: ignore[reportMissingImports]
+
+        elsewhere = tmp_path / "cwd"
+        elsewhere.mkdir()
+        monkeypatch.chdir(elsewhere)
+        assert dne.create_document("doc.docx", open_after=False)["success"]
+        assert dbe.append_text("doc.docx", "hello")["success"]
+        from docx_basic.helpers import read_receipt_tool  # type: ignore[reportMissingImports]
+
+        log = read_receipt_tool("doc.docx")
+        assert log["entries"], log
+        assert (served / "doc.docx.mcp_receipt.json").exists()
+        assert not list(elsewhere.iterdir())

@@ -468,7 +468,6 @@ def _add_image(doc: Any, block: dict[str, Any], docx_style: Any, hue: str) -> st
       document has no image" and "the file server refused" are different
       problems.
     """
-    from io import BytesIO
 
     from docx.shared import Inches  # type: ignore[import-untyped]
 
@@ -489,26 +488,21 @@ def _add_image(doc: Any, block: dict[str, Any], docx_style: Any, hue: str) -> st
             "(or ask the chart tool for an image) and pass that path"
         )
 
-    stream: Any
-    if source.lower().startswith(("http://", "https://")):
-        try:
-            import urllib.request
-
-            with urllib.request.urlopen(source, timeout=20) as resp:  # noqa: S310
-                if getattr(resp, "status", 200) >= 400:
-                    return f"{source} returned HTTP {resp.status}"
-                stream = BytesIO(resp.read())
-        except Exception as exc:
-            return f"{source} could not be fetched ({type(exc).__name__}: {exc})"
-    else:
-        img_path = Path(source)
-        if not img_path.is_absolute():
-            img_path = (Path.cwd() / img_path).resolve()
-        if not img_path.exists():
-            return f"{source} does not exist (paths are resolved on the server, not the caller)"
-        if suffix and suffix not in _IMAGE_EXTS:
-            return f"{source} is a {suffix} file; python-docx places {', '.join(_IMAGE_EXTS)}"
-        stream = str(img_path)
+    # One resolver for both kinds of source. A URL used to be fetched here with
+    # urllib directly -- no MCP_FETCH_URLS check and no refusal of loopback,
+    # private or cloud-metadata hosts, which is exactly what resolve_path's
+    # fetch_url enforces -- so a server with fetching off would still request
+    # any address a caller named. A local path resolved from the process cwd,
+    # past the confinement every other input goes through.
+    try:
+        img_path = resolve_path(source)
+    except (ValueError, PermissionError) as exc:
+        return f"{source} could not be used: {exc}"
+    if not img_path.exists():
+        return f"{source} does not exist (paths are resolved on the server, not the caller)"
+    if suffix and suffix not in _IMAGE_EXTS:
+        return f"{source} is a {suffix} file; python-docx places {', '.join(_IMAGE_EXTS)}"
+    stream: Any = str(img_path)
 
     try:
         width_in = float(block.get("width_in") or block.get("width") or _DEFAULT_IMAGE_WIDTH_IN)
@@ -1275,7 +1269,10 @@ def merge_documents(
         # Validate all source files up front
         resolved: list[Path] = []
         for fp in file_paths:
-            p = Path(str(fp)).resolve()
+            # Through the resolver like every other input: a bare Path(...).resolve()
+            # read a relative name from the process cwd, not the data folder, and
+            # an absolute one from anywhere, past the server's confinement.
+            p = resolve_path(str(fp))
             if not p.exists():
                 progress.append(fail("File not found", str(p)))
                 return _err(

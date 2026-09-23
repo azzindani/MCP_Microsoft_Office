@@ -672,12 +672,17 @@ def create_from_docx(
         path = resolve_output_path(output_path, "presentation.pptx")
     except PathOutsideRootError as exc:
         return _error(str(exc), _OUTSIDE_HINT, progress)
-    docx_file = Path(docx_path)
+    # Through the resolver like every other input: a raw Path(docx_path) looked a
+    # relative name up from the process cwd and an absolute one past confinement.
+    try:
+        docx_file = resolve_path(docx_path)
+    except (ValueError, PermissionError) as exc:
+        return _error(str(exc), _OUTSIDE_HINT, progress)
 
     if not docx_file.exists():
         return _error(
             f"File not found: {docx_file.name}",
-            "Check that docx_path is absolute and the file exists.",
+            "Check the path; a relative name is read from the data folder.",
             progress,
         )
     if docx_file.suffix.lower() != ".docx":

@@ -132,6 +132,20 @@ def _split_header(loaded: Any) -> tuple[list[dict], dict | None]:
     return [e for e in loaded if isinstance(e, dict)], None
 
 
+def _document_path(file_path: str | Path) -> Path:
+    """The document a receipt belongs beside, found the way the tool found it.
+
+    Callers pass what the caller typed. A bare Path(...).resolve() read a
+    relative name from the process cwd -- /app on a deployed server, where the
+    write failed and was swallowed -- so an edit made with a relative path left
+    no receipt, and read_receipt looked in the same wrong place and reported
+    an empty log after four edits.
+    """
+    from shared.file_utils import resolve_path
+
+    return resolve_path(str(file_path))
+
+
 def append_receipt(
     file_path: str,
     tool: str,
@@ -156,7 +170,7 @@ def append_receipt(
     valid -- one side of a lineage is better than none.
     """
     try:
-        path = Path(file_path).resolve()
+        path = _document_path(file_path)
         receipt_path = _receipt_path(path)
 
         source = receipt_path if receipt_path.exists() else _legacy_receipt_path(path)
@@ -224,7 +238,7 @@ def read_receipt(file_path: str, last_n: int = 10) -> tuple[list[dict[str, Any]]
     that eighteen of them were never eligible for it.
     """
     try:
-        path = Path(file_path).resolve()
+        path = _document_path(file_path)
         receipt_path = _receipt_path(path)
         if not receipt_path.exists():
             legacy = _legacy_receipt_path(path)
