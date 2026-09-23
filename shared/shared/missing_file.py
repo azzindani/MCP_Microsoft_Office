@@ -60,7 +60,9 @@ def _walk(folder: Path) -> list[Path]:
             seen += 1
             if seen > MAX_ENTRIES:
                 return found
-            if not name.startswith("."):
+            # `.mcp_` marks this fleet's own bookkeeping beside a file -- a
+            # receipt, a lineage record -- never something a caller would pass.
+            if not name.startswith(".") and ".mcp_" not in name:
                 found.append(here / name)
     return found
 

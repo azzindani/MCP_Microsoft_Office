@@ -49,6 +49,7 @@ def served(tmp_path, monkeypatch):
     Document().save(str(data / "Q3_Report.docx"))
     Document().save(str(data / "drafts" / "budget_2023.docx"))
     (data / ".hidden.docx").write_bytes(b"")
+    (data / "Q3_Report.docx.mcp_receipt.json").write_text("{}")
     return data
 
 
@@ -69,6 +70,11 @@ class TestThroughTheTool:
         r = _outline("Q3_Report.doc")
         assert r["did_you_mean"][0] == "Q3_Report.docx"
 
+    def test_the_fleets_own_sidecars_are_never_suggested(self, served):
+        # Found live: BIO-ATLAS-ROADMAP.docx.mcp_receipt.json was the second suggestion.
+        r = _outline("Q3_Report.doc")
+        assert not [name for name in r["did_you_mean"] if ".mcp_" in name], r["did_you_mean"]
+
     def test_a_file_in_a_subfolder_is_named_by_the_path_to_pass(self, served):
         r = _outline("budget_2024.docx")
         assert str(Path("drafts") / "budget_2023.docx") in r["did_you_mean"]
@@ -78,6 +84,7 @@ class TestThroughTheTool:
         assert "did_you_mean" not in r
         assert "Q3_Report.docx" in r["hint"]
         assert ".hidden.docx" not in r["hint"]
+        assert ".mcp_" not in r["hint"], "a receipt is bookkeeping, not a file to pass"
 
     @pytest.mark.parametrize("tier", TIERS)
     def test_every_tier_installs_it(self, tier):
