@@ -125,12 +125,21 @@ def _redirect(target: str):
     return _handler
 
 
+# Both protected-resource paths lead to the sub-server's metadata. The 401
+# names .../oauth-protected-resource/<name> (the SDK's resource URL has no
+# /mcp), and a client derives .../oauth-protected-resource/<name>/mcp from the
+# URL it connects to (RFC 9728) -- the resource that metadata itself declares.
+# Only the first was redirected, so the second was a 404.
 _discovery_redirects = [
     route
     for name in _SUB_SERVERS
     for route in (
         Route(
             f"/.well-known/oauth-protected-resource/{name}", _redirect(f"/{name}/.well-known/oauth-protected-resource")
+        ),
+        Route(
+            f"/.well-known/oauth-protected-resource/{name}/mcp",
+            _redirect(f"/{name}/.well-known/oauth-protected-resource"),
         ),
         Route(
             f"/.well-known/oauth-authorization-server/{name}",
